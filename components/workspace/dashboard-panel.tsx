@@ -194,7 +194,7 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
   );
 
   const shellClass = expanded
-    ? 'fixed inset-x-0 bottom-0 top-[4.75rem] z-30 flex flex-col border-t border-border bg-card'
+    ? 'fixed inset-x-0 bottom-0 top-24 z-30 flex flex-col border-t border-border bg-card'
     : 'absolute inset-y-0 right-0 z-30 flex w-[480px] flex-col border-l border-border bg-card';
 
   return (
