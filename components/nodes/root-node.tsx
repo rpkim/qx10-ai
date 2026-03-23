@@ -1,15 +1,19 @@
 'use client';
 
+import { useState } from 'react';
 import type { RootNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
-import { getSuggestedQueries } from '@/lib/mock-data';
+import { useI18n } from '@/components/i18n-provider';
 
 interface Props {
   node: RootNodeData;
 }
 
 export function RootNode({ node }: Props) {
-  const { state, dispatch, runQuery } = useWorkspace();
+  const { t } = useI18n();
+  const { state, runQuery, addCustomQuery } = useWorkspace();
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customQ, setCustomQ] = useState('');
 
   const handleAddAllQueries = () => {
     // All suggested queries are already in the initial workspace, just mark them as run
@@ -21,6 +25,15 @@ export function RootNode({ node }: Props) {
         runQuery(q.id);
       }
     });
+  };
+
+  const handleSubmitCustom = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = customQ.trim();
+    if (!q) return;
+    addCustomQuery(q, node.id, node.position);
+    setCustomQ('');
+    setShowCustomInput(false);
   };
 
   return (
@@ -68,6 +81,32 @@ export function RootNode({ node }: Props) {
         >
           Explore all queries
         </button>
+
+        <button
+          onClick={() => setShowCustomInput((v) => !v)}
+          className="rounded-xl px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          {t('nodes.addCustom')}
+        </button>
+
+        {showCustomInput && (
+          <form onSubmit={handleSubmitCustom} className="mt-0.5 flex w-full gap-2">
+            <input
+              autoFocus
+              value={customQ}
+              onChange={(e) => setCustomQ(e.target.value)}
+              placeholder={t('nodes.askPlaceholder')}
+              className="flex-1 rounded-xl border border-border bg-secondary px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+            />
+            <button
+              type="submit"
+              className="rounded-xl px-3 py-1.5 text-xs font-semibold"
+              style={{ background: '#00C49A', color: '#080C12' }}
+            >
+              {t('nodes.add')}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

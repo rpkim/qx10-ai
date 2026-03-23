@@ -64,7 +64,27 @@ export function Canvas() {
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
+
+    const canScrollWithin = (target: EventTarget | null, deltaY: number): boolean => {
+      let cur = target as HTMLElement | null;
+      while (cur && cur !== el) {
+        if (cur.dataset.nodeScroll === 'true') {
+          const max = cur.scrollHeight - cur.clientHeight;
+          if (max <= 0) return false;
+          // allow native scrolling while there is still room in scroll direction
+          if (deltaY < 0) return cur.scrollTop > 0;
+          if (deltaY > 0) return cur.scrollTop < max;
+          return true;
+        }
+        cur = cur.parentElement;
+      }
+      return false;
+    };
+
     const onWheel = (e: WheelEvent) => {
+      if (canScrollWithin(e.target, e.deltaY)) {
+        return;
+      }
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
         // Zoom toward mouse cursor position

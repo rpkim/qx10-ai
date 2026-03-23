@@ -17,11 +17,16 @@ function buildFileStem(keyword: string): string {
 
 export async function exportWorkspaceTreePng(keyword: string): Promise<void> {
   const target = getExportTarget();
+  const rect = target.getBoundingClientRect();
   const html2canvas = (await import('html2canvas')).default;
   const canvas = await html2canvas(target, {
     useCORS: true,
     backgroundColor: null,
-    scale: Math.min(2, window.devicePixelRatio || 1),
+    width: Math.max(1, Math.floor(rect.width)),
+    height: Math.max(1, Math.floor(rect.height)),
+    scrollX: 0,
+    scrollY: 0,
+    scale: Math.min(1.5, window.devicePixelRatio || 1),
     logging: false,
   });
 
@@ -32,27 +37,27 @@ export async function exportWorkspaceTreePng(keyword: string): Promise<void> {
 }
 
 export async function exportWorkspaceTreePdf(keyword: string): Promise<void> {
+  if (typeof window === 'undefined') return;
   const target = getExportTarget();
+  const rect = target.getBoundingClientRect();
   const html2canvas = (await import('html2canvas')).default;
-  const [{ jsPDF }] = await Promise.all([import('jspdf')]);
+  const [{ PDFDocument }] = await Promise.all([import('pdf-lib')]);
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
 
   const canvas = await html2canvas(target, {
     useCORS: true,
     backgroundColor: '#080C12',
-    scale: Math.min(2, window.devicePixelRatio || 1),
+    width: Math.max(1, Math.floor(rect.width)),
+    height: Math.max(1, Math.floor(rect.height)),
+    scrollX: 0,
+    scrollY: 0,
+    scale: Math.min(1.25, window.devicePixelRatio || 1),
     logging: false,
   });
 
-  const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
-  const pdf = new jsPDF({
-    orientation,
-    unit: 'pt',
-    format: 'a4',
-    compress: true,
-  });
-
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
+  const pageLandscape = canvas.width >= canvas.height;
+  const pageW = pageLandscape ? 841.89 : 595.28; // A4 pt
+  const pageH = pageLandscape ? 595.28 : 841.89;
   const margin = 24;
   const maxW = pageW - margin * 2;
   const maxH = pageH - margin * 2;
@@ -61,8 +66,19 @@ export async function exportWorkspaceTreePdf(keyword: string): Promise<void> {
   const drawH = canvas.height * scale;
   const x = (pageW - drawW) / 2;
   const y = (pageH - drawH) / 2;
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([pageW, pageH]);
+  const imgDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+  const img = await pdfDoc.embedJpg(imgDataUrl);
+  page.drawImage(img, { x, y, width: drawW, height: drawH });
 
-  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, drawW, drawH, undefined, 'FAST');
-  pdf.save(`${buildFileStem(keyword)}.pdf`);
+  const bytes = await pdfDoc.save();
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${buildFileStem(keyword)}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 

@@ -13,6 +13,8 @@ export function AnswerNode({ node }: Props) {
   const { t } = useI18n();
   const { addCustomQuery, toggleDashboardPin, state, aiCatalog } = useWorkspace();
   const [showAllKeywords, setShowAllKeywords] = useState(false);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customQ, setCustomQ] = useState('');
   const isPinned = state.dashboardNodeIds.includes(node.id);
 
   const parentQuery = state.nodes.find((n) => n.id === node.queryId);
@@ -40,6 +42,14 @@ export function AnswerNode({ node }: Props) {
   const visibleKeywords = showAllKeywords
     ? node.extractedKeywords
     : node.extractedKeywords.slice(0, 4);
+
+  const submitCustomQuery = () => {
+    const q = customQ.trim();
+    if (!q) return;
+    addCustomQuery(q, node.id, node.position, inheritedModelChoice);
+    setCustomQ('');
+    setShowCustomInput(false);
+  };
 
   return (
     <div
@@ -99,6 +109,7 @@ export function AnswerNode({ node }: Props) {
       {/* Answer content */}
       <div
         className="max-h-52 overflow-y-auto pr-1"
+        data-node-scroll="true"
         style={{ scrollbarWidth: 'thin', touchAction: 'pan-y', overscrollBehavior: 'contain' }}
         onMouseDown={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
@@ -182,6 +193,40 @@ export function AnswerNode({ node }: Props) {
                 {q}
               </button>
             ))}
+            <button
+              onClick={() => setShowCustomInput((v) => !v)}
+              className="mt-0.5 self-start rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              {t('nodes.addCustom')}
+            </button>
+            {showCustomInput && (
+              <div className="mt-1 flex gap-2">
+                <input
+                  autoFocus
+                  value={customQ}
+                  onChange={(e) => setCustomQ(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      submitCustomQuery();
+                    }
+                    if (e.key === 'Escape') {
+                      setShowCustomInput(false);
+                    }
+                  }}
+                  placeholder={t('nodes.askPlaceholder')}
+                  className="flex-1 rounded-xl border border-border bg-secondary px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={submitCustomQuery}
+                  className="rounded-xl px-3 py-1.5 text-xs font-semibold"
+                  style={{ background: '#00C49A', color: '#080C12' }}
+                >
+                  {t('nodes.add')}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
