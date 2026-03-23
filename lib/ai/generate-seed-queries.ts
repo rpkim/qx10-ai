@@ -1,0 +1,70 @@
+import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { z } from 'zod';
+import type { GoalType } from '@/lib/types';
+import type { CatalogOption } from '@/lib/ai/model-config';
+import { GOAL_HINT } from '@/lib/ai/prompts';
+
+const seedSchema = z.object({
+  questions: z.array(z.string()).min(4).max(8),
+});
+
+const SEED_SYSTEM = `You help design a knowledge-discovery canvas. Output JSON only, no markdown fences.
+Shape: {"questions": string[]}
+Rules:
+- Exactly 5 strings in "questions".
+- Each is one short, specific question the user might run first (full sentence, same language as the topic when possible).
+- Cover different angles; no near-duplicates.
+- Questions must be concrete enough to answer in one pass.`;
+
+export async function generateSeedQuestions(
+  selection: CatalogOption,
+  params: { keyword: string; goal: GoalType },
+  keys: { openaiKey: string | undefined; geminiKey: string | undefined }
+): Promise<string[]> {
+  const { keyword, goal } = params;
+  const hint = GOAL_HINT[goal] ?? GOAL_HINT.learn;
+  const user = `Topic / keyword: "${keyword}"
+Exploration mode: ${goal}
+Mode guidance for biasing the questions: ${hint}`;
+
+  let raw: string | undefined;
+
+  try {
+    if (selection.provider === 'openai' && keys.openaiKey) {
+      const openai = new OpenAI({ apiKey: keys.openaiKey });
+      const res = await openai.chat.completions.create({
+        model: selection.model,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: SEED_SYSTEM },
+          { role: 'user', content: user },
+        ],
+      });
+      raw = res.choices[0]?.message?.content ?? undefined;
+    } else if (selection.provider === 'gemini' && keys.geminiKey) {
+      const genAI = new GoogleGenerativeAI(keys.geminiKey);
+      const model = genAI.getGenerativeModel({
+        model: selection.model,
+        generationConfig: { responseMimeType: 'application/json' },
+      });
+      const r = await model.generateContent(`${SEED_SYSTEM}\n\n${user}`);
+      raw = r.response.text();
+    }
+  } catch {
+    return [];
+  }
+
+  if (!raw?.trim()) return [];
+
+  try {
+    const parsed = seedSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) return [];
+    return parsed.data.questions
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
