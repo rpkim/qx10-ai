@@ -1,18 +1,35 @@
 'use client';
 
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import { useWorkspace } from '@/lib/workspace-store';
 import { ConnectionLines } from './connection-lines';
+import { NodeChrome } from './node-chrome';
 import { RootNode } from '@/components/nodes/root-node';
 import { QueryNode } from '@/components/nodes/query-node';
 import { AnswerNode } from '@/components/nodes/answer-node';
 import { DataNode } from '@/components/nodes/data-node';
 import type { WorkspaceNode, Position } from '@/lib/types';
+import {
+  buildOutgoingChildrenMap,
+  getRootNodeIds,
+  getVisibleNodeIds,
+} from '@/lib/canvas-visibility';
 
 export function Canvas() {
   const { state, dispatch } = useWorkspace();
-  const { nodes, viewport, selectedNodeId } = state;
+  const { nodes, edges, viewport, selectedNodeId, collapsedNodeIds } = state;
   const { x: panX, y: panY, zoom } = viewport;
+
+  const childrenMap = useMemo(() => buildOutgoingChildrenMap(edges), [edges]);
+  const collapsedSet = useMemo(() => new Set(collapsedNodeIds), [collapsedNodeIds]);
+  const visibleIds = useMemo(() => {
+    const roots = getRootNodeIds(nodes, edges);
+    return getVisibleNodeIds(roots, childrenMap, collapsedSet);
+  }, [nodes, edges, childrenMap, collapsedSet]);
+  const visibleNodes = useMemo(
+    () => nodes.filter((n) => visibleIds.has(n.id)),
+    [nodes, visibleIds]
+  );
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const isPanning = useRef(false);
@@ -200,15 +217,17 @@ export function Canvas() {
         }}
       >
         {/* SVG connection layer */}
-        <ConnectionLines />
+        <ConnectionLines visibleNodeIds={visibleIds} />
 
         {/* Node layer */}
-        {nodes.map((node) => (
+        {visibleNodes.map((node) => (
           <NodeRenderer
             key={node.id}
             node={node}
             isSelected={selectedNodeId === node.id}
             onDragStart={startNodeDrag}
+            hasChildren={(childrenMap.get(node.id)?.length ?? 0) > 0}
+            isCollapsed={collapsedSet.has(node.id)}
           />
         ))}
       </div>
@@ -220,10 +239,14 @@ function NodeRenderer({
   node,
   isSelected,
   onDragStart,
+  hasChildren,
+  isCollapsed,
 }: {
   node: WorkspaceNode;
   isSelected: boolean;
   onDragStart: (id: string, pos: Position, e: React.MouseEvent) => void;
+  hasChildren: boolean;
+  isCollapsed: boolean;
 }) {
   const { dispatch } = useWorkspace();
 
@@ -241,16 +264,19 @@ function NodeRenderer({
   };
 
   const wrapperClass = [
-    'cursor-move transition-shadow duration-200',
+    'flex cursor-move flex-col transition-shadow duration-200',
     isSelected ? 'ring-2 ring-primary rounded-2xl' : '',
   ].join(' ');
 
   return (
     <div style={style} className={wrapperClass} onMouseDown={handleMouseDown}>
-      {node.type === 'root' && <RootNode node={node as any} />}
-      {node.type === 'query' && <QueryNode node={node as any} />}
-      {node.type === 'answer' && <AnswerNode node={node as any} />}
-      {node.type === 'data' && <DataNode node={node as any} />}
+      <NodeChrome node={node} hasChildren={hasChildren} isCollapsed={isCollapsed} />
+      <div className="min-w-0 flex-1">
+        {node.type === 'root' && <RootNode node={node as any} />}
+        {node.type === 'query' && <QueryNode node={node as any} />}
+        {node.type === 'answer' && <AnswerNode node={node as any} />}
+        {node.type === 'data' && <DataNode node={node as any} />}
+      </div>
     </div>
   );
 }

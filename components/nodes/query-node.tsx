@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { QueryNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
+import { useI18n } from '@/components/i18n-provider';
 import {
   Select,
   SelectContent,
@@ -25,6 +26,7 @@ const STATUS_COLORS = {
 };
 
 export function QueryNode({ node }: Props) {
+  const { t } = useI18n();
   const { runQuery, addCustomQuery, dispatch, aiCatalog } = useWorkspace();
   const [showCustom, setShowCustom] = useState(false);
   const [customQ, setCustomQ] = useState('');
@@ -88,7 +90,7 @@ export function QueryNode({ node }: Props) {
               className="rounded-full px-2 py-0.5 text-xs"
               style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}
             >
-              Custom
+              {t('nodes.customBadge')}
             </span>
           )}
         </div>
@@ -101,12 +103,12 @@ export function QueryNode({ node }: Props) {
                 className="inline-block h-1.5 w-1.5 rounded-full"
                 style={{ background: '#00C49A', animation: 'ping-dot 1s cubic-bezier(0,0,0.2,1) infinite' }}
               />
-              Running
+              {t('nodes.running')}
             </span>
           ) : isComplete ? (
-            <span className="text-xs text-muted-foreground">Done</span>
+            <span className="text-xs text-muted-foreground">{t('nodes.done')}</span>
           ) : (
-            <span className="text-xs text-muted-foreground">Suggested</span>
+            <span className="text-xs text-muted-foreground">{t('nodes.suggested')}</span>
           )}
         </div>
       </div>
@@ -117,18 +119,16 @@ export function QueryNode({ node }: Props) {
       {/* Model (env-driven catalog) */}
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          Model
+          {t('nodes.model')}
         </span>
         {!aiCatalog ? (
-          <span className="text-xs text-muted-foreground">Loading models…</span>
+          <span className="text-xs text-muted-foreground">{t('nodes.loadingModels')}</span>
         ) : aiCatalog.options.length === 0 ? (
-          <span className="text-xs text-muted-foreground">
-            Demo — add OPENAI_API_KEY or GEMINI_API_KEY
-          </span>
+          <span className="text-xs text-muted-foreground">{t('nodes.demoModelsHint')}</span>
         ) : aiCatalog.options.length === 1 ? (
           <span className="text-xs text-foreground/80">{aiCatalog.options[0].label}</span>
         ) : isComplete || isRunning ? (
-          <span className="text-xs text-foreground/80">{modelLabel || 'Default'}</span>
+          <span className="text-xs text-foreground/80">{modelLabel || t('nodes.defaultModel')}</span>
         ) : (
           <Select
             value={effectiveModelId}
@@ -141,7 +141,7 @@ export function QueryNode({ node }: Props) {
             }
           >
             <SelectTrigger size="sm" className="h-8 w-full max-w-full text-xs">
-              <SelectValue placeholder="Select model" />
+              <SelectValue placeholder={t('nodes.selectModel')} />
             </SelectTrigger>
             <SelectContent>
               {aiCatalog.options.map((opt) => (
@@ -177,13 +177,13 @@ export function QueryNode({ node }: Props) {
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="5,3 19,12 5,21" />
             </svg>
-            Run
+            {t('nodes.run')}
           </button>
           <button
             onClick={() => setShowCustom(!showCustom)}
             className="rounded-xl px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
-            + Custom
+            {t('nodes.addCustom')}
           </button>
         </div>
       )}
@@ -194,7 +194,7 @@ export function QueryNode({ node }: Props) {
             autoFocus
             value={customQ}
             onChange={(e) => setCustomQ(e.target.value)}
-            placeholder="Ask something specific..."
+            placeholder={t('nodes.askPlaceholder')}
             className="flex-1 rounded-xl border border-border bg-secondary px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
           />
           <button
@@ -202,7 +202,7 @@ export function QueryNode({ node }: Props) {
             className="rounded-xl px-3 py-1.5 text-xs font-semibold"
             style={{ background: '#00C49A', color: '#080C12' }}
           >
-            Add
+            {t('nodes.add')}
           </button>
         </form>
       )}

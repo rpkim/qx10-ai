@@ -1,8 +1,9 @@
 'use client';
 
+import { NODE_CANVAS_TOOLBAR_HEIGHT_PX } from '@/lib/canvas-node-chrome';
 import { useWorkspace } from '@/lib/workspace-store';
 
-export function ConnectionLines() {
+export function ConnectionLines({ visibleNodeIds }: { visibleNodeIds: Set<string> }) {
   const { state } = useWorkspace();
   const { nodes, edges } = state;
 
@@ -22,10 +23,13 @@ export function ConnectionLines() {
           refY="3"
           orient="auto"
         >
-          <path d="M0,0 L0,6 L8,3 z" fill="rgba(0,196,154,0.4)" />
+          <path d="M0,0 L0,6 L8,3 z" fill="rgba(0,196,154,0.62)" />
         </marker>
       </defs>
       {edges.map((edge) => {
+        if (!visibleNodeIds.has(edge.sourceId) || !visibleNodeIds.has(edge.targetId)) {
+          return null;
+        }
         const src = nodeMap.get(edge.sourceId);
         const tgt = nodeMap.get(edge.targetId);
         if (!src || !tgt) return null;
@@ -34,10 +38,11 @@ export function ConnectionLines() {
         const srcH = src.height ?? 100;
         const tgtW = tgt.width ?? 280;
 
+        const chrome = NODE_CANVAS_TOOLBAR_HEIGHT_PX;
         const x1 = src.position.x + srcW / 2;
-        const y1 = src.position.y + srcH;
+        const y1 = src.position.y + chrome + srcH;
         const x2 = tgt.position.x + tgtW / 2;
-        const y2 = tgt.position.y;
+        const y2 = tgt.position.y + chrome;
 
         const dy = Math.abs(y2 - y1);
         const cp = dy * 0.5;
@@ -53,8 +58,8 @@ export function ConnectionLines() {
             <path
               d={path}
               fill="none"
-              stroke={isActive ? 'rgba(0,196,154,0.35)' : 'rgba(0,196,154,0.12)'}
-              strokeWidth={isActive ? 2 : 1.5}
+              stroke={isActive ? 'rgba(0,196,154,0.62)' : 'rgba(0,196,154,0.28)'}
+              strokeWidth={isActive ? 2.25 : 1.8}
               strokeDasharray={tgt.status === 'suggested' ? '6 4' : undefined}
             />
             {/* Animated pulse dot for active edges */}

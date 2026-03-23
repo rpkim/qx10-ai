@@ -22,6 +22,9 @@ import type {
 import { toast } from 'sonner';
 import { buildInitialWorkspace, getMockResponse } from './mock-data';
 import { consumeWorkspaceQueryStream } from '@/lib/ai/consume-query-stream';
+import { NODE_CANVAS_TOOLBAR_HEIGHT_PX } from './canvas-node-chrome';
+import { tr } from '@/lib/i18n/runtime';
+import { saveWorkspaceToLocalStorage } from './workspace-snapshot';
 
 /* ─────────────────────────────────────────────
    Canvas layout (tree-aware — avoids Answer / Query overlap)
@@ -63,6 +66,7 @@ interface LayoutBox {
 function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): WorkspaceNode[] {
   if (nodes.length === 0) return nodes;
 
+  const chromeH = NODE_CANVAS_TOOLBAR_HEIGHT_PX;
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const childrenMap = new Map<string, string[]>();
   nodes.forEach((n) => childrenMap.set(n.id, []));
@@ -80,15 +84,15 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
 
     const kids = childrenMap.get(id) ?? [];
     if (kids.length === 0) {
-      return { bottom: y + h, rightEdge: x + w };
+      return { bottom: y + h + chromeH, rightEdge: x + w };
     }
 
     if (n.type === 'root') {
-      const rowY = y + h + LAYOUT_GAP_Y;
+      const rowY = y + h + chromeH + LAYOUT_GAP_Y;
       const slotW = Math.max(300, LAYOUT_QUERY_SIBLING_X);
       const totalW = kids.length * slotW;
       const startX = x + w / 2 - totalW / 2;
-      let maxBottom = y + h;
+      let maxBottom = y + h + chromeH;
       kids.forEach((kidId, i) => {
         const box = layoutSubtree(kidId, startX + i * slotW, rowY);
         maxBottom = Math.max(maxBottom, box.bottom);
@@ -97,8 +101,8 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
     }
 
     if (n.type === 'query') {
-      let curY = y + h + LAYOUT_GAP_Y;
-      let maxBottom = y + h;
+      let curY = y + h + chromeH + LAYOUT_GAP_Y;
+      let maxBottom = y + h + chromeH;
       let rightEdge = x + w;
       kids.forEach((kidId) => {
         const box = layoutSubtree(kidId, x, curY);
@@ -112,7 +116,7 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
     if (n.type === 'answer') {
       const dataKids = kids.filter((k) => nodeMap.get(k)?.type === 'data');
       const queryKids = kids.filter((k) => nodeMap.get(k)?.type === 'query');
-      let maxBottom = y + h;
+      let maxBottom = y + h + chromeH;
       let rightEdge = x + w;
 
       let dx = x + w + LAYOUT_GAP_X;
@@ -123,7 +127,7 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
         dx = box.rightEdge + LAYOUT_GAP_X;
       });
 
-      const rowY = y + h + LAYOUT_GAP_Y;
+      const rowY = y + h + chromeH + LAYOUT_GAP_Y;
       let qx = x;
       queryKids.forEach((kidId) => {
         const box = layoutSubtree(kidId, qx, rowY);
@@ -135,8 +139,8 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
       return { bottom: maxBottom, rightEdge };
     }
 
-    let curY = y + h + LAYOUT_GAP_Y;
-    let maxBottom = y + h;
+    let curY = y + h + chromeH + LAYOUT_GAP_Y;
+    let maxBottom = y + h + chromeH;
     let rightEdge = x + w;
     kids.forEach((kidId) => {
       const box = layoutSubtree(kidId, x, curY);
@@ -247,7 +251,11 @@ function attachAnswerChildren(
     });
   }
 
-  const followUpY = answerPos.y + CANVAS_ANSWER_LAYOUT_HEIGHT + LAYOUT_GAP_Y;
+  const followUpY =
+    answerPos.y +
+    NODE_CANVAS_TOOLBAR_HEIGHT_PX +
+    CANVAS_ANSWER_LAYOUT_HEIGHT +
+    LAYOUT_GAP_Y;
   suggestedQueries.slice(0, 2).forEach((q, i) => {
     const subQId = `q-sub-${queryId}-${i}-${Date.now()}`;
     const subQNode: WorkspaceNode = {
@@ -281,6 +289,7 @@ function attachAnswerChildren(
 ───────────────────────────────────────────── */
 type Action =
   | { type: 'INIT_WORKSPACE'; keyword: string; goal: GoalType }
+  | { type: 'SET_SEED_QUERIES'; questions: string[] }
   | { type: 'UPDATE_NODE'; id: string; updates: Partial<WorkspaceNode> }
   | { type: 'ADD_NODE'; node: WorkspaceNode }
   | { type: 'ADD_EDGE'; edge: Edge }
@@ -289,6 +298,7 @@ type Action =
   | { type: 'TOGGLE_DASHBOARD_PIN'; id: string }
   | { type: 'MOVE_NODE'; id: string; position: Position }
   | { type: 'DELETE_NODE'; id: string }
+  | { type: 'TOGGLE_COLLAPSE_BRANCH'; nodeId: string }
   | { type: 'RUN_QUERY'; queryId: string }
   | {
       type: 'ANSWER_STREAMED';
@@ -296,7 +306,8 @@ type Action =
       chars: number;
     }
   | { type: 'COMPLETE_ANSWER'; answerId: string }
-  | { type: 'AUTO_LAYOUT' };
+  | { type: 'AUTO_LAYOUT' }
+  | { type: 'LOAD_SNAPSHOT'; snapshot: WorkspaceState };
 
 const initialState: WorkspaceState = {
   keyword: '',
@@ -306,6 +317,7 @@ const initialState: WorkspaceState = {
   viewport: { x: 0, y: 0, zoom: 0.75 },
   selectedNodeId: null,
   dashboardNodeIds: [],
+  collapsedNodeIds: [],
 };
 
 function reducer(state: WorkspaceState, action: Action): WorkspaceState {
@@ -319,6 +331,56 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         nodes,
         edges,
         viewport: { x: 120, y: 80, zoom: 0.72 },
+        collapsedNodeIds: [],
+      };
+    }
+    case 'SET_SEED_QUERIES': {
+      const root = state.nodes.find((n) => n.type === 'root');
+      if (!root) return state;
+
+      const alreadyHas = state.edges.some((e) => {
+        if (e.sourceId !== root.id) return false;
+        const t = state.nodes.find((n) => n.id === e.targetId);
+        return t?.type === 'query';
+      });
+      if (alreadyHas) return state;
+
+      const questions = action.questions
+        .map((q) => q.trim())
+        .filter(Boolean)
+        .slice(0, 6);
+      if (questions.length === 0) return state;
+
+      const rh = root.height ?? LAYOUT_DEFAULT_HEIGHT.root;
+      const rw = root.width ?? 260;
+      const slotW = LAYOUT_QUERY_SIBLING_X;
+      const rowY =
+        root.position.y + rh + NODE_CANVAS_TOOLBAR_HEIGHT_PX + LAYOUT_GAP_Y;
+      const totalW = questions.length * slotW;
+      const startX = root.position.x + rw / 2 - totalW / 2;
+      const ts = Date.now();
+
+      const newNodes: WorkspaceNode[] = questions.map((q, i) => ({
+        id: `q-seed-${i}-${ts}`,
+        type: 'query' as const,
+        question: q,
+        parentId: root.id,
+        position: { x: startX + i * slotW, y: rowY },
+        status: 'suggested' as const,
+        width: 280,
+        height: 100,
+      }));
+
+      const newEdges: Edge[] = newNodes.map((n) => ({
+        id: `e-root-${n.id}`,
+        sourceId: root.id,
+        targetId: n.id,
+      }));
+
+      return {
+        ...state,
+        nodes: [...state.nodes, ...newNodes],
+        edges: [...state.edges, ...newEdges],
       };
     }
     case 'UPDATE_NODE': {
@@ -355,6 +417,13 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         ),
       };
     }
+    case 'TOGGLE_COLLAPSE_BRANCH': {
+      const id = action.nodeId;
+      const set = new Set(state.collapsedNodeIds);
+      if (set.has(id)) set.delete(id);
+      else set.add(id);
+      return { ...state, collapsedNodeIds: Array.from(set) };
+    }
     case 'DELETE_NODE': {
       // Collect the node and all its descendants recursively
       const collectDescendants = (id: string, nodes: WorkspaceNode[]): string[] => {
@@ -370,6 +439,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         ),
         dashboardNodeIds: state.dashboardNodeIds.filter((id) => !toDelete.has(id)),
         selectedNodeId: toDelete.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
+        collapsedNodeIds: state.collapsedNodeIds.filter((cid) => !toDelete.has(cid)),
       };
     }
     case 'AUTO_LAYOUT': {
@@ -377,6 +447,20 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
       return {
         ...state,
         nodes: layoutedNodes,
+      };
+    }
+    case 'LOAD_SNAPSHOT': {
+      const s = action.snapshot;
+      return {
+        ...initialState,
+        keyword: s.keyword,
+        goal: s.goal,
+        nodes: s.nodes,
+        edges: s.edges,
+        viewport: s.viewport,
+        selectedNodeId: null,
+        dashboardNodeIds: s.dashboardNodeIds,
+        collapsedNodeIds: s.collapsedNodeIds,
       };
     }
     default:
@@ -408,6 +492,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [aiCatalog, setAiCatalog] = React.useState<AiModelCatalog | null>(null);
+  const autosaveTimerRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -441,6 +526,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     goalRef.current = state.goal;
   }, [state.keyword, state.goal]);
 
+  React.useEffect(() => {
+    if (!state.keyword.trim()) return;
+    if (autosaveTimerRef.current != null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+    // Default persistence until DB is added: autosave current workspace silently.
+    autosaveTimerRef.current = window.setTimeout(() => {
+      saveWorkspaceToLocalStorage(state);
+      autosaveTimerRef.current = null;
+    }, 450);
+    return () => {
+      if (autosaveTimerRef.current != null) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [state]);
+
   const initWorkspace = useCallback(
     (keyword: string, goal: GoalType) => {
       dispatch({ type: 'INIT_WORKSPACE', keyword, goal });
@@ -464,7 +566,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const queryH = queryNode.height ?? LAYOUT_DEFAULT_HEIGHT.query;
     const answerPos: Position = {
       x: queryNode.position.x,
-      y: queryNode.position.y + queryH + LAYOUT_GAP_Y,
+      y:
+        queryNode.position.y +
+        NODE_CANVAS_TOOLBAR_HEIGHT_PX +
+        queryH +
+        LAYOUT_GAP_Y,
     };
 
     const runMockFlow = (mockData: ReturnType<typeof getMockResponse>) => {
@@ -547,7 +653,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           }),
         });
       } catch {
-        toast.error('Network error — could not reach the AI service.');
+        toast.error(tr('ai.networkError'));
         dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
         return;
       }
@@ -558,26 +664,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           error?: string;
         };
         if (errBody.code === 'NO_API_KEY' || errBody.code === 'NO_AI_CONFIGURED') {
-          toast.info('Demo mode: set OPENAI_API_KEY and/or GEMINI_API_KEY for live AI.', {
+          toast.info(tr('ai.demoMode'), {
             duration: 6000,
           });
           runMockFlow(getMockResponse(queryNode.question));
           return;
         }
-        toast.error(errBody.error || 'AI service unavailable.');
+        toast.error(errBody.error || tr('ai.serviceUnavailable'));
         dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
         return;
       }
 
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        toast.error(errText ? `Request failed (${res.status})` : `Request failed (${res.status}).`);
+        toast.error(tr('ai.requestFailed', { status: res.status }));
         dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
         return;
       }
 
       if (!res.body) {
-        toast.error('Empty response from AI service.');
+        toast.error(tr('ai.emptyResponse'));
         dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
         return;
       }
@@ -701,10 +807,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       let dy = 160;
       if (parent?.type === 'answer') {
         const ph = parent.height ?? CANVAS_ANSWER_LAYOUT_HEIGHT;
-        dy = ph + LAYOUT_GAP_Y;
+        dy = NODE_CANVAS_TOOLBAR_HEIGHT_PX + ph + LAYOUT_GAP_Y;
       } else if (parent?.type === 'query') {
         const ph = parent.height ?? LAYOUT_DEFAULT_HEIGHT.query;
-        dy = ph + LAYOUT_GAP_Y;
+        dy = NODE_CANVAS_TOOLBAR_HEIGHT_PX + ph + LAYOUT_GAP_Y;
       }
 
       const customQId = `q-custom-${Date.now()}`;

@@ -114,4 +114,6 @@ export interface WorkspaceState {
   viewport: Viewport;
   selectedNodeId: string | null;
   dashboardNodeIds: string[];
+  /** Branches under these node ids are hidden on the canvas (folded). */
+  collapsedNodeIds: string[];
 }
