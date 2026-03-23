@@ -94,7 +94,7 @@ export function AnswerNode({ node }: Props) {
         {isStreaming && (
           <span
             className="inline-block h-3.5 w-0.5 align-middle"
-            style={{ background: '#A3E635', animation: 'blink 0.8s step-end infinite' }}
+            style={{ background: '#A3E635', animation: 'blink-cursor 0.8s step-end infinite' }}
           />
         )}
       </div>
@@ -165,12 +165,6 @@ export function AnswerNode({ node }: Props) {
         </div>
       )}
 
-      <style jsx>{`
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
-        }
-      `}</style>
     </div>
   );
 }

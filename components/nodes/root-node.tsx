@@ -38,7 +38,7 @@ export function RootNode({ node }: Props) {
         className="pointer-events-none absolute inset-0 rounded-2xl"
         style={{
           border: '1px solid rgba(0,196,154,0.3)',
-          animation: 'pulse 3s ease-in-out infinite',
+          animation: 'socrates-pulse 3s ease-in-out infinite',
         }}
       />
 
@@ -69,13 +69,6 @@ export function RootNode({ node }: Props) {
           Explore all queries
         </button>
       </div>
-
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 0.4; transform: scale(1); }
-          50% { opacity: 0.8; transform: scale(1.02); }
-        }
-      `}</style>
     </div>
   );
 }

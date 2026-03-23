@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 import { useWorkspace } from '@/lib/workspace-store';
 import { ConnectionLines } from './connection-lines';
 import { RootNode } from '@/components/nodes/root-node';
@@ -18,37 +18,89 @@ export function Canvas() {
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
   const draggingNode = useRef<{ id: string; startMouse: Position; startNode: Position } | null>(null);
+  const spaceHeld = useRef(false);
+  const [cursor, setCursor] = useState<'default' | 'grab' | 'grabbing'>('default');
 
-  /* ── Wheel zoom ── */
+  /* ── Spacebar hold to pan ── */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat && !spaceHeld.current) {
+        spaceHeld.current = true;
+        setCursor('grab');
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        spaceHeld.current = false;
+        if (!isPanning.current) setCursor('default');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
+  /* ── Wheel zoom (pinch or ctrl+scroll) ── */
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.08 : 0.93;
-      dispatch({
-        type: 'SET_VIEWPORT',
-        viewport: { zoom: Math.min(Math.max(viewport.zoom * factor, 0.2), 2.5) },
-      });
+      if (e.ctrlKey || e.metaKey) {
+        // Zoom toward mouse cursor position
+        const rect = el.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const factor = e.deltaY < 0 ? 1.08 : 0.93;
+        const newZoom = Math.min(Math.max(viewport.zoom * factor, 0.15), 3);
+        const scale = newZoom / viewport.zoom;
+        dispatch({
+          type: 'SET_VIEWPORT',
+          viewport: {
+            zoom: newZoom,
+            x: mouseX - (mouseX - viewport.x) * scale,
+            y: mouseY - (mouseY - viewport.y) * scale,
+          },
+        });
+      } else {
+        // Two-finger scroll / trackpad pan
+        dispatch({
+          type: 'SET_VIEWPORT',
+          viewport: {
+            x: viewport.x - e.deltaX,
+            y: viewport.y - e.deltaY,
+          },
+        });
+      }
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [viewport.zoom, dispatch]);
+  }, [viewport, dispatch]);
 
-  /* ── Pan (middle-click or space+drag) ── */
+  /* ── Mouse down: start pan on blank canvas, or space+drag anywhere ── */
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (e.button === 1 || (e.button === 0 && (e.target as HTMLElement) === canvasRef.current)) {
+      const onBlankCanvas = e.target === canvasRef.current ||
+        (e.target as HTMLElement).dataset.canvasBg === 'true';
+      const isMiddleClick = e.button === 1;
+      const isPanIntent = isMiddleClick || spaceHeld.current || onBlankCanvas;
+
+      if (isPanIntent && e.button !== 2) {
         e.preventDefault();
         isPanning.current = true;
         panStart.current = { x: e.clientX - panX, y: e.clientY - panY };
+        setCursor('grabbing');
       }
     },
     [panX, panY]
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+  /* ── Global mouse move / up (so pan works even when cursor leaves nodes) ── */
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
       if (isPanning.current) {
         dispatch({
           type: 'SET_VIEWPORT',
@@ -60,25 +112,39 @@ export function Canvas() {
       }
       if (draggingNode.current) {
         const { id, startMouse, startNode } = draggingNode.current;
-        const dx = (e.clientX - startMouse.x) / zoom;
-        const dy = (e.clientY - startMouse.y) / zoom;
+        const currentZoom = (window as any).__socratesZoom ?? 1;
+        const dx = (e.clientX - startMouse.x) / currentZoom;
+        const dy = (e.clientY - startMouse.y) / currentZoom;
         dispatch({
           type: 'MOVE_NODE',
           id,
           position: { x: startNode.x + dx, y: startNode.y + dy },
         });
       }
-    },
-    [dispatch, zoom]
-  );
+    };
+    const onUp = () => {
+      if (isPanning.current) {
+        isPanning.current = false;
+        setCursor(spaceHeld.current ? 'grab' : 'default');
+      }
+      draggingNode.current = null;
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [dispatch]);
 
-  const handleMouseUp = useCallback(() => {
-    isPanning.current = false;
-    draggingNode.current = null;
-  }, []);
+  // Expose zoom to global so node drag handler can read it without closure staleness
+  useEffect(() => {
+    (window as any).__socratesZoom = zoom;
+  }, [zoom]);
 
   const startNodeDrag = useCallback(
     (nodeId: string, nodePos: Position, e: React.MouseEvent) => {
+      if (spaceHeld.current) return; // space held → pan, not node drag
       e.stopPropagation();
       draggingNode.current = {
         id: nodeId,
@@ -91,26 +157,30 @@ export function Canvas() {
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
-      if ((e.target as HTMLElement) === canvasRef.current) {
+      if (e.target === canvasRef.current ||
+          (e.target as HTMLElement).dataset.canvasBg === 'true') {
         dispatch({ type: 'SELECT_NODE', id: null });
       }
     },
     [dispatch]
   );
 
+  const cursorStyle =
+    cursor === 'grabbing' ? 'grabbing' :
+    cursor === 'grab'     ? 'grab' :
+    spaceHeld.current     ? 'grab' : 'default';
+
   return (
     <div
       ref={canvasRef}
-      className="absolute inset-0 overflow-hidden"
-      style={{ cursor: isPanning.current ? 'grabbing' : 'grab', background: 'var(--background)' }}
+      className="absolute inset-0 overflow-hidden select-none"
+      style={{ cursor: cursorStyle, background: 'var(--background)' }}
       onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
       onClick={handleCanvasClick}
     >
-      {/* Dot-grid background */}
+      {/* Dot-grid background — tagged so blank-area detection works */}
       <div
+        data-canvas-bg="true"
         className="pointer-events-none absolute inset-0"
         style={{
           backgroundImage: 'radial-gradient(circle, rgba(0,196,154,0.18) 1px, transparent 1px)',
@@ -126,6 +196,7 @@ export function Canvas() {
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
           width: '8000px',
           height: '6000px',
+          pointerEvents: cursor === 'grabbing' ? 'none' : 'auto',
         }}
       >
         {/* SVG connection layer */}
@@ -157,8 +228,8 @@ function NodeRenderer({
   const { dispatch } = useWorkspace();
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    onDragStart(node.id, node.position, e);
     dispatch({ type: 'SELECT_NODE', id: node.id });
+    onDragStart(node.id, node.position, e);
   };
 
   const style: React.CSSProperties = {

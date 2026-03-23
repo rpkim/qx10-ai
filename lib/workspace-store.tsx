@@ -117,6 +117,11 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  // Stable ref to always-current nodes, avoiding stale closure in runQuery
+  const nodesRef = React.useRef(state.nodes);
+  React.useEffect(() => {
+    nodesRef.current = state.nodes;
+  }, [state.nodes]);
 
   const initWorkspace = useCallback(
     (keyword: string, goal: GoalType) => {
@@ -127,7 +132,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const runQuery = useCallback(
     (queryId: string) => {
-      const queryNode = state.nodes.find((n) => n.id === queryId);
+      const queryNode = nodesRef.current.find((n) => n.id === queryId);
       if (!queryNode || queryNode.type !== 'query') return;
 
       // Mark query as running
@@ -241,7 +246,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }, 30);
       }, 600);
     },
-    [state.nodes]
+    [] // nodesRef is a stable ref — no dep needed
   );
 
   const addCustomQuery = useCallback(

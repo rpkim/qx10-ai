@@ -59,9 +59,6 @@ function WorkspaceInner() {
           />
           <span className="text-sm text-muted-foreground">Initializing workspace...</span>
         </div>
-        <style jsx>{`
-          @keyframes spin { to { transform: rotate(360deg); } }
-        `}</style>
       </div>
     );
   }

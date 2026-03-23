@@ -79,7 +79,7 @@ export function QueryNode({ node }: Props) {
             <span className="flex items-center gap-1 text-xs" style={{ color: '#00C49A' }}>
               <span
                 className="inline-block h-1.5 w-1.5 rounded-full"
-                style={{ background: '#00C49A', animation: 'ping 1s cubic-bezier(0,0,0.2,1) infinite' }}
+                style={{ background: '#00C49A', animation: 'ping-dot 1s cubic-bezier(0,0,0.2,1) infinite' }}
               />
               Running
             </span>
@@ -159,13 +159,6 @@ export function QueryNode({ node }: Props) {
           />
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes loading-bar {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(350%); }
-        }
-      `}</style>
     </div>
   );
 }

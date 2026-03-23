@@ -21,14 +21,23 @@ export function MiniMap() {
   const H = 120;
   const PAD = 16;
 
+  // Safe window dimensions — always valid in 'use client' during paint
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1440;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
+
   return (
     <div
       className="absolute bottom-4 right-4 z-20 overflow-hidden rounded-xl border border-border bg-card/95 backdrop-blur-sm"
-      style={{ width: W + PAD * 2, height: H + PAD * 2 }}
+      style={{ width: W + PAD * 2, height: H + PAD * 2 + 22 }}
       role="img"
       aria-label="Minimap overview"
     >
-      <div className="mb-1 px-3 pt-2 text-xs font-medium text-muted-foreground">Overview</div>
+      <div className="flex items-center justify-between px-3 pt-2 pb-1">
+        <span className="text-xs font-medium text-muted-foreground">Overview</span>
+        <span className="font-mono text-xs text-muted-foreground/60">
+          {Math.round(viewport.zoom * 100)}%
+        </span>
+      </div>
       <svg width={W} height={H} className="mx-auto block">
         {nodes.map((n) => {
           const x = n.position.x * SCALE;
@@ -57,8 +66,8 @@ export function MiniMap() {
         <rect
           x={-viewport.x * SCALE}
           y={-viewport.y * SCALE}
-          width={(window?.innerWidth ?? 1440) / viewport.zoom * SCALE}
-          height={(window?.innerHeight ?? 900) / viewport.zoom * SCALE}
+          width={(vw / viewport.zoom) * SCALE}
+          height={(vh / viewport.zoom) * SCALE}
           fill="none"
           stroke="rgba(255,255,255,0.25)"
           strokeWidth={1}
