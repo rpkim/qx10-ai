@@ -62,18 +62,18 @@ export default function LandingPage() {
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
           <div className="flex items-center gap-2">
-            <SocratesLogo />
+            <QX10Logo />
             <span
               className="text-4xl font-bold tracking-tight text-foreground"
               style={{ fontFamily: 'var(--font-space-grotesk)' }}
             >
-              socra<span style={{ color: '#00C49A' }}>.ai</span>
+              qx<span style={{ color: '#00C49A' }}>10</span>.ai
             </span>
           </div>
           <p className="text-center text-base leading-relaxed text-muted-foreground">
             Ask endlessly. Discover deeply.{' '}
             <span className="text-foreground/70">
-              Build living knowledge trees through the Socratic method.
+              Build living knowledge trees by exploring infinite possibilities.
             </span>
           </p>
         </div>
@@ -199,20 +199,19 @@ export default function LandingPage() {
   );
 }
 
-function SocratesLogo() {
+function QX10Logo() {
   return (
     <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-      <circle cx="18" cy="18" r="17" stroke="#00C49A" strokeWidth="1.5" />
-      <circle cx="18" cy="18" r="5" fill="#00C49A" fillOpacity="0.3" />
+      {/* Cube frame representing 10 dimensions */}
+      <rect x="2" y="6" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" />
+      <rect x="8" y="12" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" opacity="0.6" />
+      {/* Connecting lines */}
+      <line x1="2" y1="6" x2="8" y2="12" stroke="#00C49A" strokeWidth="1.5" />
+      <line x1="18" y1="6" x2="24" y2="12" stroke="#00C49A" strokeWidth="1.5" />
+      <line x1="2" y1="22" x2="8" y2="28" stroke="#00C49A" strokeWidth="1.5" />
+      <line x1="18" y1="22" x2="24" y2="28" stroke="#00C49A" strokeWidth="1.5" />
+      {/* Center dot */}
       <circle cx="18" cy="18" r="2" fill="#00C49A" />
-      <line x1="18" y1="1" x2="18" y2="8" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="18" y1="28" x2="18" y2="35" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="1" y1="18" x2="8" y2="18" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="28" y1="18" x2="35" y2="18" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="4.4" y1="4.4" x2="9.5" y2="9.5" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5" />
-      <line x1="26.5" y1="26.5" x2="31.6" y2="31.6" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5" />
-      <line x1="31.6" y1="4.4" x2="26.5" y2="9.5" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5" />
-      <line x1="9.5" y1="26.5" x2="4.4" y2="31.6" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" strokeOpacity="0.5" />
     </svg>
   );
 }

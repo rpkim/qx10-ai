@@ -112,7 +112,7 @@ export function Canvas() {
       }
       if (draggingNode.current) {
         const { id, startMouse, startNode } = draggingNode.current;
-        const currentZoom = (window as any).__socratesZoom ?? 1;
+        const currentZoom = (window as any).__qx10Zoom ?? 1;
         const dx = (e.clientX - startMouse.x) / currentZoom;
         const dy = (e.clientY - startMouse.y) / currentZoom;
         dispatch({
@@ -139,7 +139,7 @@ export function Canvas() {
 
   // Expose zoom to global so node drag handler can read it without closure staleness
   useEffect(() => {
-    (window as any).__socratesZoom = zoom;
+    (window as any).__qx10Zoom = zoom;
   }, [zoom]);
 
   const startNodeDrag = useCallback(

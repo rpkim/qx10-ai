@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Socrates.ai — deep navy-black base, cyan-green primary, amber accent */
+  /* qx10.ai — deep navy-black base, cyan-green primary, amber accent */
   --background: #080C12;
   --foreground: #E2E8F0;
   --card: #0F1623;

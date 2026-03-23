@@ -31,6 +31,7 @@ type Action =
   | { type: 'SELECT_NODE'; id: string | null }
   | { type: 'TOGGLE_DASHBOARD_PIN'; id: string }
   | { type: 'MOVE_NODE'; id: string; position: Position }
+  | { type: 'DELETE_NODE'; id: string }
   | { type: 'RUN_QUERY'; queryId: string }
   | {
       type: 'ANSWER_STREAMED';
@@ -96,6 +97,23 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         ),
       };
     }
+    case 'DELETE_NODE': {
+      // Collect the node and all its descendants recursively
+      const collectDescendants = (id: string, nodes: WorkspaceNode[]): string[] => {
+        const children = nodes.filter((n) => n.parentId === id).map((n) => n.id);
+        return [id, ...children.flatMap((cid) => collectDescendants(cid, nodes))];
+      };
+      const toDelete = new Set(collectDescendants(action.id, state.nodes));
+      return {
+        ...state,
+        nodes: state.nodes.filter((n) => !toDelete.has(n.id)),
+        edges: state.edges.filter(
+          (e) => !toDelete.has(e.sourceId) && !toDelete.has(e.targetId)
+        ),
+        dashboardNodeIds: state.dashboardNodeIds.filter((id) => !toDelete.has(id)),
+        selectedNodeId: toDelete.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
+      };
+    }
     default:
       return state;
   }
@@ -111,6 +129,7 @@ interface WorkspaceContextValue {
   runQuery: (queryId: string) => void;
   addCustomQuery: (question: string, parentId: string, parentPos: Position) => void;
   toggleDashboardPin: (nodeId: string) => void;
+  deleteNode: (nodeId: string) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -276,9 +295,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'TOGGLE_DASHBOARD_PIN', id: nodeId });
   }, []);
 
+  const deleteNode = useCallback((nodeId: string) => {
+    dispatch({ type: 'DELETE_NODE', id: nodeId });
+  }, []);
+
   return (
     <WorkspaceContext.Provider
-      value={{ state, dispatch, initWorkspace, runQuery, addCustomQuery, toggleDashboardPin }}
+      value={{ state, dispatch, initWorkspace, runQuery, addCustomQuery, toggleDashboardPin, deleteNode }}
     >
       {children}
     </WorkspaceContext.Provider>

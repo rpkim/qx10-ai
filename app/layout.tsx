@@ -16,8 +16,8 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata: Metadata = {
-  title: 'Socrates.ai — Socratic Knowledge Discovery',
-  description: 'Explore any topic through infinite Socratic questioning. Build living knowledge trees that evolve into real-time dashboards.',
+  title: 'qx10.ai — Infinite Knowledge Discovery',
+  description: 'Explore any topic through infinite questioning. Build living knowledge trees that evolve into real-time dashboards.',
   generator: 'v0.app',
   themeColor: '#080C12',
 }
