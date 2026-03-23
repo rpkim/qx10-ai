@@ -94,7 +94,7 @@ export default function LandingPage() {
               className="text-4xl font-bold tracking-tight text-foreground"
               style={{ fontFamily: 'var(--font-space-grotesk)' }}
             >
-              qx<span style={{ color: '#00C49A' }}>10</span>.ai
+              qx<span style={{ color: '#00C49A' }}>10</span>.lol
             </span>
           </div>
           <p className="text-center text-base leading-relaxed text-muted-foreground">
