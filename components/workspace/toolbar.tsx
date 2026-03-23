@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Download, FolderOpen, HardDrive, LayoutGrid, Upload } from 'lucide-react';
+import { Download, FileImage, FileText, FolderOpen, LayoutGrid, Upload } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { useI18n } from '@/components/i18n-provider';
@@ -31,11 +31,9 @@ import type { GoalType, WorkspaceState } from '@/lib/types';
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
 import {
   downloadWorkspaceJson,
-  hasWorkspaceInLocalStorage,
-  loadWorkspaceFromLocalStorage,
   parseWorkspaceSnapshotString,
-  saveWorkspaceToLocalStorage,
 } from '@/lib/workspace-snapshot';
+import { exportWorkspaceTreePdf, exportWorkspaceTreePng } from '@/lib/workspace-visual-export';
 import { listRecentWorkspaces } from '@/lib/workspace-index';
 import { workspaceUrl } from '@/lib/workspace-url';
 import {
@@ -64,15 +62,10 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const pendingSnapshotRef = useRef<WorkspaceState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [hasBrowserSave, setHasBrowserSave] = useState(false);
   const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
   const [newKeyword, setNewKeyword] = useState('');
   const [newGoal, setNewGoal] = useState<GoalType>('learn');
   const [recentOpen, setRecentOpen] = useState(false);
-
-  useEffect(() => {
-    setHasBrowserSave(hasWorkspaceInLocalStorage(keyword));
-  }, [keyword]);
 
   const zoomIn = () =>
     dispatch({ type: 'SET_VIEWPORT', viewport: { zoom: Math.min(viewport.zoom + 0.1, 2) } });
@@ -83,26 +76,6 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
   
   const autoLayout = () => {
     dispatch({ type: 'AUTO_LAYOUT' });
-  };
-
-  const saveToBrowser = () => {
-    const r = saveWorkspaceToLocalStorage(state);
-    if (r.ok) {
-      setHasBrowserSave(true);
-      toast.success(t('toolbar.browserSaved'));
-    } else {
-      toast.error(t(SNAPSHOT_ERROR_I18N_KEY[r.code]));
-    }
-  };
-
-  const requestLoadFromBrowser = () => {
-    const r = loadWorkspaceFromLocalStorage(keyword);
-    if (!r.ok) {
-      toast.error(t(SNAPSHOT_ERROR_I18N_KEY[r.code]));
-      return;
-    }
-    pendingSnapshotRef.current = r.state;
-    setLoadDialogOpen(true);
   };
 
   const applyLoadedSnapshot = () => {
@@ -119,7 +92,6 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
     );
     pendingSnapshotRef.current = null;
     setLoadDialogOpen(false);
-    setHasBrowserSave(hasWorkspaceInLocalStorage(snap.keyword));
     toast.success(t('toolbar.loaded'));
   };
 
@@ -157,6 +129,18 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
       pendingSnapshotRef.current = r.state;
       setLoadDialogOpen(true);
     });
+  };
+
+  const exportPng = () => {
+    void exportWorkspaceTreePng(state.keyword)
+      .then(() => toast.success(t('toolbar.exportPngDone')))
+      .catch(() => toast.error(t('toolbar.exportImageFail')));
+  };
+
+  const exportPdf = () => {
+    void exportWorkspaceTreePdf(state.keyword)
+      .then(() => toast.success(t('toolbar.exportPdfDone')))
+      .catch(() => toast.error(t('toolbar.exportImageFail')));
   };
 
   const zoomPct = Math.round(viewport.zoom * 100);
@@ -320,26 +304,19 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
             >
               <FolderOpen className="size-4" />
               {t('toolbar.saveLoad')}
-              {hasBrowserSave && (
-                <span
-                  className="absolute right-2 top-2 size-1.5 rounded-full bg-primary"
-                  title={t('toolbar.hasBrowserSave')}
-                  aria-hidden
-                />
-              )}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-              {t('toolbar.persistHint')}
+              {t('toolbar.saveLoadHint')}
             </DropdownMenuLabel>
-            <DropdownMenuItem onSelect={saveToBrowser}>
-              <HardDrive className="mr-2 size-4" />
-              {t('toolbar.saveToBrowser')}
+            <DropdownMenuItem onSelect={exportPng}>
+              <FileImage className="mr-2 size-4" />
+              {t('toolbar.exportPng')}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={requestLoadFromBrowser}>
-              <FolderOpen className="mr-2 size-4" />
-              {t('toolbar.loadFromBrowser')}
+            <DropdownMenuItem onSelect={exportPdf}>
+              <FileText className="mr-2 size-4" />
+              {t('toolbar.exportPdf')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
