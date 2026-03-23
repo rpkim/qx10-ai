@@ -97,7 +97,13 @@ export function AnswerNode({ node }: Props) {
       </div>
 
       {/* Answer content */}
-      <div className="max-h-52 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+      <div
+        className="max-h-52 overflow-y-auto pr-1"
+        style={{ scrollbarWidth: 'thin', touchAction: 'pan-y', overscrollBehavior: 'contain' }}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onWheel={(e) => e.stopPropagation()}
+      >
         {formattedText}
         {isStreaming && (
           <span

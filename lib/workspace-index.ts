@@ -47,3 +47,14 @@ export function registerWorkspaceVisit(keyword: string, goal: GoalType): void {
     /* ignore quota */
   }
 }
+
+export function removeWorkspaceVisit(keyword: string): void {
+  if (typeof window === 'undefined' || !keyword.trim()) return;
+  const kw = keyword.trim();
+  const list = readRaw().filter((e) => e.keyword !== kw);
+  try {
+    localStorage.setItem(INDEX_KEY, JSON.stringify(list));
+  } catch {
+    /* ignore quota */
+  }
+}

@@ -60,6 +60,15 @@ export function saveDashboardGrid(keyword: string, items: DashboardGridItem[]): 
   }
 }
 
+export function removeDashboardGrid(keyword: string): void {
+  if (typeof window === 'undefined' || !keyword.trim()) return;
+  try {
+    localStorage.removeItem(keyFor(keyword.trim()));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function defaultGridLayout(pinnedIds: string[]): DashboardGridItem[] {
   if (pinnedIds.length === 0) return [];
   const cols = 2;

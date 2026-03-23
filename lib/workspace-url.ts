@@ -9,6 +9,7 @@ export function workspaceUrl(opts: {
   keyword: string;
   goal: GoalType | string;
   ws?: string;
+  view?: 'workspace' | 'dashboard';
 }): string {
   const keyword = opts.keyword.trim();
   const ws = opts.ws !== undefined && opts.ws !== '' ? opts.ws : String(Date.now());
@@ -17,5 +18,8 @@ export function workspaceUrl(opts: {
     goal: String(opts.goal),
     ws,
   });
+  if (opts.view === 'dashboard') {
+    q.set('view', 'dashboard');
+  }
   return `/workspace?${q.toString()}`;
 }
