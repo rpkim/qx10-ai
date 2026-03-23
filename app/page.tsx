@@ -2,14 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { GoalType } from '@/lib/types';
-
-const GOALS: { id: GoalType; label: string; desc: string }[] = [
-  { id: 'learn', label: 'Learn', desc: 'Understand deeply' },
-  { id: 'research', label: 'Research', desc: 'Discover & analyze' },
-  { id: 'build', label: 'Build', desc: 'Create something' },
-  { id: 'analyze', label: 'Analyze', desc: 'Evaluate & compare' },
-];
 
 const EXAMPLE_KEYWORDS = [
   'Quant Trading',
@@ -22,12 +14,14 @@ const EXAMPLE_KEYWORDS = [
 export default function LandingPage() {
   const router = useRouter();
   const [keyword, setKeyword] = useState('');
-  const [goal, setGoal] = useState<GoalType>('learn');
   const [focused, setFocused] = useState(false);
 
   const handleStart = () => {
     if (!keyword.trim()) return;
-    const params = new URLSearchParams({ keyword: keyword.trim(), goal });
+    const params = new URLSearchParams({
+      keyword: keyword.trim(),
+      goal: 'learn',
+    });
     router.push(`/workspace?${params.toString()}`);
   };
 
@@ -76,30 +70,6 @@ export default function LandingPage() {
               Build living knowledge trees by exploring infinite possibilities.
             </span>
           </p>
-        </div>
-
-        {/* Goal selector */}
-        <div className="flex w-full flex-col gap-3">
-          <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            What do you want to do?
-          </span>
-          <div className="grid grid-cols-4 gap-2">
-            {GOALS.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => setGoal(g.id)}
-                className={[
-                  'flex flex-col items-center gap-1 rounded-xl border px-3 py-3 text-sm transition-all duration-200',
-                  goal === g.id
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
-                ].join(' ')}
-              >
-                <span className="font-semibold">{g.label}</span>
-                <span className="text-xs opacity-60">{g.desc}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Keyword input */}

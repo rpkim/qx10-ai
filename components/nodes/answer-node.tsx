@@ -9,9 +9,15 @@ interface Props {
 }
 
 export function AnswerNode({ node }: Props) {
-  const { runQuery, addCustomQuery, toggleDashboardPin, state } = useWorkspace();
+  const { addCustomQuery, toggleDashboardPin, state, aiCatalog } = useWorkspace();
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const isPinned = state.dashboardNodeIds.includes(node.id);
+
+  const parentQuery = state.nodes.find((n) => n.id === node.queryId);
+  const inheritedModelChoice =
+    parentQuery?.type === 'query'
+      ? parentQuery.modelChoice ?? aiCatalog?.defaultChoice
+      : undefined;
 
   const displayText =
     node.status === 'streaming' && node.streamedChars !== undefined
@@ -107,7 +113,14 @@ export function AnswerNode({ node }: Props) {
             {visibleKeywords.map((kw) => (
               <button
                 key={kw}
-                onClick={() => addCustomQuery(`What is ${kw} in this context?`, node.id, node.position)}
+                onClick={() =>
+                  addCustomQuery(
+                    `What is ${kw} in this context?`,
+                    node.id,
+                    node.position,
+                    inheritedModelChoice
+                  )
+                }
                 className="rounded-full border px-2.5 py-0.5 text-xs transition-all"
                 style={{ borderColor: 'rgba(163,230,53,0.3)', color: '#A3E635' }}
                 onMouseOver={(e) =>
@@ -145,7 +158,7 @@ export function AnswerNode({ node }: Props) {
             {node.suggestedQueries.slice(0, 2).map((q) => (
               <button
                 key={q}
-                onClick={() => addCustomQuery(q, node.id, node.position)}
+                onClick={() => addCustomQuery(q, node.id, node.position, inheritedModelChoice)}
                 className="flex items-center gap-2 rounded-xl p-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
                 <svg

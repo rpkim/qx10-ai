@@ -3,6 +3,13 @@
 import { useState } from 'react';
 import type { QueryNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Props {
   node: QueryNodeData;
@@ -18,13 +25,21 @@ const STATUS_COLORS = {
 };
 
 export function QueryNode({ node }: Props) {
-  const { runQuery, addCustomQuery } = useWorkspace();
+  const { runQuery, addCustomQuery, dispatch, aiCatalog } = useWorkspace();
   const [showCustom, setShowCustom] = useState(false);
   const [customQ, setCustomQ] = useState('');
 
   const colors = STATUS_COLORS[node.status] ?? STATUS_COLORS.suggested;
   const isRunning = node.status === 'running';
   const isComplete = node.status === 'complete';
+
+  const effectiveModelId =
+    node.modelChoice ??
+    aiCatalog?.defaultChoice ??
+    aiCatalog?.options[0]?.id ??
+    '';
+  const modelLabel =
+    aiCatalog?.options.find((o) => o.id === effectiveModelId)?.label ?? effectiveModelId;
 
   const handleRun = () => {
     if (!isRunning && !isComplete) {
@@ -35,7 +50,12 @@ export function QueryNode({ node }: Props) {
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (customQ.trim()) {
-      addCustomQuery(customQ.trim(), node.id, node.position);
+      addCustomQuery(
+        customQ.trim(),
+        node.id,
+        node.position,
+        node.modelChoice ?? aiCatalog?.defaultChoice
+      );
       setCustomQ('');
       setShowCustom(false);
     }
@@ -93,6 +113,46 @@ export function QueryNode({ node }: Props) {
 
       {/* Question */}
       <p className="text-sm leading-relaxed text-foreground">{node.question}</p>
+
+      {/* Model (env-driven catalog) */}
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Model
+        </span>
+        {!aiCatalog ? (
+          <span className="text-xs text-muted-foreground">Loading models…</span>
+        ) : aiCatalog.options.length === 0 ? (
+          <span className="text-xs text-muted-foreground">
+            Demo — add OPENAI_API_KEY or GEMINI_API_KEY
+          </span>
+        ) : aiCatalog.options.length === 1 ? (
+          <span className="text-xs text-foreground/80">{aiCatalog.options[0].label}</span>
+        ) : isComplete || isRunning ? (
+          <span className="text-xs text-foreground/80">{modelLabel || 'Default'}</span>
+        ) : (
+          <Select
+            value={effectiveModelId}
+            onValueChange={(id) =>
+              dispatch({
+                type: 'UPDATE_NODE',
+                id: node.id,
+                updates: { modelChoice: id },
+              })
+            }
+          >
+            <SelectTrigger size="sm" className="h-8 w-full max-w-full text-xs">
+              <SelectValue placeholder="Select model" />
+            </SelectTrigger>
+            <SelectContent>
+              {aiCatalog.options.map((opt) => (
+                <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
 
       {/* Actions */}
       {!isComplete && !isRunning && (
