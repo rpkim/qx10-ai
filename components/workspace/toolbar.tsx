@@ -17,6 +17,10 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
     dispatch({ type: 'SET_VIEWPORT', viewport: { zoom: Math.max(viewport.zoom - 0.1, 0.2) } });
   const fitView = () =>
     dispatch({ type: 'SET_VIEWPORT', viewport: { x: 120, y: 80, zoom: 0.72 } });
+  
+  const autoLayout = () => {
+    dispatch({ type: 'AUTO_LAYOUT' });
+  };
 
   const zoomPct = Math.round(viewport.zoom * 100);
 
@@ -25,16 +29,16 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
       {/* Left: Logo + keyword */}
       <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-border bg-card/90 px-4 py-2.5 backdrop-blur-sm">
         <svg width="22" height="22" viewBox="0 0 36 36" fill="none">
-          <circle cx="18" cy="18" r="17" stroke="#00C49A" strokeWidth="1.5" />
-          <circle cx="18" cy="18" r="5" fill="#00C49A" fillOpacity="0.3" />
+          <rect x="2" y="6" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" />
+          <rect x="8" y="12" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" opacity="0.6" />
+          <line x1="2" y1="6" x2="8" y2="12" stroke="#00C49A" strokeWidth="1.5" />
+          <line x1="18" y1="6" x2="24" y2="12" stroke="#00C49A" strokeWidth="1.5" />
+          <line x1="2" y1="22" x2="8" y2="28" stroke="#00C49A" strokeWidth="1.5" />
+          <line x1="18" y1="22" x2="24" y2="28" stroke="#00C49A" strokeWidth="1.5" />
           <circle cx="18" cy="18" r="2" fill="#00C49A" />
-          <line x1="18" y1="1" x2="18" y2="8" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" />
-          <line x1="18" y1="28" x2="18" y2="35" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" />
-          <line x1="1" y1="18" x2="8" y2="18" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" />
-          <line x1="28" y1="18" x2="35" y2="18" stroke="#00C49A" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
         <span className="font-bold text-foreground" style={{ fontFamily: 'var(--font-space-grotesk)' }}>
-          socra<span style={{ color: '#00C49A' }}>.ai</span>
+          qx<span style={{ color: '#00C49A' }}>10</span>.ai
         </span>
         <div className="mx-1 h-4 w-px bg-border" />
         <span className="text-sm font-medium text-foreground">{keyword}</span>
@@ -73,6 +77,18 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
               {dashboardNodeIds.length}
             </span>
           )}
+        </button>
+
+        {/* Auto layout button */}
+        <button
+          onClick={autoLayout}
+          className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:text-foreground hover:bg-secondary"
+          title="Auto-arrange nodes in tree layout"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 9h12M6 9a3 3 0 1 1 6 0M18 9a3 3 0 0 0-6 0M9 15h6M9 15a3 3 0 1 1 6 0M15 15a3 3 0 0 0-6 0" />
+          </svg>
+          Layout
         </button>
 
         {/* Zoom controls */}

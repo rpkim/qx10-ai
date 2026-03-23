@@ -20,6 +20,71 @@ import type {
 import { buildInitialWorkspace, getMockResponse, getSuggestedQueries } from './mock-data';
 
 /* ─────────────────────────────────────────────
+   Hierarchical Layout Algorithm
+───────────────────────────────────────────── */
+function computeHierarchicalLayout(nodes: WorkspaceNode[], edges: Edge[]): WorkspaceNode[] {
+  if (nodes.length === 0) return nodes;
+
+  const LEVEL_HEIGHT = 200;
+  const SIBLING_WIDTH = 320;
+
+  // Find root node(s)
+  const rootNodes = nodes.filter((n) => n.type === 'root' || !nodes.some((p) => edges.some((e) => e.targetId === n.id)));
+
+  // Build level map: which nodes are at which depth level
+  const levelMap = new Map<string, number>();
+  const childrenMap = new Map<string, string[]>();
+
+  // Build children map
+  nodes.forEach((n) => {
+    childrenMap.set(n.id, []);
+  });
+  edges.forEach((e) => {
+    const children = childrenMap.get(e.sourceId) || [];
+    children.push(e.targetId);
+    childrenMap.set(e.sourceId, children);
+  });
+
+  // Assign levels using BFS
+  const queue: { id: string; level: number }[] = rootNodes.map((n) => ({ id: n.id, level: 0 }));
+  while (queue.length > 0) {
+    const { id, level } = queue.shift()!;
+    if (levelMap.has(id)) continue;
+    levelMap.set(id, level);
+    const children = childrenMap.get(id) || [];
+    children.forEach((cid) => queue.push({ id: cid, level: level + 1 }));
+  }
+
+  // Group nodes by level
+  const nodesByLevel = new Map<number, string[]>();
+  levelMap.forEach((level, nodeId) => {
+    if (!nodesByLevel.has(level)) {
+      nodesByLevel.set(level, []);
+    }
+    nodesByLevel.get(level)!.push(nodeId);
+  });
+
+  // Position nodes
+  const positions = new Map<string, { x: number; y: number }>();
+  nodesByLevel.forEach((nodeIds, level) => {
+    const y = level * LEVEL_HEIGHT + 100;
+    const totalWidth = nodeIds.length * SIBLING_WIDTH;
+    const startX = 400 - totalWidth / 2;
+
+    nodeIds.forEach((nodeId, index) => {
+      const x = startX + index * SIBLING_WIDTH;
+      positions.set(nodeId, { x, y });
+    });
+  });
+
+  // Update nodes with new positions
+  return nodes.map((n) => ({
+    ...n,
+    position: positions.get(n.id) || n.position,
+  }));
+}
+
+/* ─────────────────────────────────────────────
    Action types
 ───────────────────────────────────────────── */
 type Action =
@@ -38,7 +103,8 @@ type Action =
       answerId: string;
       chars: number;
     }
-  | { type: 'COMPLETE_ANSWER'; answerId: string };
+  | { type: 'COMPLETE_ANSWER'; answerId: string }
+  | { type: 'AUTO_LAYOUT' };
 
 const initialState: WorkspaceState = {
   keyword: '',
@@ -112,6 +178,14 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         ),
         dashboardNodeIds: state.dashboardNodeIds.filter((id) => !toDelete.has(id)),
         selectedNodeId: toDelete.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
+      };
+    }
+    case 'AUTO_LAYOUT': {
+      // Hierarchical tree layout algorithm
+      const layoutedNodes = computeHierarchicalLayout(state.nodes, state.edges);
+      return {
+        ...state,
+        nodes: layoutedNodes,
       };
     }
     default:
