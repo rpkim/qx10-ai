@@ -1,7 +1,15 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useWorkspace } from '@/lib/workspace-store';
 import type { NodeType } from '@/lib/types';
+import {
+  buildOutgoingChildrenMap,
+  getRootNodeIds,
+  getVisibleNodeIds,
+} from '@/lib/canvas-visibility';
+import { NODE_CANVAS_TOOLBAR_HEIGHT_PX } from '@/lib/canvas-node-chrome';
+import { useI18n } from '@/components/i18n-provider';
 
 const NODE_COLORS: Record<NodeType, string> = {
   root: '#00C49A',
@@ -11,8 +19,15 @@ const NODE_COLORS: Record<NodeType, string> = {
 };
 
 export function MiniMap() {
-  const { state, dispatch } = useWorkspace();
-  const { nodes, viewport } = state;
+  const { t } = useI18n();
+  const { state } = useWorkspace();
+  const { nodes, edges, viewport, collapsedNodeIds } = state;
+
+  const visibleIds = useMemo(() => {
+    const childrenMap = buildOutgoingChildrenMap(edges);
+    const roots = getRootNodeIds(nodes, edges);
+    return getVisibleNodeIds(roots, childrenMap, new Set(collapsedNodeIds));
+  }, [nodes, edges, collapsedNodeIds]);
 
   if (nodes.length === 0) return null;
 
@@ -30,12 +45,12 @@ export function MiniMap() {
       className="absolute bottom-4 right-4 z-20 overflow-hidden rounded-xl border border-border bg-card/95 backdrop-blur-sm"
       style={{ width: W + PAD * 2, height: H + PAD * 2 + 22 }}
       role="img"
-      aria-label="Minimap overview"
+      aria-label={t('minimap.overview')}
     >
       <div className="flex items-center justify-between px-3 pt-2 pb-1">
-        <span className="text-xs font-medium text-muted-foreground">Overview</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('minimap.overview')}</span>
         <span className="font-mono text-xs text-muted-foreground/60">
-          {Math.round(viewport.zoom * 100)}%
+          {t('minimap.zoomPercent', { pct: Math.round(viewport.zoom * 100) })}
         </span>
       </div>
       <svg width={W} height={H} className="mx-auto block">
@@ -43,8 +58,9 @@ export function MiniMap() {
           const x = n.position.x * SCALE;
           const y = n.position.y * SCALE;
           const w = (n.width ?? 280) * SCALE;
-          const h = (n.height ?? 100) * SCALE;
+          const h = ((n.height ?? 100) + NODE_CANVAS_TOOLBAR_HEIGHT_PX) * SCALE;
           const color = NODE_COLORS[n.type];
+          const hidden = !visibleIds.has(n.id);
           return (
             <rect
               key={n.id}
@@ -54,10 +70,12 @@ export function MiniMap() {
               height={Math.max(h, 3)}
               rx={1.5}
               fill={color}
-              fillOpacity={n.status === 'suggested' ? 0.2 : 0.5}
+              fillOpacity={
+                hidden ? 0.08 : n.status === 'suggested' ? 0.2 : 0.5
+              }
               stroke={color}
               strokeWidth={0.5}
-              strokeOpacity={0.6}
+              strokeOpacity={hidden ? 0.15 : 0.6}
             />
           );
         })}

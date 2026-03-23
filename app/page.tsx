@@ -1,15 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { GoalType } from '@/lib/types';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { LanguageSwitcher } from '@/components/language-switcher';
+import { useI18n } from '@/components/i18n-provider';
+import { workspaceUrl } from '@/lib/workspace-url';
+import { GOAL_DESC_KEYS, GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
+import { listRecentWorkspaces, type WorkspaceIndexEntry } from '@/lib/workspace-index';
 
-const GOALS: { id: GoalType; label: string; desc: string }[] = [
-  { id: 'learn', label: 'Learn', desc: 'Understand deeply' },
-  { id: 'research', label: 'Research', desc: 'Discover & analyze' },
-  { id: 'build', label: 'Build', desc: 'Create something' },
-  { id: 'analyze', label: 'Analyze', desc: 'Evaluate & compare' },
-];
+const GOAL_IDS: GoalType[] = ['learn', 'research', 'build', 'analyze', 'strategize'];
 
 const EXAMPLE_KEYWORDS = [
   'Quant Trading',
@@ -20,23 +21,49 @@ const EXAMPLE_KEYWORDS = [
 ];
 
 export default function LandingPage() {
+  const { t, locale } = useI18n();
   const router = useRouter();
   const [keyword, setKeyword] = useState('');
   const [goal, setGoal] = useState<GoalType>('learn');
   const [focused, setFocused] = useState(false);
+  const [recent, setRecent] = useState<WorkspaceIndexEntry[]>([]);
 
   const handleStart = () => {
     if (!keyword.trim()) return;
-    const params = new URLSearchParams({ keyword: keyword.trim(), goal });
-    router.push(`/workspace?${params.toString()}`);
+    router.push(workspaceUrl({ keyword: keyword.trim(), goal }));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleStart();
   };
 
+  useEffect(() => {
+    setRecent(listRecentWorkspaces(6));
+  }, []);
+
+  const featureBlocks = [
+    { icon: '⟆' as const, labelKey: 'landing.feature.canvas' as const, subKey: 'landing.feature.canvasSub' as const },
+    { icon: '⊕' as const, labelKey: 'landing.feature.tree' as const, subKey: 'landing.feature.treeSub' as const },
+    {
+      icon: '⊞' as const,
+      labelKey: 'landing.feature.dashboard' as const,
+      subKey: 'landing.feature.dashboardSub' as const,
+    },
+  ];
+
+  const dateFmt = new Intl.DateTimeFormat(locale === 'zh' ? 'zh-Hans' : locale, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   return (
     <main className="relative flex h-screen w-screen flex-col items-center justify-center overflow-hidden bg-background">
+      <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2">
+        <LanguageSwitcher />
+        <ThemeToggle />
+      </div>
       {/* Grid background */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.035]"
@@ -71,32 +98,31 @@ export default function LandingPage() {
             </span>
           </div>
           <p className="text-center text-base leading-relaxed text-muted-foreground">
-            Ask endlessly. Discover deeply.{' '}
-            <span className="text-foreground/70">
-              Build living knowledge trees by exploring infinite possibilities.
-            </span>
+            {t('landing.subLead')}
+            <span className="text-foreground/70">{t('landing.subAccent')}</span>
           </p>
         </div>
 
-        {/* Goal selector */}
-        <div className="flex w-full flex-col gap-3">
+        {/* Exploration mode — shapes AI answers & opening questions */}
+        <div className="flex w-full flex-col gap-2">
           <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            What do you want to do?
+            {t('landing.explorePrompt')}
           </span>
-          <div className="grid grid-cols-4 gap-2">
-            {GOALS.map((g) => (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            {GOAL_IDS.map((id) => (
               <button
-                key={g.id}
-                onClick={() => setGoal(g.id)}
+                key={id}
+                type="button"
+                onClick={() => setGoal(id)}
                 className={[
-                  'flex flex-col items-center gap-1 rounded-xl border px-3 py-3 text-sm transition-all duration-200',
-                  goal === g.id
+                  'flex flex-col items-center gap-0.5 rounded-xl border px-2 py-2.5 text-center text-sm transition-all duration-200',
+                  goal === id
                     ? 'border-primary bg-primary/10 text-primary'
                     : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
                 ].join(' ')}
               >
-                <span className="font-semibold">{g.label}</span>
-                <span className="text-xs opacity-60">{g.desc}</span>
+                <span className="font-semibold leading-tight">{t(GOAL_LABEL_KEYS[id])}</span>
+                <span className="text-[10px] leading-snug opacity-70">{t(GOAL_DESC_KEYS[id])}</span>
               </button>
             ))}
           </div>
@@ -105,7 +131,7 @@ export default function LandingPage() {
         {/* Keyword input */}
         <div className="flex w-full flex-col gap-3">
           <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Start with a keyword or topic
+            {t('landing.keywordPrompt')}
           </span>
           <div
             className={[
@@ -135,7 +161,7 @@ export default function LandingPage() {
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               onKeyDown={handleKeyDown}
-              placeholder="e.g. Quant Trading, Climate Policy, LLMs..."
+              placeholder={t('landing.keywordPlaceholder')}
               className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground/50 outline-none"
             />
             <button
@@ -148,7 +174,7 @@ export default function LandingPage() {
                   : 'cursor-not-allowed bg-muted text-muted-foreground',
               ].join(' ')}
             >
-              Start
+              {t('landing.start')}
               <svg
                 width="14"
                 height="14"
@@ -164,7 +190,7 @@ export default function LandingPage() {
 
           {/* Example keywords */}
           <div className="flex flex-wrap gap-2">
-            <span className="text-xs text-muted-foreground/60">Try:</span>
+            <span className="text-xs text-muted-foreground/60">{t('landing.tryLabel')}</span>
             {EXAMPLE_KEYWORDS.map((ex) => (
               <button
                 key={ex}
@@ -179,20 +205,50 @@ export default function LandingPage() {
 
         {/* Feature hints */}
         <div className="flex w-full gap-3">
-          {[
-            { icon: '⟆', label: 'Infinite Canvas', sub: 'Pan & zoom freely' },
-            { icon: '⊕', label: 'Live Tree', sub: 'Branches expand on demand' },
-            { icon: '⊞', label: 'Dashboard', sub: 'Pin insights as widgets' },
-          ].map((f) => (
+          {featureBlocks.map((f) => (
             <div
-              key={f.label}
+              key={f.labelKey}
               className="flex flex-1 flex-col gap-1 rounded-xl border border-border bg-card px-4 py-3"
             >
               <span className="font-mono text-lg text-primary">{f.icon}</span>
-              <span className="text-xs font-semibold text-foreground">{f.label}</span>
-              <span className="text-xs text-muted-foreground">{f.sub}</span>
+              <span className="text-xs font-semibold text-foreground">{t(f.labelKey)}</span>
+              <span className="text-xs text-muted-foreground">{t(f.subKey)}</span>
             </div>
           ))}
+        </div>
+
+        {/* Recent workspaces */}
+        <div className="flex w-full flex-col gap-2">
+          <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            {t('landing.recentTitle')}
+          </span>
+          <div className="rounded-2xl border border-border bg-card/85 p-2 backdrop-blur-sm">
+            {recent.length === 0 ? (
+              <div className="px-3 py-4 text-sm text-muted-foreground">{t('landing.recentEmpty')}</div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {recent.map((entry) => (
+                  <button
+                    key={`${entry.keyword}-${entry.updatedAt}`}
+                    type="button"
+                    onClick={() => router.push(workspaceUrl({ keyword: entry.keyword, goal: entry.goal }))}
+                    className="flex items-center justify-between rounded-xl border border-transparent px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-secondary/70"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-foreground">{entry.keyword}</div>
+                      <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
+                          {t(GOAL_LABEL_KEYS[entry.goal])}
+                        </span>
+                        <span>{t('landing.lastUpdated', { date: dateFmt.format(new Date(entry.updatedAt)) })}</span>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xs font-medium text-primary">{t('landing.continue')}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </main>

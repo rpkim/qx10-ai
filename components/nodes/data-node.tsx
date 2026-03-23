@@ -2,6 +2,7 @@
 
 import type { DataNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
+import { useI18n } from '@/components/i18n-provider';
 import {
   BarChart,
   Bar,
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function DataNode({ node }: Props) {
+  const { t } = useI18n();
   const { toggleDashboardPin, state } = useWorkspace();
   const isPinned = state.dashboardNodeIds.includes(node.id);
 
@@ -68,7 +70,7 @@ export function DataNode({ node }: Props) {
           >
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
-          {isPinned ? 'Pinned' : 'Pin'}
+          {isPinned ? t('nodes.pinnedAction') : t('nodes.pinAction')}
         </button>
       </div>
 

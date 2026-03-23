@@ -3,15 +3,23 @@
 import { useState } from 'react';
 import type { AnswerNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
+import { useI18n } from '@/components/i18n-provider';
 
 interface Props {
   node: AnswerNodeData;
 }
 
 export function AnswerNode({ node }: Props) {
-  const { runQuery, addCustomQuery, toggleDashboardPin, state } = useWorkspace();
+  const { t } = useI18n();
+  const { addCustomQuery, toggleDashboardPin, state, aiCatalog } = useWorkspace();
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const isPinned = state.dashboardNodeIds.includes(node.id);
+
+  const parentQuery = state.nodes.find((n) => n.id === node.queryId);
+  const inheritedModelChoice =
+    parentQuery?.type === 'query'
+      ? parentQuery.modelChoice ?? aiCatalog?.defaultChoice
+      : undefined;
 
   const displayText =
     node.status === 'streaming' && node.streamedChars !== undefined
@@ -71,7 +79,7 @@ export function AnswerNode({ node }: Props) {
                 ? { background: 'rgba(0,196,154,0.15)', color: '#00C49A' }
                 : { color: 'var(--muted-foreground)' }
             }
-            title={isPinned ? 'Remove from dashboard' : 'Pin to dashboard'}
+            title={isPinned ? t('nodes.unpin') : t('nodes.pin')}
           >
             <svg
               width="12"
@@ -83,7 +91,7 @@ export function AnswerNode({ node }: Props) {
             >
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
-            {isPinned ? 'Pinned' : 'Pin'}
+            {isPinned ? t('nodes.pinnedAction') : t('nodes.pinAction')}
           </button>
         )}
       </div>
@@ -107,7 +115,14 @@ export function AnswerNode({ node }: Props) {
             {visibleKeywords.map((kw) => (
               <button
                 key={kw}
-                onClick={() => addCustomQuery(`What is ${kw} in this context?`, node.id, node.position)}
+                onClick={() =>
+                  addCustomQuery(
+                    `What is ${kw} in this context?`,
+                    node.id,
+                    node.position,
+                    inheritedModelChoice
+                  )
+                }
                 className="rounded-full border px-2.5 py-0.5 text-xs transition-all"
                 style={{ borderColor: 'rgba(163,230,53,0.3)', color: '#A3E635' }}
                 onMouseOver={(e) =>
@@ -145,7 +160,7 @@ export function AnswerNode({ node }: Props) {
             {node.suggestedQueries.slice(0, 2).map((q) => (
               <button
                 key={q}
-                onClick={() => addCustomQuery(q, node.id, node.position)}
+                onClick={() => addCustomQuery(q, node.id, node.position, inheritedModelChoice)}
                 className="flex items-center gap-2 rounded-xl p-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
                 <svg

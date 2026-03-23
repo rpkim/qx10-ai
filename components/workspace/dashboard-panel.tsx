@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { DataNodeData, AnswerNodeData, WorkspaceNode } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
 import {
@@ -13,30 +13,100 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { Maximize2, Minimize2, Pencil, Save, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { useI18n } from '@/components/i18n-provider';
+import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
+import {
+  loadDashboardGrid,
+  saveDashboardGrid,
+  mergeLayoutWithPins,
+  type DashboardGridItem,
+} from '@/lib/dashboard-layout-storage';
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
 
 interface Props {
   onClose: () => void;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
 }
 
-export function DashboardPanel({ onClose }: Props) {
+export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
+  const { t } = useI18n();
   const { state, toggleDashboardPin } = useWorkspace();
   const { nodes, dashboardNodeIds, keyword, goal } = state;
   const [widgetOrder, setWidgetOrder] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
 
+  const [gridLayout, setGridLayout] = useState<DashboardGridItem[]>([]);
+  const [editingGrid, setEditingGrid] = useState(false);
+  const layoutBaselineRef = useRef<DashboardGridItem[] | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    id: string;
+    ox: number;
+    oy: number;
+    px: number;
+    py: number;
+    w: number;
+    h: number;
+  } | null>(null);
+
   const pinnedNodes = nodes.filter((n) => dashboardNodeIds.includes(n.id));
 
-  // Maintain insertion order + custom reorder
-  const orderedIds = [
-    ...widgetOrder.filter((id) => dashboardNodeIds.includes(id)),
-    ...dashboardNodeIds.filter((id) => !widgetOrder.includes(id)),
-  ];
-  const orderedNodes = orderedIds
-    .map((id) => pinnedNodes.find((n) => n.id === id))
-    .filter(Boolean) as WorkspaceNode[];
+  const orderedIds = useMemo(
+    () => [
+      ...widgetOrder.filter((id) => dashboardNodeIds.includes(id)),
+      ...dashboardNodeIds.filter((id) => !widgetOrder.includes(id)),
+    ],
+    [widgetOrder, dashboardNodeIds]
+  );
 
-  // Drag-to-reorder
+  const orderedNodes = useMemo(
+    () =>
+      orderedIds
+        .map((id) => pinnedNodes.find((n) => n.id === id))
+        .filter(Boolean) as WorkspaceNode[],
+    [orderedIds, pinnedNodes]
+  );
+
+  const orderedIdsKey = orderedIds.join(',');
+
+  useEffect(() => {
+    if (editingGrid) return;
+    const saved = loadDashboardGrid(keyword);
+    setGridLayout(mergeLayoutWithPins(saved, orderedIds));
+  }, [keyword, orderedIdsKey, editingGrid]);
+
+  const startEditLayout = () => {
+    layoutBaselineRef.current = gridLayout.map((x) => ({ ...x }));
+    setEditingGrid(true);
+  };
+
+  const cancelEditLayout = () => {
+    const b = layoutBaselineRef.current;
+    if (b) setGridLayout(b.map((x) => ({ ...x })));
+    layoutBaselineRef.current = null;
+    setEditingGrid(false);
+  };
+
+  const saveEditLayout = () => {
+    saveDashboardGrid(keyword, gridLayout);
+    layoutBaselineRef.current = null;
+    setEditingGrid(false);
+    toast.success(t('dashboard.layoutSaved'));
+  };
+
+  const collapseExpanded = () => {
+    if (editingGrid) cancelEditLayout();
+    onExpandedChange(false);
+  };
+
   const handleDragStart = (id: string) => setDragging(id);
   const handleDragOver = (e: React.DragEvent, id: string) => {
     e.preventDefault();
@@ -69,22 +139,68 @@ export function DashboardPanel({ onClose }: Props) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `socrates-dashboard-${keyword.replace(/\s+/g, '-').toLowerCase()}.json`;
+    a.download = `qx10-dashboard-${keyword.replace(/\s+/g, '-').toLowerCase()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
+  const onHeaderPointerDown = useCallback(
+    (id: string) => (e: React.PointerEvent) => {
+      if (!editingGrid || !boardRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const item = gridLayout.find((l) => l.id === id);
+      if (!item) return;
+      dragRef.current = {
+        id,
+        ox: item.x,
+        oy: item.y,
+        px: e.clientX,
+        py: e.clientY,
+        w: item.w,
+        h: item.h,
+      };
+
+      const onMove = (ev: PointerEvent) => {
+        const d = dragRef.current;
+        const board = boardRef.current;
+        if (!d || !board) return;
+        const rect = board.getBoundingClientRect();
+        const dx = ((ev.clientX - d.px) / rect.width) * 100;
+        const dy = ((ev.clientY - d.py) / rect.height) * 100;
+        setGridLayout((prev) =>
+          prev.map((it) =>
+            it.id === d.id
+              ? {
+                  ...it,
+                  x: clamp(d.ox + dx, 0, 100 - d.w),
+                  y: clamp(d.oy + dy, 0, 100 - d.h),
+                }
+              : it
+          )
+        );
+      };
+
+      const onUp = () => {
+        dragRef.current = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [editingGrid, gridLayout]
+  );
+
+  const shellClass = expanded
+    ? 'fixed inset-x-0 bottom-0 top-24 z-30 flex flex-col border-t border-border bg-card'
+    : 'absolute inset-y-0 right-0 z-30 flex w-[480px] flex-col border-l border-border bg-card';
+
   return (
-    <div
-      className="absolute inset-y-0 right-0 z-30 flex w-[480px] flex-col"
-      style={{ borderLeft: '1px solid var(--border)', background: 'var(--card)' }}
-    >
-      {/* Header */}
-      <div
-        className="flex shrink-0 items-center justify-between px-5 py-4"
-        style={{ borderBottom: '1px solid var(--border)' }}
-      >
-        <div className="flex flex-col gap-0.5">
+    <div className={shellClass}>
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+        <div className="min-w-0 flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00C49A" strokeWidth="2">
               <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -93,117 +209,211 @@ export function DashboardPanel({ onClose }: Props) {
               <rect x="14" y="14" width="7" height="7" rx="1" />
             </svg>
             <h2
-              className="text-base font-bold text-foreground"
+              className="truncate text-base font-bold text-foreground"
               style={{ fontFamily: 'var(--font-space-grotesk)' }}
             >
-              Dashboard
+              {t('toolbar.dashboard')}
             </h2>
             {pinnedNodes.length > 0 && (
               <span
-                className="flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-xs font-bold"
+                className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-bold"
                 style={{ background: 'rgba(0,196,154,0.15)', color: '#00C49A' }}
               >
                 {pinnedNodes.length}
               </span>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {keyword}
             <span
-              className="ml-1.5 rounded-full px-1.5 py-0.5 capitalize"
+              className="ml-1.5 rounded-full px-1.5 py-0.5"
               style={{ background: 'rgba(0,196,154,0.1)', color: '#00C49A' }}
             >
-              {goal}
+              {t(GOAL_LABEL_KEYS[goal])}
             </span>
           </p>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {pinnedNodes.length > 0 && (
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-              title="Export dashboard as JSON"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Export
-            </button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          {expanded && (
+            <>
+              {!editingGrid ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1 text-xs"
+                  onClick={startEditLayout}
+                >
+                  <Pencil className="size-3.5" />
+                  {t('dashboard.edit')}
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1 text-xs"
+                    onClick={cancelEditLayout}
+                  >
+                    <X className="size-3.5" />
+                    {t('common.cancel')}
+                  </Button>
+                  <Button type="button" size="sm" className="h-8 gap-1 text-xs" onClick={saveEditLayout}>
+                    <Save className="size-3.5" />
+                    {t('common.save')}
+                  </Button>
+                </>
+              )}
+            </>
           )}
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 text-muted-foreground"
+            title={expanded ? t('dashboard.shrinkPanel') : t('dashboard.expandPanel')}
+            onClick={() => {
+              if (expanded) {
+                collapseExpanded();
+              } else {
+                onExpandedChange(true);
+              }
+            }}
+          >
+            {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+          </Button>
+          {pinnedNodes.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="hidden h-8 text-xs sm:inline-flex"
+              onClick={handleExport}
+            >
+              {t('dashboard.export')}
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 text-muted-foreground"
             onClick={onClose}
-            className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            aria-label="Close dashboard"
+            aria-label={t('common.close')}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6 6 18M6 6l12 12" />
             </svg>
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto">
-        {orderedNodes.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <div className="flex flex-col gap-3 p-4">
-            {pinnedNodes.length > 1 && (
-              <p className="text-xs text-muted-foreground/60">Drag widgets to reorder</p>
-            )}
-            {orderedNodes.map((node) => (
-              <div
-                key={node.id}
-                draggable
-                onDragStart={() => handleDragStart(node.id)}
-                onDragOver={(e) => handleDragOver(e, node.id)}
-                onDrop={() => handleDrop(node.id)}
-                onDragEnd={handleDragEnd}
-                style={{
-                  opacity: dragging === node.id ? 0.4 : 1,
-                  outline: dragOver === node.id && dragging !== node.id
-                    ? '2px solid rgba(0,196,154,0.6)'
-                    : 'none',
-                  borderRadius: '16px',
-                  transition: 'opacity 0.15s, outline 0.1s',
-                }}
-              >
-                <DashboardWidget
-                  node={node}
-                  onUnpin={() => toggleDashboardPin(node.id)}
-                />
-              </div>
-            ))}
+      {expanded && editingGrid && (
+        <div className="shrink-0 border-b border-dashed border-primary/30 bg-primary/5 px-4 py-2 text-center text-xs text-muted-foreground">
+          {t('dashboard.editHint')}
+        </div>
+      )}
 
-            {/* Summary footer */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {orderedNodes.length === 0 ? (
+          <div className="flex-1 overflow-y-auto">
+            <EmptyState />
+          </div>
+        ) : expanded ? (
+          <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
             <div
-              className="mt-1 rounded-2xl border p-4"
-              style={{ borderColor: 'rgba(0,196,154,0.12)', background: 'rgba(0,196,154,0.03)' }}
+              ref={boardRef}
+              className={[
+                'relative min-h-[min(70vh,720px)] flex-1 overflow-hidden rounded-2xl border bg-background/40',
+                editingGrid ? 'border-dashed border-primary/40' : 'border-border',
+              ].join(' ')}
             >
-              <p className="text-xs font-semibold text-muted-foreground mb-2">Summary</p>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: 'Widgets', value: pinnedNodes.length },
-                  { label: 'Answers', value: pinnedNodes.filter((n) => n.type === 'answer').length },
-                  { label: 'Data', value: pinnedNodes.filter((n) => n.type === 'data').length },
-                ].map((s) => (
+              {orderedNodes.map((node) => {
+                const box = gridLayout.find((g) => g.id === node.id);
+                if (!box) return null;
+                return (
                   <div
-                    key={s.label}
-                    className="flex flex-col items-center gap-0.5 rounded-xl py-2"
-                    style={{ background: 'rgba(0,0,0,0.2)' }}
+                    key={node.id}
+                    className="absolute overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+                    style={{
+                      left: `${box.x}%`,
+                      top: `${box.y}%`,
+                      width: `${box.w}%`,
+                      height: `${box.h}%`,
+                    }}
                   >
-                    <span
-                      className="text-xl font-bold"
-                      style={{ fontFamily: 'var(--font-space-grotesk)', color: '#00C49A' }}
-                    >
-                      {s.value}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{s.label}</span>
+                    <DashboardWidget
+                      node={node}
+                      onUnpin={() => toggleDashboardPin(node.id)}
+                      compact={false}
+                      editMode={editingGrid}
+                      onHeaderPointerDown={onHeaderPointerDown(node.id)}
+                    />
                   </div>
-                ))}
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            <div className="flex flex-col gap-3 p-4">
+              {pinnedNodes.length > 1 && (
+                <p className="text-xs text-muted-foreground/60">{t('dashboard.dragReorder')}</p>
+              )}
+              {orderedNodes.map((node) => (
+                <div
+                  key={node.id}
+                  draggable
+                  onDragStart={() => handleDragStart(node.id)}
+                  onDragOver={(e) => handleDragOver(e, node.id)}
+                  onDrop={() => handleDrop(node.id)}
+                  onDragEnd={handleDragEnd}
+                  style={{
+                    opacity: dragging === node.id ? 0.4 : 1,
+                    outline:
+                      dragOver === node.id && dragging !== node.id
+                        ? '2px solid rgba(0,196,154,0.6)'
+                        : 'none',
+                    borderRadius: '16px',
+                    transition: 'opacity 0.15s, outline 0.1s',
+                  }}
+                >
+                  <DashboardWidget
+                    node={node}
+                    onUnpin={() => toggleDashboardPin(node.id)}
+                    compact
+                  />
+                </div>
+              ))}
+
+              <div
+                className="mt-1 rounded-2xl border p-4"
+                style={{ borderColor: 'rgba(0,196,154,0.12)', background: 'rgba(0,196,154,0.03)' }}
+              >
+                <p className="mb-2 text-xs font-semibold text-muted-foreground">{t('dashboard.summary')}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: t('dashboard.widgets'), value: pinnedNodes.length },
+                    { label: t('dashboard.answers'), value: pinnedNodes.filter((n) => n.type === 'answer').length },
+                    { label: t('dashboard.data'), value: pinnedNodes.filter((n) => n.type === 'data').length },
+                  ].map((s) => (
+                    <div
+                      key={s.label}
+                      className="flex flex-col items-center gap-0.5 rounded-xl py-2"
+                      style={{ background: 'rgba(0,0,0,0.2)' }}
+                    >
+                      <span
+                        className="text-xl font-bold"
+                        style={{ fontFamily: 'var(--font-space-grotesk)', color: '#00C49A' }}
+                      >
+                        {s.value}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{s.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -214,6 +424,7 @@ export function DashboardPanel({ onClose }: Props) {
 }
 
 function EmptyState() {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col items-center justify-center gap-5 px-6 py-16 text-center">
       <div
@@ -228,19 +439,15 @@ function EmptyState() {
         </svg>
       </div>
       <div>
-        <p className="font-semibold text-foreground">Your dashboard is empty</p>
-        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-          Run queries on the canvas, then pin Answer or Data nodes here to build your knowledge dashboard.
-        </p>
+        <p className="font-semibold text-foreground">{t('dashboard.emptyTitle')}</p>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{t('dashboard.emptyDesc')}</p>
       </div>
-      <div
-        className="flex flex-col gap-3 w-full rounded-2xl border border-border bg-secondary px-4 py-4 text-left"
-      >
-        <p className="text-xs font-semibold text-foreground">How to add widgets:</p>
+      <div className="flex w-full flex-col gap-3 rounded-2xl border border-border bg-secondary px-4 py-4 text-left">
+        <p className="text-xs font-semibold text-foreground">{t('dashboard.howToTitle')}</p>
         {[
-          { step: '1', text: 'Click Run on any Query node' },
-          { step: '2', text: 'Wait for the Answer to generate' },
-          { step: '3', text: 'Click Pin on an Answer or Data node' },
+          { step: '1', text: t('dashboard.step1') },
+          { step: '2', text: t('dashboard.step2') },
+          { step: '3', text: t('dashboard.step3') },
         ].map((s) => (
           <div key={s.step} className="flex items-center gap-3">
             <span
@@ -257,10 +464,23 @@ function EmptyState() {
   );
 }
 
-function DashboardWidget({ node, onUnpin }: { node: WorkspaceNode; onUnpin: () => void }) {
+function DashboardWidget({
+  node,
+  onUnpin,
+  compact,
+  editMode,
+  onHeaderPointerDown,
+}: {
+  node: WorkspaceNode;
+  onUnpin: () => void;
+  compact: boolean;
+  editMode?: boolean;
+  onHeaderPointerDown?: (e: React.PointerEvent) => void;
+}) {
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
 
-  const title = node.type === 'answer' ? 'Answer' : (node as DataNodeData).title;
+  const title = node.type === 'answer' ? t('nodes.answer') : (node as DataNodeData).title;
   const badge =
     node.type === 'answer'
       ? { bg: 'rgba(163,230,53,0.15)', color: '#A3E635', label: 'A' }
@@ -268,34 +488,61 @@ function DashboardWidget({ node, onUnpin }: { node: WorkspaceNode; onUnpin: () =
 
   return (
     <div
-      className="flex flex-col gap-0 rounded-2xl border overflow-hidden"
-      style={{ borderColor: 'var(--border)', background: 'rgba(255,255,255,0.015)' }}
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl"
+      style={{ background: 'rgba(255,255,255,0.015)' }}
     >
-      {/* Widget header */}
       <div
-        className="flex items-center justify-between px-4 py-3"
-        style={{ borderBottom: collapsed ? 'none' : '1px solid var(--border)', cursor: 'grab' }}
+        className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:px-4 sm:py-3"
+        onPointerDown={editMode ? onHeaderPointerDown : undefined}
+        style={{
+          cursor: editMode ? 'move' : compact ? 'grab' : 'default',
+          borderBottom: collapsed ? 'none' : undefined,
+        }}
       >
-        <div className="flex items-center gap-2">
-          {/* drag handle */}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/40 shrink-0">
-            <circle cx="9" cy="5" r="1" fill="currentColor" /><circle cx="15" cy="5" r="1" fill="currentColor" />
-            <circle cx="9" cy="12" r="1" fill="currentColor" /><circle cx="15" cy="12" r="1" fill="currentColor" />
-            <circle cx="9" cy="19" r="1" fill="currentColor" /><circle cx="15" cy="19" r="1" fill="currentColor" />
-          </svg>
+        <div className="flex min-w-0 items-center gap-2">
+          {compact && (
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="shrink-0 text-muted-foreground/40"
+            >
+              <circle cx="9" cy="5" r="1" fill="currentColor" />
+              <circle cx="15" cy="5" r="1" fill="currentColor" />
+              <circle cx="9" cy="12" r="1" fill="currentColor" />
+              <circle cx="15" cy="12" r="1" fill="currentColor" />
+              <circle cx="9" cy="19" r="1" fill="currentColor" />
+              <circle cx="15" cy="19" r="1" fill="currentColor" />
+            </svg>
+          )}
+          {editMode && (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-primary/80">
+              {t('dashboard.dragBadge')}
+            </span>
+          )}
           <span
-            className="flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold"
             style={{ background: badge.bg, color: badge.color }}
           >
             {badge.label}
           </span>
-          <span className="text-sm font-medium text-foreground truncate max-w-[200px]">{title}</span>
+          <span className="truncate text-sm font-medium text-foreground">{title}</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div
+          className="flex shrink-0 items-center gap-1"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <button
-            onClick={() => setCollapsed((v) => !v)}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCollapsed((v) => !v);
+            }}
             className="rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground"
-            title={collapsed ? 'Expand' : 'Collapse'}
+            title={collapsed ? t('dashboard.expandWidget') : t('dashboard.collapseWidget')}
           >
             <svg
               width="12"
@@ -304,15 +551,22 @@ function DashboardWidget({ node, onUnpin }: { node: WorkspaceNode; onUnpin: () =
               fill="none"
               stroke="currentColor"
               strokeWidth="2.5"
-              style={{ transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+              style={{
+                transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s',
+              }}
             >
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </button>
           <button
-            onClick={onUnpin}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onUnpin();
+            }}
             className="rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:text-destructive"
-            title="Remove from dashboard"
+            title={t('dashboard.removeWidget')}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M18 6 6 18M6 6l12 12" />
@@ -321,21 +575,27 @@ function DashboardWidget({ node, onUnpin }: { node: WorkspaceNode; onUnpin: () =
         </div>
       </div>
 
-      {/* Widget content */}
       {!collapsed && (
-        <div className="px-4 py-3">
-          {node.type === 'answer' && <AnswerWidget node={node as AnswerNodeData} />}
-          {node.type === 'data' && <DataWidget node={node as DataNodeData} />}
+        <div
+          className={[
+            'min-h-0 flex-1 overflow-y-auto px-3 py-2 sm:px-4 sm:py-3',
+            compact ? '' : 'text-sm',
+          ].join(' ')}
+        >
+          {node.type === 'answer' && <AnswerWidget node={node as AnswerNodeData} compact={compact} />}
+          {node.type === 'data' && <DataWidget node={node as DataNodeData} compact={compact} />}
         </div>
       )}
     </div>
   );
 }
 
-function AnswerWidget({ node }: { node: AnswerNodeData }) {
+function AnswerWidget({ node, compact }: { node: AnswerNodeData; compact: boolean }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const preview = node.content.slice(0, 280);
-  const isTruncated = node.content.length > 280;
+  const limit = compact ? 280 : 2000;
+  const preview = node.content.slice(0, limit);
+  const isTruncated = node.content.length > limit;
 
   return (
     <div className="flex flex-col gap-3">
@@ -345,10 +605,11 @@ function AnswerWidget({ node }: { node: AnswerNodeData }) {
       </p>
       {isTruncated && (
         <button
+          type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="self-start text-xs text-primary/70 hover:text-primary transition-colors"
+          className="self-start text-xs text-primary/70 transition-colors hover:text-primary"
         >
-          {expanded ? 'Show less' : 'Show more'}
+          {expanded ? t('dashboard.showLess') : t('dashboard.showMore')}
         </button>
       )}
       {node.extractedKeywords.length > 0 && (
@@ -368,31 +629,65 @@ function AnswerWidget({ node }: { node: AnswerNodeData }) {
   );
 }
 
-function DataWidget({ node }: { node: DataNodeData }) {
+function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean }) {
+  const chartH = compact ? 140 : 200;
   return (
     <div>
-      {node.subtitle && (
-        <p className="mb-2 text-xs text-muted-foreground">{node.subtitle}</p>
-      )}
+      {node.subtitle && <p className="mb-2 text-xs text-muted-foreground">{node.subtitle}</p>}
       {node.dataType === 'bar-chart' && node.chartData && (
-        <ResponsiveContainer width="100%" height={140}>
+        <ResponsiveContainer width="100%" height={chartH}>
           <BarChart data={node.chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <XAxis dataKey="label" tick={{ fill: 'rgba(148,163,184,0.7)', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fill: 'rgba(148,163,184,0.7)', fontSize: 10 }}
+              axisLine={false}
+              tickLine={false}
+            />
             <YAxis tick={{ fill: 'rgba(148,163,184,0.7)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ background: '#0F1623', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, fontSize: 11 }} labelStyle={{ color: '#E2E8F0' }} itemStyle={{ color: '#F59E0B' }} />
+            <Tooltip
+              contentStyle={{
+                background: '#0F1623',
+                border: '1px solid rgba(245,158,11,0.3)',
+                borderRadius: 8,
+                fontSize: 11,
+              }}
+              labelStyle={{ color: '#E2E8F0' }}
+              itemStyle={{ color: '#F59E0B' }}
+            />
             <Bar dataKey="value" fill="#F59E0B" fillOpacity={0.85} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       )}
       {node.dataType === 'line-chart' && node.chartData && (
-        <ResponsiveContainer width="100%" height={140}>
+        <ResponsiveContainer width="100%" height={chartH}>
           <LineChart data={node.chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <XAxis dataKey="label" tick={{ fill: 'rgba(148,163,184,0.7)', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fill: 'rgba(148,163,184,0.7)', fontSize: 10 }}
+              axisLine={false}
+              tickLine={false}
+            />
             <YAxis tick={{ fill: 'rgba(148,163,184,0.7)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ background: '#0F1623', border: '1px solid rgba(0,196,154,0.3)', borderRadius: 8, fontSize: 11 }} labelStyle={{ color: '#E2E8F0' }} />
+            <Tooltip
+              contentStyle={{
+                background: '#0F1623',
+                border: '1px solid rgba(0,196,154,0.3)',
+                borderRadius: 8,
+                fontSize: 11,
+              }}
+              labelStyle={{ color: '#E2E8F0' }}
+            />
             <Line type="monotone" dataKey="value" stroke="#00C49A" strokeWidth={2} dot={false} name="Strategy" />
             {node.chartData[0]?.value2 !== undefined && (
-              <Line type="monotone" dataKey="value2" stroke="#F59E0B" strokeWidth={1.5} strokeDasharray="4 2" dot={false} name="Benchmark" />
+              <Line
+                type="monotone"
+                dataKey="value2"
+                stroke="#F59E0B"
+                strokeWidth={1.5}
+                strokeDasharray="4 2"
+                dot={false}
+                name="Benchmark"
+              />
             )}
           </LineChart>
         </ResponsiveContainer>
@@ -403,7 +698,13 @@ function DataWidget({ node }: { node: DataNodeData }) {
             <thead>
               <tr>
                 {node.tableColumns?.map((col) => (
-                  <th key={col} className="border-b px-3 py-2 text-left font-semibold text-muted-foreground" style={{ borderColor: 'rgba(245,158,11,0.12)' }}>{col}</th>
+                  <th
+                    key={col}
+                    className="border-b px-3 py-2 text-left font-semibold text-muted-foreground"
+                    style={{ borderColor: 'rgba(245,158,11,0.12)' }}
+                  >
+                    {col}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -411,7 +712,13 @@ function DataWidget({ node }: { node: DataNodeData }) {
               {node.tableRows.map((row, i) => (
                 <tr key={i} className="transition-colors hover:bg-white/[0.02]">
                   {node.tableColumns?.map((col) => (
-                    <td key={col} className="border-b px-3 py-2 text-foreground/80" style={{ borderColor: 'rgba(245,158,11,0.06)' }}>{String(row[col] ?? '')}</td>
+                    <td
+                      key={col}
+                      className="border-b px-3 py-2 text-foreground/80"
+                      style={{ borderColor: 'rgba(245,158,11,0.06)' }}
+                    >
+                      {String(row[col] ?? '')}
+                    </td>
                   ))}
                 </tr>
               ))}
@@ -423,7 +730,12 @@ function DataWidget({ node }: { node: DataNodeData }) {
         <ul className="flex flex-col gap-1.5">
           {node.listItems.map((item, i) => (
             <li key={i} className="flex items-start gap-2 text-xs text-foreground/80">
-              <span className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold" style={{ background: 'rgba(245,158,11,0.2)', color: '#F59E0B' }}>{i + 1}</span>
+              <span
+                className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
+                style={{ background: 'rgba(245,158,11,0.2)', color: '#F59E0B' }}
+              >
+                {i + 1}
+              </span>
               {item}
             </li>
           ))}
@@ -434,7 +746,12 @@ function DataWidget({ node }: { node: DataNodeData }) {
           {node.metrics.map((m) => (
             <div key={m.label} className="flex flex-col gap-1 rounded-xl p-3" style={{ background: 'rgba(0,0,0,0.2)' }}>
               <span className="text-xs text-muted-foreground">{m.label}</span>
-              <span className="text-xl font-bold" style={{ fontFamily: 'var(--font-space-grotesk)', color: m.up ? '#00C49A' : '#F59E0B' }}>{m.value}</span>
+              <span
+                className="text-xl font-bold"
+                style={{ fontFamily: 'var(--font-space-grotesk)', color: m.up ? '#00C49A' : '#F59E0B' }}
+              >
+                {m.value}
+              </span>
               {m.change && <span className="text-xs text-muted-foreground">{m.change}</span>}
             </div>
           ))}

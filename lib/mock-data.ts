@@ -215,12 +215,11 @@ export function getMockResponse(question: string): MockResponse {
 /* ─────────────────────────────────────────────
    Initial workspace nodes for "Quant Trading"
 ───────────────────────────────────────────── */
+/** Root only — starter queries are loaded via AI (see SET_SEED_QUERIES) or API fallback. */
 export function buildInitialWorkspace(
   keyword: string,
   goal: string
 ): { nodes: WorkspaceNode[]; edges: Edge[] } {
-  const queries = getSuggestedQueries(keyword);
-
   const nodes: WorkspaceNode[] = [
     {
       id: 'root',
@@ -232,44 +231,7 @@ export function buildInitialWorkspace(
       width: 260,
       height: 80,
     },
-    // First 3 suggested query nodes
-    {
-      id: 'q-1',
-      type: 'query',
-      question: queries[0],
-      parentId: 'root',
-      position: { x: 120, y: 260 },
-      status: 'suggested',
-      width: 280,
-      height: 100,
-    },
-    {
-      id: 'q-2',
-      type: 'query',
-      question: queries[1],
-      parentId: 'root',
-      position: { x: 620, y: 260 },
-      status: 'suggested',
-      width: 280,
-      height: 100,
-    },
-    {
-      id: 'q-3',
-      type: 'query',
-      question: queries[2],
-      parentId: 'root',
-      position: { x: 1120, y: 260 },
-      status: 'suggested',
-      width: 280,
-      height: 100,
-    },
   ];
 
-  const edges: Edge[] = [
-    { id: 'e-root-q1', sourceId: 'root', targetId: 'q-1' },
-    { id: 'e-root-q2', sourceId: 'root', targetId: 'q-2' },
-    { id: 'e-root-q3', sourceId: 'root', targetId: 'q-3' },
-  ];
-
-  return { nodes, edges };
+  return { nodes, edges: [] };
 }

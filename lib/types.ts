@@ -1,4 +1,19 @@
-export type GoalType = 'learn' | 'build' | 'research' | 'analyze';
+export type GoalType = 'learn' | 'build' | 'research' | 'analyze' | 'strategize';
+
+export type AiProviderId = 'openai' | 'gemini';
+
+/** One selectable model in the workspace (matches GET /api/workspace/models). */
+export interface AiModelOption {
+  id: string;
+  provider: AiProviderId;
+  model: string;
+  label: string;
+}
+
+export interface AiModelCatalog {
+  defaultChoice: string;
+  options: AiModelOption[];
+}
 
 export type NodeType = 'root' | 'query' | 'answer' | 'data';
 
@@ -38,6 +53,8 @@ export interface QueryNodeData extends BaseNode {
   type: 'query';
   question: string;
   isCustom?: boolean;
+  /** Catalog id (`provider:model`); omit to use server default (AI_DEFAULT). */
+  modelChoice?: string;
 }
 
 export interface AnswerNodeData extends BaseNode {
@@ -97,4 +114,6 @@ export interface WorkspaceState {
   viewport: Viewport;
   selectedNodeId: string | null;
   dashboardNodeIds: string[];
+  /** Branches under these node ids are hidden on the canvas (folded). */
+  collapsedNodeIds: string[];
 }
