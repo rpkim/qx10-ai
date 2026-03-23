@@ -129,6 +129,15 @@ function storageKey(keyword: string): string {
   return `${STORAGE_PREFIX}:${encodeURIComponent(keyword)}`;
 }
 
+export function removeWorkspaceFromLocalStorage(keyword: string): void {
+  if (typeof window === 'undefined' || !keyword.trim()) return;
+  try {
+    localStorage.removeItem(storageKey(keyword));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function workspaceToSnapshotPayload(state: WorkspaceState): WorkspaceSnapshotFile {
   return {
     version: WORKSPACE_SNAPSHOT_VERSION,

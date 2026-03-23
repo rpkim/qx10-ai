@@ -56,6 +56,15 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
     w: number;
     h: number;
   } | null>(null);
+  const resizeRef = useRef<{
+    id: string;
+    px: number;
+    py: number;
+    ox: number;
+    oy: number;
+    ow: number;
+    oh: number;
+  } | null>(null);
 
   const pinnedNodes = nodes.filter((n) => dashboardNodeIds.includes(n.id));
 
@@ -193,9 +202,61 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
     [editingGrid, gridLayout]
   );
 
+  const onResizePointerDown = useCallback(
+    (id: string) => (e: React.PointerEvent) => {
+      if (!editingGrid || !boardRef.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const item = gridLayout.find((l) => l.id === id);
+      if (!item) return;
+      resizeRef.current = {
+        id,
+        px: e.clientX,
+        py: e.clientY,
+        ox: item.x,
+        oy: item.y,
+        ow: item.w,
+        oh: item.h,
+      };
+
+      const onMove = (ev: PointerEvent) => {
+        const r = resizeRef.current;
+        const board = boardRef.current;
+        if (!r || !board) return;
+        const rect = board.getBoundingClientRect();
+        const dw = ((ev.clientX - r.px) / rect.width) * 100;
+        const dh = ((ev.clientY - r.py) / rect.height) * 100;
+        setGridLayout((prev) =>
+          prev.map((it) => {
+            if (it.id !== r.id) return it;
+            const minW = 16;
+            const minH = 14;
+            const maxW = 100 - r.ox;
+            const maxH = 100 - r.oy;
+            return {
+              ...it,
+              w: clamp(r.ow + dw, minW, maxW),
+              h: clamp(r.oh + dh, minH, maxH),
+            };
+          })
+        );
+      };
+
+      const onUp = () => {
+        resizeRef.current = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [editingGrid, gridLayout]
+  );
+
   const shellClass = expanded
     ? 'fixed inset-x-0 bottom-0 top-24 z-30 flex flex-col border-t border-border bg-card'
-    : 'absolute inset-y-0 right-0 z-30 flex w-[480px] flex-col border-l border-border bg-card';
+    : 'absolute right-0 bottom-0 top-24 z-30 flex w-[480px] flex-col border-l border-border bg-card';
 
   return (
     <div className={shellClass}>
@@ -329,6 +390,15 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                 'relative min-h-[min(70vh,720px)] flex-1 overflow-hidden rounded-2xl border bg-background/40',
                 editingGrid ? 'border-dashed border-primary/40' : 'border-border',
               ].join(' ')}
+              style={
+                editingGrid
+                  ? {
+                      backgroundImage:
+                        'linear-gradient(to right, rgba(0,196,154,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,196,154,0.06) 1px, transparent 1px)',
+                      backgroundSize: '24px 24px',
+                    }
+                  : undefined
+              }
             >
               {orderedNodes.map((node) => {
                 const box = gridLayout.find((g) => g.id === node.id);
@@ -336,7 +406,10 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                 return (
                   <div
                     key={node.id}
-                    className="absolute overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+                    className={[
+                      'absolute overflow-hidden rounded-2xl border border-border bg-card shadow-sm',
+                      editingGrid ? 'ring-1 ring-primary/20 shadow-lg' : '',
+                    ].join(' ')}
                     style={{
                       left: `${box.x}%`,
                       top: `${box.y}%`,
@@ -351,6 +424,19 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                       editMode={editingGrid}
                       onHeaderPointerDown={onHeaderPointerDown(node.id)}
                     />
+                    {editingGrid && (
+                      <button
+                        type="button"
+                        onPointerDown={onResizePointerDown(node.id)}
+                        className="absolute bottom-1.5 right-1.5 z-20 flex h-5 w-5 items-center justify-center rounded-md border border-primary/40 bg-background/90 text-primary shadow-sm"
+                        title="Resize widget"
+                        aria-label="Resize widget"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M7 17 17 7M13 17h4v-4" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -596,13 +682,20 @@ function AnswerWidget({ node, compact }: { node: AnswerNodeData; compact: boolea
   const limit = compact ? 280 : 2000;
   const preview = node.content.slice(0, limit);
   const isTruncated = node.content.length > limit;
+  const rendered = (expanded ? node.content : preview).split('\n\n').map((para, i) => (
+    <p key={i} className="mb-2 last:mb-0 text-xs leading-relaxed text-foreground/80">
+      {formatBold(para)}
+    </p>
+  ));
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs leading-relaxed text-foreground/80">
-        {expanded ? node.content : preview}
-        {isTruncated && !expanded && '...'}
-      </p>
+      <div>
+        {rendered}
+        {isTruncated && !expanded && (
+          <span className="text-xs leading-relaxed text-foreground/70">...</span>
+        )}
+      </div>
       {isTruncated && (
         <button
           type="button"
@@ -626,6 +719,19 @@ function AnswerWidget({ node, compact }: { node: AnswerNodeData; compact: boolea
         </div>
       )}
     </div>
+  );
+}
+
+function formatBold(text: string): React.ReactNode[] {
+  const parts = text.split(/\*\*(.*?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className="font-semibold text-foreground">
+        {part}
+      </strong>
+    ) : (
+      part
+    )
   );
 }
 

@@ -11,7 +11,7 @@ export const GOAL_HINT: Record<GoalType, string> = {
 
 export function buildAnswerSystemPrompt(goal: GoalType): string {
   return [
-    'You are qx10.ai, a Socratic knowledge companion.',
+    'You are qx10.lol, a Socratic knowledge companion.',
     'The user is exploring a topic on an infinite canvas: they run queries, read answers, branch into follow-ups, and pin insights to a dashboard.',
     GOAL_HINT[goal] ?? GOAL_HINT.learn,
     'Respond in the same language as the user question (if the question mixes languages, follow the dominant one).',

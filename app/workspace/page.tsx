@@ -12,6 +12,7 @@ import { DashboardPanel } from '@/components/workspace/dashboard-panel';
 import { registerWorkspaceVisit } from '@/lib/workspace-index';
 import { useI18n } from '@/components/i18n-provider';
 import { loadWorkspaceFromLocalStorage } from '@/lib/workspace-snapshot';
+import { readWorkspaceLaunch } from '@/lib/workspace-launch';
 
 function WorkspacePageFallback() {
   const { t } = useI18n();
@@ -55,16 +56,20 @@ function WorkspaceInner() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardExpanded, setDashboardExpanded] = useState(false);
   const [ready, setReady] = useState(false);
+  const initialView = searchParams.get('view');
 
   useEffect(() => {
-    const keyword = searchParams.get('keyword');
-    const goal = (searchParams.get('goal') as GoalType) || 'learn';
-    if (keyword) {
-      const saved = loadWorkspaceFromLocalStorage(keyword);
+    const launch = readWorkspaceLaunch(searchParams);
+    if (launch) {
+      const saved = loadWorkspaceFromLocalStorage(launch.keyword);
       if (saved.ok) {
         dispatch({ type: 'LOAD_SNAPSHOT', snapshot: saved.state });
       } else {
-        initWorkspace(keyword, goal);
+        initWorkspace(launch.keyword, launch.goal);
+      }
+      if (initialView === 'dashboard') {
+        setShowDashboard(true);
+        setDashboardExpanded(true);
       }
       setReady(true);
     } else {
@@ -144,7 +149,12 @@ function WorkspaceInner() {
       <Toolbar
         onToggleDashboard={() => {
           setShowDashboard((v) => {
-            if (v) setDashboardExpanded(false);
+            if (v) {
+              setDashboardExpanded(false);
+            } else {
+              const wide = typeof window !== 'undefined' && window.innerWidth >= 1280;
+              setDashboardExpanded(wide);
+            }
             return !v;
           });
         }}

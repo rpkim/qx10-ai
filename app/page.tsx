@@ -3,12 +3,20 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { GoalType } from '@/lib/types';
+import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { useI18n } from '@/components/i18n-provider';
 import { workspaceUrl } from '@/lib/workspace-url';
 import { GOAL_DESC_KEYS, GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
-import { listRecentWorkspaces, type WorkspaceIndexEntry } from '@/lib/workspace-index';
+import {
+  listRecentWorkspaces,
+  removeWorkspaceVisit,
+  type WorkspaceIndexEntry,
+} from '@/lib/workspace-index';
+import { readWorkspaceLaunch } from '@/lib/workspace-launch';
+import { removeWorkspaceFromLocalStorage } from '@/lib/workspace-snapshot';
+import { removeDashboardGrid } from '@/lib/dashboard-layout-storage';
 
 const GOAL_IDS: GoalType[] = ['learn', 'research', 'build', 'analyze', 'strategize'];
 
@@ -41,6 +49,12 @@ export default function LandingPage() {
     setRecent(listRecentWorkspaces(6));
   }, []);
 
+  useEffect(() => {
+    const launch = readWorkspaceLaunch(new URLSearchParams(window.location.search));
+    if (!launch) return;
+    router.replace(workspaceUrl({ keyword: launch.keyword, goal: launch.goal }));
+  }, [router]);
+
   const featureBlocks = [
     { icon: '⟆' as const, labelKey: 'landing.feature.canvas' as const, subKey: 'landing.feature.canvasSub' as const },
     { icon: '⊕' as const, labelKey: 'landing.feature.tree' as const, subKey: 'landing.feature.treeSub' as const },
@@ -57,6 +71,29 @@ export default function LandingPage() {
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  const goWorkspace = (entry: WorkspaceIndexEntry) => {
+    router.push(workspaceUrl({ keyword: entry.keyword, goal: entry.goal }));
+  };
+
+  const goDashboardOnly = (entry: WorkspaceIndexEntry) => {
+    router.push(
+      workspaceUrl({
+        keyword: entry.keyword,
+        goal: entry.goal,
+        view: 'dashboard',
+      })
+    );
+  };
+
+  const deleteWorkspace = (entry: WorkspaceIndexEntry) => {
+    if (!window.confirm(t('landing.deleteWorkspaceConfirm'))) return;
+    removeWorkspaceFromLocalStorage(entry.keyword);
+    removeDashboardGrid(entry.keyword);
+    removeWorkspaceVisit(entry.keyword);
+    setRecent((prev) => prev.filter((x) => x.keyword !== entry.keyword));
+    toast.success(t('landing.deleteWorkspaceDone'));
+  };
 
   return (
     <main className="relative flex h-screen w-screen flex-col items-center justify-center overflow-hidden bg-background">
@@ -94,7 +131,7 @@ export default function LandingPage() {
               className="text-4xl font-bold tracking-tight text-foreground"
               style={{ fontFamily: 'var(--font-space-grotesk)' }}
             >
-              qx<span style={{ color: '#00C49A' }}>10</span>.ai
+              qx<span style={{ color: '#00C49A' }}>10</span>.lol
             </span>
           </div>
           <p className="text-center text-base leading-relaxed text-muted-foreground">
@@ -189,13 +226,13 @@ export default function LandingPage() {
           </div>
 
           {/* Example keywords */}
-          <div className="flex flex-wrap gap-2">
-            <span className="text-xs text-muted-foreground/60">{t('landing.tryLabel')}</span>
+          <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="shrink-0 text-xs text-muted-foreground/60">{t('landing.tryLabel')}</span>
             {EXAMPLE_KEYWORDS.map((ex) => (
               <button
                 key={ex}
                 onClick={() => setKeyword(ex)}
-                className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                className="shrink-0 rounded-full border border-border px-2.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
               >
                 {ex}
               </button>
@@ -228,13 +265,15 @@ export default function LandingPage() {
             ) : (
               <div className="flex flex-col gap-1.5">
                 {recent.map((entry) => (
-                  <button
+                  <div
                     key={`${entry.keyword}-${entry.updatedAt}`}
-                    type="button"
-                    onClick={() => router.push(workspaceUrl({ keyword: entry.keyword, goal: entry.goal }))}
                     className="flex items-center justify-between rounded-xl border border-transparent px-3 py-2 text-left transition-colors hover:border-primary/30 hover:bg-secondary/70"
                   >
-                    <div className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => goWorkspace(entry)}
+                      className="min-w-0 flex-1 text-left"
+                    >
                       <div className="truncate text-sm font-semibold text-foreground">{entry.keyword}</div>
                       <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
@@ -242,9 +281,24 @@ export default function LandingPage() {
                         </span>
                         <span>{t('landing.lastUpdated', { date: dateFmt.format(new Date(entry.updatedAt)) })}</span>
                       </div>
+                    </button>
+                    <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => goDashboardOnly(entry)}
+                        className="rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                      >
+                        {t('landing.viewDashboard')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteWorkspace(entry)}
+                        className="rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
+                      >
+                        {t('landing.deleteWorkspace')}
+                      </button>
                     </div>
-                    <span className="shrink-0 text-xs font-medium text-primary">{t('landing.continue')}</span>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
