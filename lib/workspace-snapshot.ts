@@ -43,6 +43,7 @@ const queryNodeSchema = z.object({
   question: z.string(),
   isCustom: z.boolean().optional(),
   modelChoice: z.string().optional(),
+  toolChoice: z.enum(['auto', 'web', 'market']).optional(),
 });
 
 const answerNodeSchema = z.object({

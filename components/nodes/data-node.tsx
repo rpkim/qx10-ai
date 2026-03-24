@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import type { DataNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
+import { RefreshCw } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -20,8 +22,47 @@ interface Props {
 
 export function DataNode({ node }: Props) {
   const { t } = useI18n();
-  const { toggleDashboardPin, state } = useWorkspace();
+  const { toggleDashboardPin, state, dispatch } = useWorkspace();
   const isPinned = state.dashboardNodeIds.includes(node.id);
+  const [refreshing, setRefreshing] = useState(false);
+  const stockSymbol = (node.title.match(/^([A-Z.\-]{1,10})\s+/)?.[1] ?? '').toUpperCase();
+  const isStockNode = !!stockSymbol && (node.title.includes('quote') || node.title.includes('intraday'));
+
+  const refreshStock = async () => {
+    if (!isStockNode || refreshing) return;
+    setRefreshing(true);
+    try {
+      const res = await fetch('/api/market/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: stockSymbol }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        payload?: Pick<
+          DataNodeData,
+          'dataType' | 'title' | 'subtitle' | 'metrics' | 'chartData' | 'tableColumns' | 'tableRows' | 'listItems'
+        >;
+      };
+      if (!data.payload) return;
+      dispatch({
+        type: 'UPDATE_NODE',
+        id: node.id,
+        updates: {
+          dataType: data.payload.dataType,
+          title: data.payload.title,
+          subtitle: data.payload.subtitle,
+          metrics: data.payload.metrics,
+          chartData: data.payload.chartData,
+          tableColumns: data.payload.tableColumns,
+          tableRows: data.payload.tableRows,
+          listItems: data.payload.listItems,
+        } as Partial<DataNodeData>,
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <div
@@ -50,28 +91,40 @@ export function DataNode({ node }: Props) {
             {node.title}
           </span>
         </div>
-        <button
-          onClick={() => toggleDashboardPin(node.id)}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors"
-          style={
-            isPinned
-              ? { background: 'rgba(0,196,154,0.15)', color: '#00C49A' }
-              : { color: 'var(--muted-foreground)' }
-          }
-          title={isPinned ? 'Remove from dashboard' : 'Pin to dashboard'}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill={isPinned ? 'currentColor' : 'none'}
-            stroke="currentColor"
-            strokeWidth="2"
+        <div className="flex items-center gap-1">
+          {isStockNode && (
+            <button
+              onClick={refreshStock}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+              title="Refresh quote"
+            >
+              <RefreshCw className={`size-3 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+          <button
+            onClick={() => toggleDashboardPin(node.id)}
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors"
+            style={
+              isPinned
+                ? { background: 'rgba(0,196,154,0.15)', color: '#00C49A' }
+                : { color: 'var(--muted-foreground)' }
+            }
+            title={isPinned ? 'Remove from dashboard' : 'Pin to dashboard'}
           >
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
-          {isPinned ? t('nodes.pinnedAction') : t('nodes.pinAction')}
-        </button>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill={isPinned ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+            {isPinned ? t('nodes.pinnedAction') : t('nodes.pinAction')}
+          </button>
+        </div>
       </div>
 
       {/* Data rendering */}
@@ -137,7 +190,7 @@ function TableView({ node }: { node: DataNodeData }) {
         </thead>
         <tbody>
           {node.tableRows.map((row, i) => (
-            <tr key={i} className="transition-colors hover:bg-white/[0.02]">
+            <tr key={i} className="transition-colors hover:bg-white/2">
               {node.tableColumns!.map((col) => (
                 <td
                   key={col}

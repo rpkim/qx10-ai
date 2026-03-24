@@ -45,6 +45,7 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
 
   const [gridLayout, setGridLayout] = useState<DashboardGridItem[]>([]);
   const [editingGrid, setEditingGrid] = useState(false);
+  const [compactHeights, setCompactHeights] = useState<Record<string, number>>({});
   const layoutBaselineRef = useRef<DashboardGridItem[] | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
@@ -64,6 +65,11 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
     oy: number;
     ow: number;
     oh: number;
+  } | null>(null);
+  const compactResizeRef = useRef<{
+    id: string;
+    startY: number;
+    startH: number;
   } | null>(null);
 
   const pinnedNodes = nodes.filter((n) => dashboardNodeIds.includes(n.id));
@@ -85,12 +91,33 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
   );
 
   const orderedIdsKey = orderedIds.join(',');
+  const compactHeightsKey = `qx10.dashboard.compactHeights:${keyword}`;
 
   useEffect(() => {
     if (editingGrid) return;
     const saved = loadDashboardGrid(keyword);
     setGridLayout(mergeLayoutWithPins(saved, orderedIds));
   }, [keyword, orderedIdsKey, editingGrid]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(compactHeightsKey);
+      if (!raw) {
+        setCompactHeights({});
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      setCompactHeights(parsed ?? {});
+    } catch {
+      setCompactHeights({});
+    }
+  }, [compactHeightsKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(compactHeightsKey, JSON.stringify(compactHeights));
+  }, [compactHeights, compactHeightsKey]);
 
   const startEditLayout = () => {
     layoutBaselineRef.current = gridLayout.map((x) => ({ ...x }));
@@ -252,6 +279,39 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
       window.addEventListener('pointerup', onUp);
     },
     [editingGrid, gridLayout]
+  );
+
+  const onCompactResizePointerDown = useCallback(
+    (id: string) => (e: React.PointerEvent) => {
+      if (expanded) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const current = compactHeights[id] ?? 280;
+      compactResizeRef.current = {
+        id,
+        startY: e.clientY,
+        startH: current,
+      };
+
+      const onMove = (ev: PointerEvent) => {
+        const r = compactResizeRef.current;
+        if (!r) return;
+        const dy = ev.clientY - r.startY;
+        const next = clamp(r.startH + dy, 180, 760);
+        setCompactHeights((prev) => ({ ...prev, [r.id]: next }));
+      };
+
+      const onUp = () => {
+        compactResizeRef.current = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [expanded, compactHeights]
   );
 
   const shellClass = expanded
@@ -464,6 +524,8 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                         : 'none',
                     borderRadius: '16px',
                     transition: 'opacity 0.15s, outline 0.1s',
+                    position: 'relative',
+                    height: compactHeights[node.id] ? `${compactHeights[node.id]}px` : undefined,
                   }}
                 >
                   <DashboardWidget
@@ -471,6 +533,18 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                     onUnpin={() => toggleDashboardPin(node.id)}
                     compact
                   />
+                  <button
+                    type="button"
+                    onPointerDown={onCompactResizePointerDown(node.id)}
+                    className="absolute bottom-2 right-2 z-20 flex h-5 w-5 items-center justify-center rounded-md border border-primary/40 bg-background/90 text-primary shadow-sm"
+                    title="Resize widget"
+                    aria-label="Resize widget"
+                    onClick={(e) => e.preventDefault()}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M7 17 17 7M13 17h4v-4" />
+                    </svg>
+                  </button>
                 </div>
               ))}
 
@@ -816,7 +890,7 @@ function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean })
             </thead>
             <tbody>
               {node.tableRows.map((row, i) => (
-                <tr key={i} className="transition-colors hover:bg-white/[0.02]">
+                <tr key={i} className="transition-colors hover:bg-white/2">
                   {node.tableColumns?.map((col) => (
                     <td
                       key={col}

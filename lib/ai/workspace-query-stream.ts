@@ -1,9 +1,11 @@
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { GoalType } from '@/lib/types';
+import type { GoalType, QueryToolChoice } from '@/lib/types';
 import { parseQueryMetadata, normalizeDataNodePayload } from '@/lib/ai/metadata';
 import { buildAnswerSystemPrompt, METADATA_SYSTEM_PROMPT } from '@/lib/ai/prompts';
 import type { CatalogOption } from '@/lib/ai/model-config';
+import { maybeGetMarketDataNodeFromApi } from '@/lib/ai/market-api';
+import { maybeGetWebSearchDataNode } from '@/lib/ai/web-search-api';
 
 const encoder = new TextEncoder();
 
@@ -83,18 +85,47 @@ async function extractMetadata(
 
 export function createWorkspaceQueryReadableStream(
   selection: CatalogOption,
-  params: { question: string; keyword: string; goal: GoalType },
+  params: { question: string; keyword: string; goal: GoalType; toolChoice?: QueryToolChoice },
   keys: { openaiKey: string | undefined; geminiKey: string | undefined }
 ): ReadableStream<Uint8Array> {
-  const { question, keyword, goal } = params;
+  const { question, keyword, goal, toolChoice } = params;
   const userText = userPayload(keyword, goal, question);
   const systemText = buildAnswerSystemPrompt(goal);
 
   return new ReadableStream({
     async start(controller) {
       let fullAnswer = '';
+      const selectedTool: QueryToolChoice = toolChoice ?? 'auto';
 
       try {
+        if (selectedTool === 'market') {
+          const market = await maybeGetMarketDataNodeFromApi(question);
+          const answer =
+            market?.summary ??
+            '시장 데이터를 가져오지 못했습니다. 티커(예: NKE, AAPL) 또는 회사명을 조금 더 명확히 입력해 주세요.';
+          controller.enqueue(sseLine({ type: 'token', text: answer }));
+          controller.enqueue(
+            sseLine({
+              type: 'metadata',
+              extractedKeywords: market ? [market.symbol, '실시간 데이터', '주가'] : ['시장 데이터'],
+              suggestedQueries: market
+                ? [
+                    `${market.symbol} 장중 흐름을 더 자세히 분석해줘`,
+                    `${market.symbol}와 같은 섹터 종목 비교해줘`,
+                    `${market.symbol} 투자 시 체크할 리스크는?`,
+                  ]
+                : [
+                    '티커를 직접 입력해서 다시 시도해볼래?',
+                    '다른 종목으로 시도해볼래?',
+                    '웹 검색 모드로 전환해서 확인해볼래?',
+                  ],
+              dataNode: market?.payload ?? null,
+            })
+          );
+          controller.enqueue(sseLine({ type: 'done' }));
+          return;
+        }
+
         if (selection.provider === 'openai') {
           if (!keys.openaiKey) {
             controller.enqueue(sseLine({ type: 'error', message: 'OpenAI API key missing' }));
@@ -149,6 +180,31 @@ export function createWorkspaceQueryReadableStream(
 
         const meta = await extractMetadata(selection, question, fullAnswer, keys);
         let { extractedKeywords, suggestedQueries, dataNode } = meta;
+
+        // Tool enrichment path:
+        // - explicit tool selection should override model-generated dataNode
+        // - auto mode only supplements when model omitted dataNode
+        if (selectedTool === 'web') {
+          const web = await maybeGetWebSearchDataNode(question);
+          if (web) {
+            dataNode = web.payload;
+            extractedKeywords = [...web.keywords, ...extractedKeywords].slice(0, 14);
+          }
+        } else if (!dataNode) {
+          const market = await maybeGetMarketDataNodeFromApi(question);
+          if (market) {
+            dataNode = market.payload;
+            if (!extractedKeywords.includes(market.symbol)) {
+              extractedKeywords = [market.symbol, ...extractedKeywords].slice(0, 14);
+            }
+          } else {
+            const web = await maybeGetWebSearchDataNode(question);
+            if (web) {
+              dataNode = web.payload;
+              extractedKeywords = [...web.keywords, ...extractedKeywords].slice(0, 14);
+            }
+          }
+        }
 
         if (extractedKeywords.length === 0) {
           extractedKeywords = ['Overview', 'Context', 'Next steps', 'Details'];

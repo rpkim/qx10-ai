@@ -22,6 +22,7 @@ export function AnswerNode({ node }: Props) {
     parentQuery?.type === 'query'
       ? parentQuery.modelChoice ?? aiCatalog?.defaultChoice
       : undefined;
+  const inheritedToolChoice = parentQuery?.type === 'query' ? parentQuery.toolChoice ?? 'auto' : 'auto';
 
   const displayText =
     node.status === 'streaming' && node.streamedChars !== undefined
@@ -46,7 +47,7 @@ export function AnswerNode({ node }: Props) {
   const submitCustomQuery = () => {
     const q = customQ.trim();
     if (!q) return;
-    addCustomQuery(q, node.id, node.position, inheritedModelChoice);
+    addCustomQuery(q, node.id, node.position, inheritedModelChoice, inheritedToolChoice);
     setCustomQ('');
     setShowCustomInput(false);
   };
@@ -137,7 +138,8 @@ export function AnswerNode({ node }: Props) {
                     `What is ${kw} in this context?`,
                     node.id,
                     node.position,
-                    inheritedModelChoice
+                    inheritedModelChoice,
+                    inheritedToolChoice
                   )
                 }
                 className="rounded-full border px-2.5 py-0.5 text-xs transition-all"
@@ -177,7 +179,7 @@ export function AnswerNode({ node }: Props) {
             {node.suggestedQueries.slice(0, 2).map((q) => (
               <button
                 key={q}
-                onClick={() => addCustomQuery(q, node.id, node.position, inheritedModelChoice)}
+                onClick={() => addCustomQuery(q, node.id, node.position, inheritedModelChoice, inheritedToolChoice)}
                 className="flex items-center gap-2 rounded-xl p-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
                 <svg

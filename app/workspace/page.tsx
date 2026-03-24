@@ -145,10 +145,7 @@ function WorkspaceInner() {
   const canvasObscured = showDashboard && dashboardExpanded;
 
   return (
-    <div
-      id="workspace-tree-export-target"
-      className="relative h-screen w-screen overflow-hidden bg-background"
-    >
+    <div className="relative h-screen w-screen overflow-hidden bg-background">
       <Toolbar
         onToggleDashboard={() => {
           setShowDashboard((v) => {
@@ -165,6 +162,7 @@ function WorkspaceInner() {
       />
 
       <div
+        id="workspace-tree-export-target"
         className="absolute inset-0"
         style={{
           right: showDashboard && !dashboardExpanded ? '480px' : 0,
