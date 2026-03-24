@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import type { DataNodeData } from '@/lib/types';
+import {
+  fetchMarketQuotePayload,
+  marketDataNodeRefreshSymbol,
+} from '@/lib/market-data-node-refresh';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
 import { RefreshCw } from 'lucide-react';
@@ -25,38 +29,27 @@ export function DataNode({ node }: Props) {
   const { toggleDashboardPin, state, dispatch } = useWorkspace();
   const isPinned = state.dashboardNodeIds.includes(node.id);
   const [refreshing, setRefreshing] = useState(false);
-  const stockSymbol = (node.title.match(/^([A-Z.\-]{1,10})\s+/)?.[1] ?? '').toUpperCase();
-  const isStockNode = !!stockSymbol && (node.title.includes('quote') || node.title.includes('intraday'));
+  const stockSymbol = marketDataNodeRefreshSymbol(node);
+  const isStockNode = !!stockSymbol;
 
   const refreshStock = async () => {
-    if (!isStockNode || refreshing) return;
+    if (!stockSymbol || refreshing) return;
     setRefreshing(true);
     try {
-      const res = await fetch('/api/market/quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: stockSymbol }),
-      });
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        payload?: Pick<
-          DataNodeData,
-          'dataType' | 'title' | 'subtitle' | 'metrics' | 'chartData' | 'tableColumns' | 'tableRows' | 'listItems'
-        >;
-      };
-      if (!data.payload) return;
+      const payload = await fetchMarketQuotePayload(stockSymbol);
+      if (!payload) return;
       dispatch({
         type: 'UPDATE_NODE',
         id: node.id,
         updates: {
-          dataType: data.payload.dataType,
-          title: data.payload.title,
-          subtitle: data.payload.subtitle,
-          metrics: data.payload.metrics,
-          chartData: data.payload.chartData,
-          tableColumns: data.payload.tableColumns,
-          tableRows: data.payload.tableRows,
-          listItems: data.payload.listItems,
+          dataType: payload.dataType,
+          title: payload.title,
+          subtitle: payload.subtitle,
+          metrics: payload.metrics,
+          chartData: payload.chartData,
+          tableColumns: payload.tableColumns,
+          tableRows: payload.tableRows,
+          listItems: payload.listItems,
         } as Partial<DataNodeData>,
       });
     } finally {
@@ -66,7 +59,7 @@ export function DataNode({ node }: Props) {
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-2xl border p-4 transition-all duration-300"
+      className="flex min-w-0 max-w-full flex-col gap-3 overflow-hidden rounded-2xl border p-4 transition-all duration-300"
       style={{
         borderColor: isPinned ? 'rgba(0,196,154,0.5)' : 'rgba(245,158,11,0.25)',
         background: 'rgba(245,158,11,0.03)',
@@ -79,15 +72,15 @@ export function DataNode({ node }: Props) {
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <span
-            className="flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold"
             style={{ background: '#F59E0B', color: '#080C12' }}
           >
             <DataIcon type={node.dataType} />
           </span>
-          <span className="text-xs font-medium" style={{ color: '#F59E0B' }}>
+          <span className="min-w-0 truncate text-xs font-medium" style={{ color: '#F59E0B' }}>
             {node.title}
           </span>
         </div>
@@ -128,7 +121,7 @@ export function DataNode({ node }: Props) {
       </div>
 
       {/* Data rendering */}
-      <div className="min-h-[160px]">
+      <div className="min-h-[160px] min-w-0 overflow-x-hidden">
         {node.dataType === 'table' && <TableView node={node} />}
         {node.dataType === 'bar-chart' && <BarChartView node={node} />}
         {node.dataType === 'line-chart' && <LineChartView node={node} />}
@@ -274,16 +267,18 @@ function LineChartView({ node }: { node: DataNodeData }) {
 function ListView({ node }: { node: DataNodeData }) {
   if (!node.listItems) return null;
   return (
-    <ul className="flex flex-col gap-1.5">
+    <ul className="flex min-w-0 flex-col gap-1.5">
       {node.listItems.map((item, i) => (
-        <li key={i} className="flex items-start gap-2 text-xs text-foreground/80">
+        <li key={i} className="flex min-w-0 items-start gap-2 text-xs text-foreground/80">
           <span
             className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
             style={{ background: 'rgba(245,158,11,0.2)', color: '#F59E0B' }}
           >
             {i + 1}
           </span>
-          {item}
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere] break-words">
+            {item}
+          </span>
         </li>
       ))}
     </ul>

@@ -13,7 +13,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Maximize2, Minimize2, Pencil, Save, X } from 'lucide-react';
+import { Maximize2, Minimize2, Pencil, RefreshCw, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/components/i18n-provider';
@@ -24,6 +24,10 @@ import {
   mergeLayoutWithPins,
   type DashboardGridItem,
 } from '@/lib/dashboard-layout-storage';
+import {
+  fetchMarketQuotePayload,
+  marketDataNodeRefreshSymbol,
+} from '@/lib/market-data-node-refresh';
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -638,9 +642,33 @@ function DashboardWidget({
   onHeaderPointerDown?: (e: React.PointerEvent) => void;
 }) {
   const { t } = useI18n();
+  const { dispatch } = useWorkspace();
   const [collapsed, setCollapsed] = useState(false);
+  const [dataRefreshing, setDataRefreshing] = useState(false);
 
   const title = node.type === 'answer' ? t('nodes.answer') : (node as DataNodeData).title;
+  const dataRefreshSymbol =
+    node.type === 'data' ? marketDataNodeRefreshSymbol(node as DataNodeData) : null;
+
+  const refreshDataWidget = async () => {
+    if (!dataRefreshSymbol || dataRefreshing) return;
+    setDataRefreshing(true);
+    try {
+      const payload = await fetchMarketQuotePayload(dataRefreshSymbol);
+      if (!payload) {
+        toast.error(t('dashboard.dataRefreshFail'));
+        return;
+      }
+      dispatch({
+        type: 'UPDATE_NODE',
+        id: node.id,
+        updates: payload as Partial<DataNodeData>,
+      });
+      toast.success(t('dashboard.dataRefreshDone'));
+    } finally {
+      setDataRefreshing(false);
+    }
+  };
   const badge =
     node.type === 'answer'
       ? { bg: 'rgba(163,230,53,0.15)', color: '#A3E635', label: 'A' }
@@ -695,6 +723,20 @@ function DashboardWidget({
           className="flex shrink-0 items-center gap-1"
           onPointerDown={(e) => e.stopPropagation()}
         >
+          {dataRefreshSymbol && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void refreshDataWidget();
+              }}
+              disabled={dataRefreshing}
+              className="rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
+              title={t('dashboard.dataRefresh')}
+            >
+              <RefreshCw className={`size-3.5 ${dataRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => {
@@ -812,8 +854,12 @@ function formatBold(text: string): React.ReactNode[] {
 function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean }) {
   const chartH = compact ? 140 : 200;
   return (
-    <div>
-      {node.subtitle && <p className="mb-2 text-xs text-muted-foreground">{node.subtitle}</p>}
+    <div className="min-w-0 overflow-x-hidden">
+      {node.subtitle && (
+        <p className="mb-2 min-w-0 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
+          {node.subtitle}
+        </p>
+      )}
       {node.dataType === 'bar-chart' && node.chartData && (
         <ResponsiveContainer width="100%" height={chartH}>
           <BarChart data={node.chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -907,16 +953,16 @@ function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean })
         </div>
       )}
       {node.dataType === 'list' && node.listItems && (
-        <ul className="flex flex-col gap-1.5">
+        <ul className="flex min-w-0 flex-col gap-1.5">
           {node.listItems.map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-xs text-foreground/80">
+            <li key={i} className="flex min-w-0 items-start gap-2 text-xs text-foreground/80">
               <span
                 className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
                 style={{ background: 'rgba(245,158,11,0.2)', color: '#F59E0B' }}
               >
                 {i + 1}
               </span>
-              {item}
+              <span className="min-w-0 flex-1 [overflow-wrap:anywhere] break-words">{item}</span>
             </li>
           ))}
         </ul>

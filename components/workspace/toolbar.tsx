@@ -1,9 +1,19 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { Download, FileImage, FileText, FolderOpen, LayoutGrid, Upload } from 'lucide-react';
+import {
+  Download,
+  FileImage,
+  FileText,
+  FolderOpen,
+  LayoutGrid,
+  LayoutTemplate,
+  Pencil,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { useI18n } from '@/components/i18n-provider';
@@ -24,10 +34,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuGroup,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { GoalType, WorkspaceState } from '@/lib/types';
+import type { GoalType, Position, WorkspaceState, WorkspaceNode } from '@/lib/types';
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
 import {
   downloadWorkspaceJson,
@@ -45,6 +56,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { QuestionTemplateDesignerDialog } from '@/components/question-template-designer-dialog';
+import {
+  deleteQuestionTemplate,
+  loadQuestionTemplates,
+  type QuestionTemplate,
+} from '@/lib/question-templates';
 
 const NEW_WORKSPACE_GOALS: GoalType[] = ['learn', 'research', 'build', 'analyze', 'strategize'];
 
@@ -57,7 +74,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n();
-  const { state, dispatch } = useWorkspace();
+  const { state, dispatch, addQueryTemplateNode } = useWorkspace();
   const { keyword, goal, viewport, dashboardNodeIds } = state;
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const pendingSnapshotRef = useRef<WorkspaceState | null>(null);
@@ -66,6 +83,65 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
   const [newKeyword, setNewKeyword] = useState('');
   const [newGoal, setNewGoal] = useState<GoalType>('learn');
   const [recentOpen, setRecentOpen] = useState(false);
+  const [tplList, setTplList] = useState<QuestionTemplate[]>([]);
+  const [tplDesigner, setTplDesigner] = useState<{
+    open: boolean;
+    templateId: string | null;
+    seed: QuestionTemplate | null;
+  }>({ open: false, templateId: null, seed: null });
+  const [deleteTplId, setDeleteTplId] = useState<string | null>(null);
+
+  const refreshTplList = () => setTplList(loadQuestionTemplates());
+
+  const openTplDesignerNew = () => {
+    setTplDesigner({
+      open: true,
+      templateId: null,
+      seed: {
+        id: `draft-${Date.now()}`,
+        name: '',
+        pattern: '',
+        toolChoice: 'auto',
+        followUpQuestions: [],
+      },
+    });
+  };
+
+  const openTplDesignerEdit = (tpl: QuestionTemplate) => {
+    setTplDesigner({
+      open: true,
+      templateId: tpl.id,
+      seed: { ...tpl },
+    });
+  };
+
+  const confirmDeleteTemplate = () => {
+    if (deleteTplId) {
+      deleteQuestionTemplate(deleteTplId);
+      refreshTplList();
+    }
+    setDeleteTplId(null);
+  };
+
+  const positionForNewTemplateNode = (nodes: WorkspaceNode[]): Position => {
+    const root = nodes.find((n) => n.type === 'root');
+    if (root) {
+      const rw = root.width ?? 260;
+      return { x: root.position.x + rw + 140, y: root.position.y };
+    }
+    return { x: 400, y: 200 };
+  };
+
+  const placeTemplateOnCanvas = (tpl: QuestionTemplate) => {
+    addQueryTemplateNode({
+      displayName: tpl.name,
+      pattern: tpl.pattern,
+      position: positionForNewTemplateNode(state.nodes),
+      toolChoice: tpl.toolChoice,
+      followUpQuestions: tpl.followUpQuestions,
+    });
+    toast.success(t('toolbar.templatePlaced'));
+  };
 
   const zoomIn = () =>
     dispatch({ type: 'SET_VIEWPORT', viewport: { zoom: Math.min(viewport.zoom + 0.1, 2) } });
@@ -339,6 +415,101 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <DropdownMenu onOpenChange={(o) => o && refreshTplList()}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
+            >
+              <LayoutTemplate className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              {t('toolbar.templatesMenu')}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="max-h-[min(70vh,420px)] w-56 overflow-y-auto">
+            <DropdownMenuItem
+              onSelect={() => {
+                window.setTimeout(() => openTplDesignerNew(), 0);
+              }}
+            >
+              {t('toolbar.templateNew')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {tplList.length === 0 ? (
+              <div className="text-muted-foreground px-2 py-2 text-xs">{t('templates.emptyList')}</div>
+            ) : (
+              tplList.map((tpl, idx) => (
+                <Fragment key={tpl.id}>
+                  {idx > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel className="text-muted-foreground max-w-[240px] truncate text-xs font-medium">
+                      {tpl.name}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        window.setTimeout(() => placeTemplateOnCanvas(tpl), 0);
+                      }}
+                    >
+                      <LayoutTemplate className="size-4 text-amber-600 dark:text-amber-400" />
+                      {t('toolbar.templateAddToCanvas')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        window.setTimeout(() => openTplDesignerEdit(tpl), 0);
+                      }}
+                    >
+                      <Pencil className="size-4" />
+                      {t('toolbar.templateEdit')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        window.setTimeout(() => setDeleteTplId(tpl.id), 0);
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                      {t('toolbar.templateDelete')}
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </Fragment>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <QuestionTemplateDesignerDialog
+          open={tplDesigner.open}
+          onOpenChange={(open) => {
+            if (!open) setTplDesigner({ open: false, templateId: null, seed: null });
+          }}
+          templateId={tplDesigner.templateId}
+          initialPattern={tplDesigner.seed?.pattern ?? ''}
+          initialName={tplDesigner.seed?.name ?? ''}
+          initialToolChoice={tplDesigner.seed?.toolChoice ?? 'auto'}
+          initialFollowUpQuestions={tplDesigner.seed?.followUpQuestions ?? []}
+          onSaved={refreshTplList}
+        />
+
+        <AlertDialog open={deleteTplId != null} onOpenChange={(o) => !o && setDeleteTplId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('toolbar.templateDeleteTitle')}</AlertDialogTitle>
+              <AlertDialogDescription>{t('toolbar.templateDeleteDesc')}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={confirmDeleteTemplate}
+              >
+                {t('common.delete')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <LanguageSwitcher />
         <ThemeToggle />
