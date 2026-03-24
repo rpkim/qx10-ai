@@ -1,6 +1,7 @@
 export type GoalType = 'learn' | 'build' | 'research' | 'analyze' | 'strategize';
 
 export type AiProviderId = 'openai' | 'gemini';
+export type QueryToolChoice = 'auto' | 'web' | 'market';
 
 /** One selectable model in the workspace (matches GET /api/workspace/models). */
 export interface AiModelOption {
@@ -55,6 +56,8 @@ export interface QueryNodeData extends BaseNode {
   isCustom?: boolean;
   /** Catalog id (`provider:model`); omit to use server default (AI_DEFAULT). */
   modelChoice?: string;
+  /** Optional tool routing hint used by backend enrichment path. */
+  toolChoice?: QueryToolChoice;
 }
 
 export interface AnswerNodeData extends BaseNode {

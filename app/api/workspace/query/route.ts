@@ -1,4 +1,4 @@
-import type { GoalType } from '@/lib/types';
+import type { GoalType, QueryToolChoice } from '@/lib/types';
 import {
   buildModelCatalog,
   readGeminiApiKey,
@@ -16,6 +16,7 @@ export async function POST(req: Request) {
     goal?: GoalType;
     /** Catalog id e.g. `openai:gpt-4o-mini` */
     modelChoice?: string | null;
+    toolChoice?: QueryToolChoice | null;
   };
   try {
     body = await req.json();
@@ -66,6 +67,10 @@ export async function POST(req: Request) {
     typeof body.modelChoice === 'string' && body.modelChoice.trim()
       ? body.modelChoice.trim()
       : null;
+  const toolChoice: QueryToolChoice =
+    body.toolChoice === 'market' || body.toolChoice === 'web' || body.toolChoice === 'auto'
+      ? body.toolChoice
+      : 'auto';
   const selection = resolveModelSelection(catalog, modelChoice);
   if (!selection) {
     return new Response(JSON.stringify({ error: 'Invalid model selection' }), {
@@ -79,7 +84,7 @@ export async function POST(req: Request) {
 
   const stream = createWorkspaceQueryReadableStream(
     selection,
-    { question, keyword, goal },
+    { question, keyword, goal, toolChoice },
     { openaiKey, geminiKey }
   );
 

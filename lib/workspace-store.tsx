@@ -18,6 +18,7 @@ import type {
   DataNodeData,
   DataNodeType,
   AiModelCatalog,
+  QueryToolChoice,
 } from './types';
 import { toast } from 'sonner';
 import { buildInitialWorkspace, getMockResponse } from './mock-data';
@@ -230,6 +231,7 @@ function attachAnswerChildren(
     dataPayload: Record<string, unknown> | null | undefined;
     /** Copied to branched query nodes so they keep the same model. */
     parentModelChoice?: string;
+    parentToolChoice?: QueryToolChoice;
   }
 ) {
   const {
@@ -240,6 +242,7 @@ function attachAnswerChildren(
     dataId,
     dataPayload,
     parentModelChoice,
+    parentToolChoice,
   } = opts;
 
   const built = dataNodeFromApiPayload(dataPayload, dataId, answerId, answerPos, 320);
@@ -271,6 +274,7 @@ function attachAnswerChildren(
       width: 280,
       height: 100,
       ...(parentModelChoice ? { modelChoice: parentModelChoice } : {}),
+      ...(parentToolChoice ? { toolChoice: parentToolChoice } : {}),
     };
     dispatch({ type: 'ADD_NODE', node: subQNode });
     dispatch({
@@ -481,7 +485,8 @@ interface WorkspaceContextValue {
     question: string,
     parentId: string,
     parentPos: Position,
-    modelChoice?: string
+    modelChoice?: string,
+    toolChoice?: QueryToolChoice
   ) => void;
   toggleDashboardPin: (nodeId: string) => void;
   deleteNode: (nodeId: string) => void;
@@ -633,6 +638,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
               dataId,
               dataPayload,
               parentModelChoice: queryNode.modelChoice,
+              parentToolChoice: queryNode.toolChoice,
             });
           }
         }, 28);
@@ -650,6 +656,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             keyword: keywordRef.current,
             goal: goalRef.current,
             modelChoice: queryNode.modelChoice ?? null,
+            toolChoice: queryNode.toolChoice ?? 'auto',
           }),
         });
       } catch {
@@ -757,6 +764,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             dataId,
             dataPayload: metaPayload,
             parentModelChoice: queryNode.modelChoice,
+            parentToolChoice: queryNode.toolChoice,
           });
         },
         onError: (msg) => {
@@ -794,6 +802,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           dataId,
           dataPayload: metaPayload,
           parentModelChoice: queryNode.modelChoice,
+          parentToolChoice: queryNode.toolChoice,
         });
       }
     };
@@ -802,7 +811,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addCustomQuery = useCallback(
-    (question: string, parentId: string, parentPos: Position, modelChoice?: string) => {
+    (
+      question: string,
+      parentId: string,
+      parentPos: Position,
+      modelChoice?: string,
+      toolChoice?: QueryToolChoice
+    ) => {
       const parent = nodesRef.current.find((n) => n.id === parentId);
       let dy = 160;
       if (parent?.type === 'answer') {
@@ -825,6 +840,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         height: 100,
         isCustom: true,
         ...(modelChoice ? { modelChoice } : {}),
+        ...(toolChoice ? { toolChoice } : {}),
       } as WorkspaceNode;
       dispatch({ type: 'ADD_NODE', node: customNode });
       dispatch({
