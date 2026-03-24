@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import type { AnswerNodeData } from '@/lib/types';
+import { useMemo, useState } from 'react';
+import type { AnswerNodeData, QueryNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
 
@@ -11,7 +11,7 @@ interface Props {
 
 export function AnswerNode({ node }: Props) {
   const { t } = useI18n();
-  const { addCustomQuery, toggleDashboardPin, state, aiCatalog } = useWorkspace();
+  const { addCustomQuery, toggleDashboardPin, state, aiCatalog, runQuery } = useWorkspace();
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
@@ -51,6 +51,16 @@ export function AnswerNode({ node }: Props) {
     setCustomQ('');
     setShowCustomInput(false);
   };
+
+  const followUpChildByText = useMemo(() => {
+    const map = new Map<string, QueryNodeData>();
+    for (const n of state.nodes) {
+      if (n.type !== 'query' || n.parentId !== node.id) continue;
+      const key = normalizeFollowUpQuestion(n.question);
+      if (!map.has(key)) map.set(key, n);
+    }
+    return map;
+  }, [state.nodes, node.id]);
 
   return (
     <div
@@ -176,25 +186,75 @@ export function AnswerNode({ node }: Props) {
         <div className="flex flex-col gap-1.5 border-t pt-3" style={{ borderColor: 'rgba(163,230,53,0.15)' }}>
           <span className="text-xs text-muted-foreground">Follow-up queries</span>
           <div className="flex flex-col gap-1">
-            {node.suggestedQueries.slice(0, 2).map((q) => (
-              <button
-                key={q}
-                onClick={() => addCustomQuery(q, node.id, node.position, inheritedModelChoice, inheritedToolChoice)}
-                className="flex items-center gap-2 rounded-xl p-2 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
+            {node.suggestedQueries.slice(0, 2).map((q) => {
+              const linked = followUpChildByText.get(normalizeFollowUpQuestion(q));
+              const spawning = !linked;
+              const running = linked?.status === 'running';
+
+              const spawnOrRun = () => {
+                if (running) return;
+                if (linked) {
+                  runQuery(linked.id);
+                } else {
+                  addCustomQuery(q, node.id, node.position, inheritedModelChoice, inheritedToolChoice);
+                }
+              };
+
+              return (
+                <div
+                  key={q}
+                  className="flex items-start gap-2 rounded-xl p-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 >
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-                {q}
-              </button>
-            ))}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      spawnOrRun();
+                    }}
+                    disabled={running}
+                    className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    style={
+                      spawning
+                        ? {
+                            color: 'var(--muted-foreground)',
+                            border: '1px solid rgba(163,230,53,0.25)',
+                          }
+                        : {
+                            background: 'rgba(0,196,154,0.12)',
+                            color: '#00C49A',
+                            border: '1px solid rgba(0,196,154,0.35)',
+                          }
+                    }
+                    title={spawning ? t('nodes.spawnFollowUp') : t('nodes.run')}
+                  >
+                    {spawning ? (
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path d="M5 12h14M12 5l7 7-7 7" />
+                      </svg>
+                    ) : (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5,3 19,12 5,21" />
+                      </svg>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={spawnOrRun}
+                    disabled={running}
+                    className="min-w-0 flex-1 text-left leading-relaxed transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {q}
+                  </button>
+                </div>
+              );
+            })}
             <button
               onClick={() => setShowCustomInput((v) => !v)}
               className="mt-0.5 self-start rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -235,6 +295,10 @@ export function AnswerNode({ node }: Props) {
 
     </div>
   );
+}
+
+function normalizeFollowUpQuestion(s: string): string {
+  return s.replace(/\s+/g, ' ').trim();
 }
 
 function formatBold(text: string): React.ReactNode[] {

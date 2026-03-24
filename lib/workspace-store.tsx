@@ -19,7 +19,12 @@ import type {
   DataNodeType,
   AiModelCatalog,
   QueryToolChoice,
+  QueryTemplateNodeData,
 } from './types';
+import {
+  parseTemplateVariableKeys,
+  substituteTemplate,
+} from '@/lib/question-templates';
 import { toast } from 'sonner';
 import { buildInitialWorkspace, getMockResponse } from './mock-data';
 import { consumeWorkspaceQueryStream } from '@/lib/ai/consume-query-stream';
@@ -32,9 +37,13 @@ import { saveWorkspaceToLocalStorage } from './workspace-snapshot';
 ───────────────────────────────────────────── */
 
 /** Vertical gap between parent bottom and child top */
-const LAYOUT_GAP_Y = 56;
-const LAYOUT_GAP_X = 48;
-const LAYOUT_QUERY_SIBLING_X = 320;
+const LAYOUT_GAP_Y = 108;
+const LAYOUT_GAP_X = 64;
+/** Minimum horizontal step when we cannot use subtree width (e.g. root row) */
+const LAYOUT_QUERY_SIBLING_X = 400;
+
+/** Vertical gap between stacked query subtrees under a `query-template` node. */
+const TEMPLATE_SLOT_QUERY_PITCH_Y = 880;
 
 /**
  * Estimated Answer card height for placement & auto-layout when DOM is unknown.
@@ -42,18 +51,62 @@ const LAYOUT_QUERY_SIBLING_X = 320;
  */
 const CANVAS_ANSWER_LAYOUT_HEIGHT = 520;
 
+/** Extra buffer so auto-layout stays below typical rendered cards (toolbar + controls). */
+const LAYOUT_HEIGHT_BUFFER = 56;
+
 const LAYOUT_DEFAULT_HEIGHT: Record<WorkspaceNode['type'], number> = {
-  root: 90,
-  query: 140,
-  answer: CANVAS_ANSWER_LAYOUT_HEIGHT,
-  data: 280,
+  root: 100,
+  query: 280,
+  'query-template': 360,
+  answer: CANVAS_ANSWER_LAYOUT_HEIGHT + LAYOUT_HEIGHT_BUFFER + 40,
+  data: 320,
 };
 
+/**
+ * Layout uses stored height when present; otherwise conservative estimates so
+ * auto-layout does not place children inside underestimated parent boxes (overlap).
+ */
 function layoutNodeSize(n: WorkspaceNode): { w: number; h: number } {
   const w =
-    n.width ?? (n.type === 'root' ? 260 : n.type === 'data' ? 320 : 280);
-  const h = n.height ?? LAYOUT_DEFAULT_HEIGHT[n.type];
+    n.width ??
+    (n.type === 'root' ? 260 : n.type === 'data' ? 320 : n.type === 'query-template' ? 300 : 280);
+  let h = n.height ?? LAYOUT_DEFAULT_HEIGHT[n.type];
+
+  if (n.type === 'query') {
+    h = Math.max(h, 320 + LAYOUT_HEIGHT_BUFFER);
+  } else if (n.type === 'query-template') {
+    const tpl = n as QueryTemplateNodeData;
+    const slotCount = tpl.slots?.length ?? 0;
+    const bodyGuess =
+      NODE_CANVAS_TOOLBAR_HEIGHT_PX + 200 + Math.max(slotCount, 1) * 120 + LAYOUT_HEIGHT_BUFFER;
+    h = Math.max(h, bodyGuess);
+  } else if (n.type === 'data') {
+    h = Math.max(h, 320 + LAYOUT_HEIGHT_BUFFER);
+  } else if (n.type === 'answer') {
+    h = Math.max(h, CANVAS_ANSWER_LAYOUT_HEIGHT + LAYOUT_HEIGHT_BUFFER + 64);
+  } else if (n.type === 'root') {
+    h = Math.max(h, 100);
+  }
+
   return { w, h };
+}
+
+function subtreeMaxRight(
+  id: string,
+  nodeMap: Map<string, WorkspaceNode>,
+  childrenMap: Map<string, string[]>,
+  positions: Map<string, Position>
+): number {
+  const n = nodeMap.get(id);
+  if (!n) return 0;
+  const pos = positions.get(id);
+  if (!pos) return 0;
+  const { w } = layoutNodeSize(n);
+  let right = pos.x + w;
+  for (const c of childrenMap.get(id) ?? []) {
+    right = Math.max(right, subtreeMaxRight(c, nodeMap, childrenMap, positions));
+  }
+  return right;
 }
 
 interface LayoutBox {
@@ -90,18 +143,20 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
 
     if (n.type === 'root') {
       const rowY = y + h + chromeH + LAYOUT_GAP_Y;
-      const slotW = Math.max(300, LAYOUT_QUERY_SIBLING_X);
+      const slotW = Math.max(380, LAYOUT_QUERY_SIBLING_X);
       const totalW = kids.length * slotW;
       const startX = x + w / 2 - totalW / 2;
       let maxBottom = y + h + chromeH;
+      let maxRight = x + w;
       kids.forEach((kidId, i) => {
         const box = layoutSubtree(kidId, startX + i * slotW, rowY);
         maxBottom = Math.max(maxBottom, box.bottom);
+        maxRight = Math.max(maxRight, box.rightEdge);
       });
-      return { bottom: maxBottom, rightEdge: x + w };
+      return { bottom: maxBottom, rightEdge: maxRight };
     }
 
-    if (n.type === 'query') {
+    if (n.type === 'query' || n.type === 'query-template') {
       let curY = y + h + chromeH + LAYOUT_GAP_Y;
       let maxBottom = y + h + chromeH;
       let rightEdge = x + w;
@@ -134,7 +189,7 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
         const box = layoutSubtree(kidId, qx, rowY);
         maxBottom = Math.max(maxBottom, box.bottom);
         rightEdge = Math.max(rightEdge, box.rightEdge);
-        qx += LAYOUT_QUERY_SIBLING_X;
+        qx = Math.max(box.rightEdge + LAYOUT_GAP_X, qx + LAYOUT_QUERY_SIBLING_X);
       });
 
       return { bottom: maxBottom, rightEdge };
@@ -152,13 +207,30 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
     return { bottom: maxBottom, rightEdge };
   }
 
-  const roots = nodes.filter(
-    (n) => n.type === 'root' || !edges.some((e) => e.targetId === n.id)
-  );
-  const root = roots.find((r) => r.type === 'root') ?? roots[0];
-  if (!root) return nodes;
+  const roots = nodes.filter((n) => !edges.some((e) => e.targetId === n.id));
+  if (roots.length === 0) return nodes;
 
-  layoutSubtree(root.id, root.position.x, root.position.y);
+  const topicRoot = roots.find((r) => r.type === 'root');
+  const packOrdered: WorkspaceNode[] = topicRoot
+    ? [
+        topicRoot,
+        ...roots
+          .filter((r) => r.id !== topicRoot.id)
+          .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y),
+      ]
+    : [...roots].sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y);
+
+  const ROOT_PACK_GAP = LAYOUT_GAP_X * 5;
+  let packCursorRight = -Infinity;
+  packOrdered.forEach((r, i) => {
+    const x = i === 0 ? r.position.x : packCursorRight + ROOT_PACK_GAP;
+    const y = r.position.y;
+    layoutSubtree(r.id, x, y);
+    packCursorRight = Math.max(
+      packCursorRight,
+      subtreeMaxRight(r.id, nodeMap, childrenMap, positions)
+    );
+  });
 
   return nodes.map((n) => ({
     ...n,
@@ -218,6 +290,53 @@ function dataNodeFromApiPayload(
     width: 320,
     height: 280,
   };
+}
+
+const MAX_FOLLOWUP_QUERY_NODES = 8;
+
+/** Slot values for a query spawned from a template row (for {{var}} in follow-ups). */
+function slotValuesForTemplateQuery(
+  nodes: WorkspaceNode[],
+  queryId: string
+): Record<string, string> | null {
+  const q = nodes.find((n) => n.id === queryId && n.type === 'query');
+  if (!q || q.type !== 'query' || !q.parentId) return null;
+  const tpl = nodes.find(
+    (n): n is QueryTemplateNodeData =>
+      n.id === q.parentId && n.type === 'query-template'
+  );
+  if (!tpl) return null;
+  const slot = tpl.slots.find((s) => s.linkedQueryId === queryId);
+  return slot?.values ?? null;
+}
+
+/** Template-stored follow-ups first (with {{var}} filled from the slot), then API suggestions; deduped. */
+function mergeTemplateFollowUpsIntoSuggested(
+  nodes: WorkspaceNode[],
+  queryId: string,
+  apiSuggested: string[]
+): string[] {
+  const q = nodes.find((n) => n.id === queryId && n.type === 'query');
+  if (!q || q.type !== 'query' || !q.parentId) return apiSuggested;
+  const parent = nodes.find((n) => n.id === q.parentId);
+  if (!parent || parent.type !== 'query-template') return apiSuggested;
+  const values = slotValuesForTemplateQuery(nodes, queryId);
+  const extra = (parent.followUpQuestions ?? [])
+    .map((s) => {
+      const t = s.trim();
+      if (!t) return '';
+      return values ? substituteTemplate(t, values) : t;
+    })
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of [...extra, ...apiSuggested]) {
+    const t = line.trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  return out;
 }
 
 function attachAnswerChildren(
@@ -304,6 +423,8 @@ type Action =
   | { type: 'DELETE_NODE'; id: string }
   | { type: 'TOGGLE_COLLAPSE_BRANCH'; nodeId: string }
   | { type: 'RUN_QUERY'; queryId: string }
+  /** Remove answer/data descendants of a query and reset it to suggested (for re-run). */
+  | { type: 'CLEAR_QUERY_SUBTREE'; queryId: string }
   | {
       type: 'ANSWER_STREAMED';
       answerId: string;
@@ -428,6 +549,34 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
       else set.add(id);
       return { ...state, collapsedNodeIds: Array.from(set) };
     }
+    case 'CLEAR_QUERY_SUBTREE': {
+      const collectDescendants = (id: string, nodes: WorkspaceNode[]): string[] => {
+        const children = nodes.filter((n) => n.parentId === id).map((n) => n.id);
+        return [id, ...children.flatMap((cid) => collectDescendants(cid, nodes))];
+      };
+      const qid = action.queryId;
+      const childRoots = state.nodes.filter((n) => n.parentId === qid).map((n) => n.id);
+      const toDelete = new Set<string>();
+      for (const rid of childRoots) {
+        for (const id of collectDescendants(rid, state.nodes)) {
+          toDelete.add(id);
+        }
+      }
+      return {
+        ...state,
+        nodes: state.nodes
+          .filter((n) => !toDelete.has(n.id))
+          .map((n) =>
+            n.id === qid && n.type === 'query' ? { ...n, status: 'suggested' as const } : n
+          ),
+        edges: state.edges.filter(
+          (e) => !toDelete.has(e.sourceId) && !toDelete.has(e.targetId)
+        ),
+        dashboardNodeIds: state.dashboardNodeIds.filter((id) => !toDelete.has(id)),
+        selectedNodeId: toDelete.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
+        collapsedNodeIds: state.collapsedNodeIds.filter((cid) => !toDelete.has(cid)),
+      };
+    }
     case 'DELETE_NODE': {
       // Collect the node and all its descendants recursively
       const collectDescendants = (id: string, nodes: WorkspaceNode[]): string[] => {
@@ -488,6 +637,14 @@ interface WorkspaceContextValue {
     modelChoice?: string,
     toolChoice?: QueryToolChoice
   ) => void;
+  addQueryTemplateNode: (args: {
+    displayName: string;
+    pattern: string;
+    position: Position;
+    toolChoice?: QueryToolChoice;
+    followUpQuestions?: string[];
+  }) => void;
+  runTemplateSlot: (templateNodeId: string, slotId: string) => void;
   toggleDashboardPin: (nodeId: string) => void;
   deleteNode: (nodeId: string) => void;
 }
@@ -521,11 +678,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   // Stable ref to always-current nodes, avoiding stale closure in runQuery
   const nodesRef = React.useRef(state.nodes);
+  const edgesRef = React.useRef(state.edges);
   const keywordRef = React.useRef(state.keyword);
   const goalRef = React.useRef(state.goal);
   React.useEffect(() => {
     nodesRef.current = state.nodes;
   }, [state.nodes]);
+  React.useEffect(() => {
+    edgesRef.current = state.edges;
+  }, [state.edges]);
   React.useEffect(() => {
     keywordRef.current = state.keyword;
     goalRef.current = state.goal;
@@ -556,9 +717,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   );
 
   const runQuery = useCallback((queryId: string) => {
-    const queryNode = nodesRef.current.find((n) => n.id === queryId);
-    if (!queryNode || queryNode.type !== 'query') return;
-    if (queryNode.status === 'running' || queryNode.status === 'complete') return;
+    const queryNode0 = nodesRef.current.find((n) => n.id === queryId);
+    if (!queryNode0 || queryNode0.type !== 'query') return;
+    if (queryNode0.status === 'running') return;
+
+    if (queryNode0.status === 'complete') {
+      dispatch({ type: 'CLEAR_QUERY_SUBTREE', queryId });
+    }
+
+    const queryNode =
+      queryNode0.status === 'complete' ? { ...queryNode0, status: 'suggested' as const } : queryNode0;
+
+    if (queryNode.status !== 'suggested' && queryNode.status !== 'idle') return;
 
     dispatch({
       type: 'UPDATE_NODE',
@@ -634,7 +804,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
               queryId,
               answerId,
               answerPos,
-              suggestedQueries: mockData.suggestedQueries,
+              suggestedQueries: mergeTemplateFollowUpsIntoSuggested(
+                nodesRef.current,
+                queryId,
+                mockData.suggestedQueries
+              ),
               dataId,
               dataPayload,
               parentModelChoice: queryNode.modelChoice,
@@ -760,7 +934,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             queryId,
             answerId,
             answerPos,
-            suggestedQueries: suggested.length ? suggested : ['What should I explore next?'],
+            suggestedQueries: mergeTemplateFollowUpsIntoSuggested(
+              nodesRef.current,
+              queryId,
+              suggested.length ? suggested : ['What should I explore next?']
+            ),
             dataId,
             dataPayload: metaPayload,
             parentModelChoice: queryNode.modelChoice,
@@ -798,7 +976,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           queryId,
           answerId,
           answerPos,
-          suggestedQueries: suggested.length ? suggested : ['What should I explore next?'],
+          suggestedQueries: mergeTemplateFollowUpsIntoSuggested(
+            nodesRef.current,
+            queryId,
+            suggested.length ? suggested : ['What should I explore next?']
+          ),
           dataId,
           dataPayload: metaPayload,
           parentModelChoice: queryNode.modelChoice,
@@ -809,6 +991,121 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     void runLiveAi();
   }, []);
+
+  const addQueryTemplateNode = useCallback(
+    ({
+      displayName,
+      pattern,
+      position,
+      toolChoice,
+      followUpQuestions,
+    }: {
+      displayName: string;
+      pattern: string;
+      position: Position;
+      toolChoice?: QueryToolChoice;
+      followUpQuestions?: string[];
+    }) => {
+      const id = `qt-node-${Date.now()}`;
+      const fus = (followUpQuestions ?? []).map((s) => s.trim()).filter(Boolean);
+      const node: WorkspaceNode = {
+        id,
+        type: 'query-template',
+        templateName: displayName.trim() || 'Template',
+        pattern,
+        slots: [],
+        position,
+        status: 'suggested',
+        width: 300,
+        height: LAYOUT_DEFAULT_HEIGHT['query-template'],
+        toolChoice: toolChoice ?? 'auto',
+        ...(fus.length > 0 ? { followUpQuestions: fus } : {}),
+      } as QueryTemplateNodeData;
+      dispatch({ type: 'ADD_NODE', node });
+    },
+    []
+  );
+
+  const runTemplateSlot = useCallback(
+    (templateNodeId: string, slotId: string) => {
+      const nodes = nodesRef.current;
+      const tpl = nodes.find(
+        (n): n is QueryTemplateNodeData =>
+          n.id === templateNodeId && n.type === 'query-template'
+      );
+      if (!tpl) return;
+      const slot = tpl.slots.find((s) => s.id === slotId);
+      if (!slot) return;
+
+      const keys = parseTemplateVariableKeys(tpl.pattern);
+      if (keys.length > 0) {
+        const missing = keys.some((k) => !(slot.values[k] ?? '').trim());
+        if (missing) {
+          toast.error(tr('templates.slotFillRequired'));
+          return;
+        }
+      } else if (!tpl.pattern.trim()) {
+        return;
+      }
+
+      const question = substituteTemplate(tpl.pattern, slot.values);
+      if (!question.trim()) {
+        toast.error(tr('templates.slotFillRequired'));
+        return;
+      }
+
+      if (slot.linkedQueryId) {
+        dispatch({ type: 'DELETE_NODE', id: slot.linkedQueryId });
+      }
+
+      const slotIndex = Math.max(0, tpl.slots.findIndex((s) => s.id === slotId));
+      const tplH = tpl.height ?? LAYOUT_DEFAULT_HEIGHT['query-template'];
+      const baseY =
+        tpl.position.y + NODE_CANVAS_TOOLBAR_HEIGHT_PX + tplH + LAYOUT_GAP_Y;
+      const queryY = baseY + slotIndex * TEMPLATE_SLOT_QUERY_PITCH_Y;
+      const queryId = `q-tpl-${templateNodeId}-${slotId}-${Date.now()}`;
+
+      const queryNode: WorkspaceNode = {
+        id: queryId,
+        type: 'query',
+        question,
+        parentId: templateNodeId,
+        position: { x: tpl.position.x, y: queryY },
+        status: 'suggested',
+        width: 280,
+        height: 100,
+        isCustom: true,
+        ...(tpl.modelChoice ? { modelChoice: tpl.modelChoice } : {}),
+        ...(tpl.toolChoice ? { toolChoice: tpl.toolChoice } : {}),
+      } as WorkspaceNode;
+
+      dispatch({ type: 'ADD_NODE', node: queryNode });
+      dispatch({
+        type: 'ADD_EDGE',
+        edge: {
+          id: `e-${templateNodeId}-${queryId}`,
+          sourceId: templateNodeId,
+          targetId: queryId,
+        },
+      });
+
+      const newSlots = tpl.slots.map((s) =>
+        s.id === slotId ? { ...s, linkedQueryId: queryId } : s
+      );
+      dispatch({
+        type: 'UPDATE_NODE',
+        id: templateNodeId,
+        updates: { slots: newSlots } as Partial<WorkspaceNode>,
+      });
+
+      dispatch({ type: 'AUTO_LAYOUT' });
+
+      window.setTimeout(() => {
+        runQuery(queryId);
+      }, 0);
+    },
+    [runQuery]
+  );
 
   const addCustomQuery = useCallback(
     (
@@ -868,6 +1165,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         initWorkspace,
         runQuery,
         addCustomQuery,
+        addQueryTemplateNode,
+        runTemplateSlot,
         toggleDashboardPin,
         deleteNode,
       }}
