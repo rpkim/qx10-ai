@@ -137,7 +137,7 @@ function TableView({ node }: { node: DataNodeData }) {
         </thead>
         <tbody>
           {node.tableRows.map((row, i) => (
-            <tr key={i} className="transition-colors hover:bg-white/[0.02]">
+            <tr key={i} className="transition-colors hover:bg-white/2">
               {node.tableColumns!.map((col) => (
                 <td
                   key={col}

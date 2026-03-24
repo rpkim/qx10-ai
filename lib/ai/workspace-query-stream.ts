@@ -4,6 +4,7 @@ import type { GoalType } from '@/lib/types';
 import { parseQueryMetadata, normalizeDataNodePayload } from '@/lib/ai/metadata';
 import { buildAnswerSystemPrompt, METADATA_SYSTEM_PROMPT } from '@/lib/ai/prompts';
 import type { CatalogOption } from '@/lib/ai/model-config';
+import { maybeGetMarketDataNodeFromMcp } from '@/lib/ai/mcp-market';
 
 const encoder = new TextEncoder();
 
@@ -149,6 +150,18 @@ export function createWorkspaceQueryReadableStream(
 
         const meta = await extractMetadata(selection, question, fullAnswer, keys);
         let { extractedKeywords, suggestedQueries, dataNode } = meta;
+
+        // Optional MCP enrichment: if a ticker-like query is detected and MCP bridge is configured,
+        // inject live market data node when the model did not provide one.
+        if (!dataNode) {
+          const mcp = await maybeGetMarketDataNodeFromMcp(question);
+          if (mcp) {
+            dataNode = mcp.payload;
+            if (!extractedKeywords.includes(mcp.symbol)) {
+              extractedKeywords = [mcp.symbol, ...extractedKeywords].slice(0, 14);
+            }
+          }
+        }
 
         if (extractedKeywords.length === 0) {
           extractedKeywords = ['Overview', 'Context', 'Next steps', 'Details'];

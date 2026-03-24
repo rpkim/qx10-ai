@@ -226,8 +226,9 @@ export function Canvas() {
         }}
       />
 
-      {/* Canvas transform wrapper */}
+      {/* Canvas transform wrapper — full graph bounds for html2canvas export */}
       <div
+        id="workspace-graph-capture-root"
         className="absolute origin-top-left"
         style={{
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
@@ -279,19 +280,24 @@ function NodeRenderer({
     position: 'absolute',
     left: node.position.x,
     top: node.position.y,
-    width: node.width ?? 280,
+    width: node.width ?? (node.type === 'data' ? 320 : 280),
     userSelect: 'none',
   };
 
   const wrapperClass = [
-    'flex cursor-move flex-col transition-shadow duration-200',
+    'relative flex cursor-move flex-col transition-shadow duration-200',
     isSelected ? 'ring-2 ring-primary rounded-2xl' : '',
   ].join(' ');
 
   return (
-    <div style={style} className={wrapperClass} onMouseDown={handleMouseDown}>
+    <div
+      data-workspace-node="true"
+      style={style}
+      className={wrapperClass}
+      onMouseDown={handleMouseDown}
+    >
       <NodeChrome node={node} hasChildren={hasChildren} isCollapsed={isCollapsed} />
-      <div className="min-w-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1">
         {node.type === 'root' && <RootNode node={node as any} />}
         {node.type === 'query' && <QueryNode node={node as any} />}
         {node.type === 'answer' && <AnswerNode node={node as any} />}
