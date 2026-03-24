@@ -14,6 +14,7 @@ import { useI18n } from '@/components/i18n-provider';
 const NODE_COLORS: Record<NodeType, string> = {
   root: '#00C49A',
   query: '#60A5FA',
+  'query-template': '#D97706',
   answer: '#A3E635',
   data: '#F59E0B',
 };

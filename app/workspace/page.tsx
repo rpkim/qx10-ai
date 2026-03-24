@@ -195,6 +195,7 @@ function WorkspaceInner() {
         {[
           { color: '#00C49A', labelKey: 'workspace.legendRoot' as const },
           { color: '#60A5FA', labelKey: 'workspace.legendQuery' as const },
+          { color: '#D97706', labelKey: 'workspace.legendTemplate' as const },
           { color: '#A3E635', labelKey: 'workspace.legendAnswer' as const },
           { color: '#F59E0B', labelKey: 'workspace.legendData' as const },
         ].map(({ color, labelKey }) => (

@@ -46,6 +46,23 @@ const queryNodeSchema = z.object({
   toolChoice: z.enum(['auto', 'web', 'market']).optional(),
 });
 
+const templateSlotSchema = z.object({
+  id: z.string(),
+  values: z.record(z.string(), z.string()),
+  linkedQueryId: z.string().optional(),
+});
+
+const queryTemplateNodeSchema = z.object({
+  ...baseNode,
+  type: z.literal('query-template'),
+  templateName: z.string(),
+  pattern: z.string(),
+  slots: z.array(templateSlotSchema),
+  modelChoice: z.string().optional(),
+  toolChoice: z.enum(['auto', 'web', 'market']).optional(),
+  followUpQuestions: z.array(z.string()).optional(),
+});
+
 const answerNodeSchema = z.object({
   ...baseNode,
   type: z.literal('answer'),
@@ -87,6 +104,7 @@ const dataNodeSchema = z.object({
 const workspaceNodeSchema = z.discriminatedUnion('type', [
   rootNodeSchema,
   queryNodeSchema,
+  queryTemplateNodeSchema,
   answerNodeSchema,
   dataNodeSchema,
 ]);

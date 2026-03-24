@@ -2,10 +2,13 @@
 
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import { useWorkspace } from '@/lib/workspace-store';
+import { useI18n } from '@/components/i18n-provider';
+import { QuestionTemplatePlaceDialog } from '@/components/question-template-place-dialog';
 import { ConnectionLines } from './connection-lines';
 import { NodeChrome } from './node-chrome';
 import { RootNode } from '@/components/nodes/root-node';
 import { QueryNode } from '@/components/nodes/query-node';
+import { QueryTemplateNode } from '@/components/nodes/query-template-node';
 import { AnswerNode } from '@/components/nodes/answer-node';
 import { DataNode } from '@/components/nodes/data-node';
 import type { WorkspaceNode, Position } from '@/lib/types';
@@ -16,7 +19,8 @@ import {
 } from '@/lib/canvas-visibility';
 
 export function Canvas() {
-  const { state, dispatch } = useWorkspace();
+  const { t } = useI18n();
+  const { state, dispatch, addQueryTemplateNode } = useWorkspace();
   const { nodes, edges, viewport, selectedNodeId, collapsedNodeIds } = state;
   const { x: panX, y: panY, zoom } = viewport;
 
@@ -37,6 +41,22 @@ export function Canvas() {
   const draggingNode = useRef<{ id: string; startMouse: Position; startNode: Position } | null>(null);
   const spaceHeld = useRef(false);
   const [cursor, setCursor] = useState<'default' | 'grab' | 'grabbing'>('default');
+  const [canvasCtx, setCanvasCtx] = useState<{ x: number; y: number } | null>(null);
+  const [placeTemplate, setPlaceTemplate] = useState<{
+    open: boolean;
+    world: Position | null;
+  }>({ open: false, world: null });
+  const canvasCtxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!canvasCtx) return;
+    const onDown = (e: MouseEvent) => {
+      if (canvasCtxRef.current?.contains(e.target as Node)) return;
+      setCanvasCtx(null);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [canvasCtx]);
 
   /* ── Spacebar hold to pan ── */
   useEffect(() => {
@@ -181,6 +201,7 @@ export function Canvas() {
 
   const startNodeDrag = useCallback(
     (nodeId: string, nodePos: Position, e: React.MouseEvent) => {
+      if (e.button !== 0) return; // only primary button drags; right-click keeps context menu
       if (spaceHeld.current) return; // space held → pan, not node drag
       e.stopPropagation();
       draggingNode.current = {
@@ -202,6 +223,12 @@ export function Canvas() {
     [dispatch]
   );
 
+  const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('[data-workspace-node]')) return;
+    e.preventDefault();
+    setCanvasCtx({ x: e.clientX, y: e.clientY });
+  }, []);
+
   const cursorStyle =
     cursor === 'grabbing' ? 'grabbing' :
     cursor === 'grab'     ? 'grab' :
@@ -214,6 +241,7 @@ export function Canvas() {
       style={{ cursor: cursorStyle, background: 'var(--background)' }}
       onMouseDown={handleMouseDown}
       onClick={handleCanvasClick}
+      onContextMenu={handleCanvasContextMenu}
     >
       {/* Dot-grid background — tagged so blank-area detection works */}
       <div
@@ -252,6 +280,53 @@ export function Canvas() {
           />
         ))}
       </div>
+
+      {canvasCtx && (
+        <div
+          ref={canvasCtxRef}
+          className="border-border bg-popover text-popover-foreground fixed z-[200] min-w-[220px] rounded-lg border py-1 shadow-lg"
+          style={{ left: canvasCtx.x, top: canvasCtx.y }}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            type="button"
+            className="hover:bg-accent block w-full px-3 py-2 text-left text-sm"
+            onClick={() => {
+              const el = canvasRef.current;
+              if (!el || !canvasCtx) {
+                setCanvasCtx(null);
+                return;
+              }
+              const rect = el.getBoundingClientRect();
+              const world: Position = {
+                x: (canvasCtx.x - rect.left - panX) / zoom,
+                y: (canvasCtx.y - rect.top - panY) / zoom,
+              };
+              setPlaceTemplate({ open: true, world });
+              setCanvasCtx(null);
+            }}
+          >
+            {t('templates.addFromMenu')}
+          </button>
+        </div>
+      )}
+
+      <QuestionTemplatePlaceDialog
+        open={placeTemplate.open}
+        onOpenChange={(open) => {
+          if (!open) setPlaceTemplate({ open: false, world: null });
+        }}
+        onPick={(tpl) => {
+          if (!placeTemplate.world) return;
+          addQueryTemplateNode({
+            displayName: tpl.name,
+            pattern: tpl.pattern,
+            position: placeTemplate.world,
+            toolChoice: tpl.toolChoice,
+            followUpQuestions: tpl.followUpQuestions,
+          });
+        }}
+      />
     </div>
   );
 }
@@ -273,7 +348,9 @@ function NodeRenderer({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     dispatch({ type: 'SELECT_NODE', id: node.id });
-    onDragStart(node.id, node.position, e);
+    if (e.button === 0) {
+      onDragStart(node.id, node.position, e);
+    }
   };
 
   const style: React.CSSProperties = {
@@ -300,6 +377,9 @@ function NodeRenderer({
       <div className="min-h-0 min-w-0 flex-1">
         {node.type === 'root' && <RootNode node={node as any} />}
         {node.type === 'query' && <QueryNode node={node as any} />}
+        {node.type === 'query-template' && (
+          <QueryTemplateNode node={node as any} />
+        )}
         {node.type === 'answer' && <AnswerNode node={node as any} />}
         {node.type === 'data' && <DataNode node={node as any} />}
       </div>

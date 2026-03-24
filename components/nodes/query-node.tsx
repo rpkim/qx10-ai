@@ -30,7 +30,6 @@ export function QueryNode({ node }: Props) {
   const { runQuery, addCustomQuery, dispatch, aiCatalog } = useWorkspace();
   const [showCustom, setShowCustom] = useState(false);
   const [customQ, setCustomQ] = useState('');
-
   const colors = STATUS_COLORS[node.status] ?? STATUS_COLORS.suggested;
   const isRunning = node.status === 'running';
   const isComplete = node.status === 'complete';
@@ -257,6 +256,7 @@ export function QueryNode({ node }: Props) {
           />
         </div>
       )}
+
     </div>
   );
 }

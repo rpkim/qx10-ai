@@ -10,6 +10,10 @@ interface MarketQuote {
   source?: string;
 }
 
+function isCompareIntent(question: string): boolean {
+  return /(비교|동종|유사|peer|peers|compare|competitor)/i.test(question);
+}
+
 const COMPANY_TO_TICKER: Record<string, string> = {
   NIKE: 'NKE',
   APPLE: 'AAPL',
@@ -177,6 +181,14 @@ async function fetchMarketQuote(url: string, headers: Record<string, string>): P
   }
 }
 
+async function fetchQuoteBySymbol(symbol: string): Promise<MarketQuote | null> {
+  const url = buildMarketApiUrl(symbol);
+  if (!url) return null;
+  const req = withApiKey(url);
+  const raw = await fetchMarketQuote(req.url, req.headers);
+  return raw ? normalizeQuote(raw, symbol) : null;
+}
+
 async function resolveTickerViaFinnhubSearch(question: string): Promise<string | null> {
   const template = readString(process.env.MARKET_API_URL_TEMPLATE);
   if (!template || !template.includes('finnhub.io')) return null;
@@ -253,13 +265,41 @@ async function fetchFinnhubIntradaySeries(symbol: string): Promise<{ label: stri
   }
 }
 
+async function fetchFinnhubPeers(symbol: string): Promise<string[]> {
+  const template = readString(process.env.MARKET_API_URL_TEMPLATE);
+  if (!template || !template.includes('finnhub.io')) return [];
+  const key = readString(process.env.MARKET_API_KEY);
+  if (!key) return [];
+  const keyQuery = readString(process.env.MARKET_API_KEY_QUERY_PARAM) ?? 'token';
+  const keyHeader = readString(process.env.MARKET_API_KEY_HEADER);
+
+  const url = new URL('https://finnhub.io/api/v1/stock/peers');
+  url.searchParams.set('symbol', symbol);
+  if (!keyHeader) url.searchParams.set(keyQuery, key);
+  const headers: Record<string, string> = keyHeader ? { [keyHeader]: key } : {};
+
+  try {
+    const res = await fetch(url.toString(), { headers, cache: 'no-store' });
+    if (!res.ok) return [];
+    const raw = (await res.json()) as unknown;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((x) => (typeof x === 'string' ? x.trim().toUpperCase() : ''))
+      .filter((x) => !!x && /^[A-Z.\-]{1,10}$/.test(x));
+  } catch {
+    return [];
+  }
+}
+
 export async function maybeGetMarketDataNodeFromApi(question: string): Promise<
   | {
       payload: {
-        dataType: 'metric' | 'line-chart';
+        dataType: 'metric' | 'line-chart' | 'table';
         title: string;
         subtitle?: string;
         chartData?: { label: string; value: number }[];
+        tableColumns?: string[];
+        tableRows?: Record<string, string | number>[];
         metrics: { label: string; value: string; change?: string; up?: boolean }[];
       };
       symbol: string;
@@ -270,24 +310,44 @@ export async function maybeGetMarketDataNodeFromApi(question: string): Promise<
   const symbol = maybeTickerFromQuestion(question);
   if (!symbol) return null;
 
-  const url = buildMarketApiUrl(symbol);
-  if (!url) return null;
-  const req = withApiKey(url);
-  const raw = await fetchMarketQuote(req.url, req.headers);
-  let quote = raw ? normalizeQuote(raw, symbol) : null;
+  let quote = await fetchQuoteBySymbol(symbol);
   if (!quote || quote.price === undefined || quote.price <= 0) {
     // Common case: question used company name (e.g. "NIKE") not ticker ("NKE").
     const resolved = await resolveTickerViaFinnhubSearch(question);
     if (resolved && resolved !== symbol) {
-      const retryUrl = buildMarketApiUrl(resolved);
-      if (retryUrl) {
-        const retryReq = withApiKey(retryUrl);
-        const retryRaw = await fetchMarketQuote(retryReq.url, retryReq.headers);
-        quote = retryRaw ? normalizeQuote(retryRaw, resolved) : null;
-      }
+      quote = await fetchQuoteBySymbol(resolved);
     }
   }
   if (!quote) return null;
+
+  if (isCompareIntent(question)) {
+    const peers = await fetchFinnhubPeers(quote.symbol);
+    const targets = [quote.symbol, ...peers.filter((p) => p !== quote.symbol)].slice(0, 6);
+    const quotes = await Promise.all(targets.map((s) => fetchQuoteBySymbol(s)));
+    const rows = quotes
+      .filter((q): q is MarketQuote => !!q && q.price !== undefined)
+      .map((q) => ({
+        Symbol: q.symbol,
+        Price: Number(q.price!.toFixed(2)),
+        'Change %':
+          q.changePercent !== undefined ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(2)}%` : '-',
+      }));
+    if (rows.length >= 2) {
+      return {
+        payload: {
+          dataType: 'table',
+          title: `${quote.symbol} peer comparison`,
+          subtitle: 'Price and daily change',
+          tableColumns: ['Symbol', 'Price', 'Change %'],
+          tableRows: rows,
+          metrics: [],
+        },
+        symbol: quote.symbol,
+        summary: `${quote.symbol}와 유사 종목 ${rows.length}개를 비교했습니다.`,
+      };
+    }
+  }
+
   const intraday = await fetchFinnhubIntradaySeries(quote.symbol);
   const metricPayload = quoteToDataNodePayload(quote);
   const payload =

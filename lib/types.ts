@@ -16,7 +16,7 @@ export interface AiModelCatalog {
   options: AiModelOption[];
 }
 
-export type NodeType = 'root' | 'query' | 'answer' | 'data';
+export type NodeType = 'root' | 'query' | 'answer' | 'data' | 'query-template';
 
 export type NodeStatus =
   | 'idle'
@@ -60,6 +60,24 @@ export interface QueryNodeData extends BaseNode {
   toolChoice?: QueryToolChoice;
 }
 
+/** Saved template placed on canvas; not connected to the topic root. Each slot can run a filled query below. */
+export interface TemplateQuerySlot {
+  id: string;
+  values: Record<string, string>;
+  linkedQueryId?: string;
+}
+
+export interface QueryTemplateNodeData extends BaseNode {
+  type: 'query-template';
+  templateName: string;
+  pattern: string;
+  slots: TemplateQuerySlot[];
+  modelChoice?: string;
+  toolChoice?: QueryToolChoice;
+  /** Pre-seeded follow-up queries (from saved template) merged with API suggestions under the answer. */
+  followUpQuestions?: string[];
+}
+
 export interface AnswerNodeData extends BaseNode {
   type: 'answer';
   queryId: string;
@@ -94,6 +112,7 @@ export interface DataNodeData extends BaseNode {
 export type WorkspaceNode =
   | RootNodeData
   | QueryNodeData
+  | QueryTemplateNodeData
   | AnswerNodeData
   | DataNodeData;
 
