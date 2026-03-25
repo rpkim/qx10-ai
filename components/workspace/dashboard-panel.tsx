@@ -611,6 +611,7 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                 return (
                   <div
                     key={node.id}
+                    data-dashboard-export-item="true"
                     className={[
                       'absolute overflow-hidden rounded-2xl border border-border bg-card shadow-sm',
                       editingGrid ? 'ring-1 ring-primary/20 shadow-lg' : '',
@@ -656,6 +657,7 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
               {orderedNodes.map((node) => (
                 <div
                   key={node.id}
+                  data-dashboard-export-item="true"
                   data-dashboard-compact-widget-id={node.id}
                   draggable={!usePointerDnD}
                   onDragStart={!usePointerDnD ? () => handleDragStart(node.id) : undefined}

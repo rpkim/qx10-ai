@@ -44,6 +44,8 @@ import { findIncomingAncestorIds } from '@/lib/workspace-node-search';
 /** Vertical gap between parent bottom and child top */
 const LAYOUT_GAP_Y = 108;
 const LAYOUT_GAP_X = 64;
+/** Template-slot row is compact: keep it closer to its template node. */
+const TEMPLATE_SLOT_GAP_Y = 56;
 /** Minimum horizontal step when we cannot use subtree width (e.g. root row) */
 const LAYOUT_QUERY_SIBLING_X = 400;
 
@@ -60,15 +62,15 @@ const LAYOUT_DEFAULT_HEIGHT: Record<WorkspaceNode['type'], number> = {
   root: 100,
   query: 280,
   'query-template': 360,
-  'template-slot': 240,
+  'template-slot': 200,
   answer: CANVAS_ANSWER_LAYOUT_HEIGHT + LAYOUT_HEIGHT_BUFFER + 40,
   data: 320,
 };
 
 function estimateTemplateSlotHeight(keyCount: number): number {
   return Math.max(
-    200,
-    NODE_CANVAS_TOOLBAR_HEIGHT_PX + 80 + keyCount * 52 + 88 + LAYOUT_HEIGHT_BUFFER
+    140,
+    NODE_CANVAS_TOOLBAR_HEIGHT_PX + 56 + keyCount * 40 + 64 + LAYOUT_HEIGHT_BUFFER
   );
 }
 
@@ -94,7 +96,7 @@ function layoutNodeSize(n: WorkspaceNode): { w: number; h: number } {
     const bodyGuess = NODE_CANVAS_TOOLBAR_HEIGHT_PX + 220 + LAYOUT_HEIGHT_BUFFER;
     h = Math.max(h, bodyGuess);
   } else if (n.type === 'template-slot') {
-    h = Math.max(h, 200 + LAYOUT_HEIGHT_BUFFER);
+    h = Math.max(h, 150 + LAYOUT_HEIGHT_BUFFER);
   } else if (n.type === 'data') {
     h = Math.max(h, 320 + LAYOUT_HEIGHT_BUFFER);
   } else if (n.type === 'answer') {
@@ -324,7 +326,7 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
     const maxSlotH = Math.max(...heights);
     const gapX = LAYOUT_GAP_X;
     const totalW = widths.reduce((acc, w, i) => acc + w + (i > 0 ? gapX : 0), 0);
-    const rowY = tplPos.y - chromeH - maxSlotH - LAYOUT_GAP_Y;
+    const rowY = tplPos.y - chromeH - maxSlotH - TEMPLATE_SLOT_GAP_Y;
     let cursorX = tplPos.x + tplW / 2 - totalW / 2;
     slotIds.forEach((sid, i) => {
       positions.set(sid, { x: cursorX, y: rowY });
@@ -804,7 +806,7 @@ interface WorkspaceContextValue {
     toolChoice?: QueryToolChoice;
     followUpQuestions?: string[];
   }) => void;
-  addTemplateSlotNode: (templateNodeId: string) => void;
+  addTemplateSlotNode: (templateNodeId: string) => string | null;
   deleteTemplateSlotNode: (slotNodeId: string) => void;
   runTemplateSlot: (slotNodeId: string) => void;
   toggleDashboardPin: (nodeId: string) => void;
@@ -1187,13 +1189,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const addTemplateSlotNode = useCallback((templateNodeId: string) => {
+  const addTemplateSlotNode = useCallback((templateNodeId: string): string | null => {
     const nodes = nodesRef.current;
     const tpl = nodes.find(
       (n): n is QueryTemplateNodeData =>
         n.id === templateNodeId && n.type === 'query-template'
     );
-    if (!tpl) return;
+    if (!tpl) return null;
 
     const keys = parseTemplateVariableKeys(tpl.pattern);
     const values =
@@ -1226,6 +1228,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
 
     dispatch({ type: 'AUTO_LAYOUT' });
+    return slotId;
   }, []);
 
   const deleteTemplateSlotNode = useCallback((slotNodeId: string) => {
