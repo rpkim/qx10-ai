@@ -32,7 +32,7 @@ export function QueryTemplateNode({ node }: Props) {
 
   return (
     <div
-      className="flex flex-col gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/[0.06] p-3"
+      className="flex flex-col gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/6 p-3"
       data-node-scroll="true"
       style={{ minWidth: 280, maxHeight: 420 }}
     >
@@ -49,7 +49,7 @@ export function QueryTemplateNode({ node }: Props) {
         <button
           type="button"
           title={t('templates.addSlotTooltip')}
-          onClick={() => addTemplateSlotNode(node.id)}
+          onClick={() => void addTemplateSlotNode(node.id)}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-500/15 text-lg font-semibold text-amber-700 transition-colors hover:bg-amber-500/25 dark:text-amber-300"
         >
           +

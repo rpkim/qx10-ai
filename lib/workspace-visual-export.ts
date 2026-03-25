@@ -100,6 +100,7 @@ function normalizeCaptureScales(rectW: number, rectH: number, maxScale: number):
  */
 const NODE_UNION_PAD_PX = 64;
 const CROP_MIN_SIZE_PX = 200;
+const DASHBOARD_CROP_PAD_PX = 24;
 
 /**
  * Tight crop around node cards in graph-local coordinates (pre-transform).
@@ -266,17 +267,55 @@ async function captureElementToCanvas(
   backgroundColor: string | null
 ): Promise<HTMLCanvasElement> {
   const rect = el.getBoundingClientRect();
+  const computeDashboardCrop = (): { x: number; y: number; w: number; h: number } => {
+    const full = {
+      x: 0,
+      y: 0,
+      w: Math.max(1, Math.ceil(rect.width)),
+      h: Math.max(1, Math.ceil(rect.height)),
+    };
+    const items = el.querySelectorAll<HTMLElement>('[data-dashboard-export-item="true"]');
+    if (items.length === 0) return full;
+
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    items.forEach((item) => {
+      const w = item.offsetWidth;
+      const h = item.offsetHeight;
+      if (w < 1 || h < 1) return;
+      const x = item.offsetLeft;
+      const y = item.offsetTop;
+      left = Math.min(left, x);
+      top = Math.min(top, y);
+      right = Math.max(right, x + w);
+      bottom = Math.max(bottom, y + h);
+    });
+    if (!Number.isFinite(left)) return full;
+
+    left = Math.max(0, left - DASHBOARD_CROP_PAD_PX);
+    top = Math.max(0, top - DASHBOARD_CROP_PAD_PX);
+    right = Math.min(rect.width, right + DASHBOARD_CROP_PAD_PX);
+    bottom = Math.min(rect.height, bottom + DASHBOARD_CROP_PAD_PX);
+
+    const w = Math.max(1, Math.ceil(right - left));
+    const h = Math.max(1, Math.ceil(bottom - top));
+    return { x: Math.floor(left), y: Math.floor(top), w, h };
+  };
+
+  const crop = computeDashboardCrop();
   const html2canvas = (await import('html2canvas')).default;
-  const scales = normalizeCaptureScales(rect.width, rect.height, maxScale);
+  const scales = normalizeCaptureScales(crop.w, crop.h, maxScale);
   const scrollX = typeof window !== 'undefined' ? window.pageXOffset : 0;
   const scrollY = typeof window !== 'undefined' ? window.pageYOffset : 0;
   const windowWidth = Math.max(
     typeof window !== 'undefined' ? window.innerWidth : 0,
-    Math.ceil(rect.width)
+    Math.ceil(crop.w)
   );
   const windowHeight = Math.max(
     typeof window !== 'undefined' ? window.innerHeight : 0,
-    Math.ceil(rect.height)
+    Math.ceil(crop.h)
   );
 
   let lastError: unknown;
@@ -288,8 +327,10 @@ async function captureElementToCanvas(
         useCORS: true,
         allowTaint: false,
         backgroundColor,
-        width: Math.max(1, Math.ceil(rect.width)),
-        height: Math.max(1, Math.ceil(rect.height)),
+        x: crop.x,
+        y: crop.y,
+        width: crop.w,
+        height: crop.h,
         windowWidth,
         windowHeight,
         scrollX,

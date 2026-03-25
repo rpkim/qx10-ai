@@ -804,7 +804,7 @@ interface WorkspaceContextValue {
     toolChoice?: QueryToolChoice;
     followUpQuestions?: string[];
   }) => void;
-  addTemplateSlotNode: (templateNodeId: string) => void;
+  addTemplateSlotNode: (templateNodeId: string) => string | null;
   deleteTemplateSlotNode: (slotNodeId: string) => void;
   runTemplateSlot: (slotNodeId: string) => void;
   toggleDashboardPin: (nodeId: string) => void;
@@ -1187,13 +1187,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const addTemplateSlotNode = useCallback((templateNodeId: string) => {
+  const addTemplateSlotNode = useCallback((templateNodeId: string): string | null => {
     const nodes = nodesRef.current;
     const tpl = nodes.find(
       (n): n is QueryTemplateNodeData =>
         n.id === templateNodeId && n.type === 'query-template'
     );
-    if (!tpl) return;
+    if (!tpl) return null;
 
     const keys = parseTemplateVariableKeys(tpl.pattern);
     const values =
@@ -1226,6 +1226,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
 
     dispatch({ type: 'AUTO_LAYOUT' });
+    return slotId;
   }, []);
 
   const deleteTemplateSlotNode = useCallback((slotNodeId: string) => {

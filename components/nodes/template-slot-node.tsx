@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { QueryTemplateNodeData, TemplateSlotNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
@@ -12,7 +12,7 @@ interface Props {
 
 export function TemplateSlotNode({ node }: Props) {
   const { t } = useI18n();
-  const { state, dispatch, runTemplateSlot, deleteTemplateSlotNode } = useWorkspace();
+  const { state, dispatch, runTemplateSlot, deleteTemplateSlotNode, addTemplateSlotNode } = useWorkspace();
 
   const tpl = useMemo(
     () =>
@@ -46,6 +46,73 @@ export function TemplateSlotNode({ node }: Props) {
       updates: { values: { ...node.values, [key]: value } } as Partial<TemplateSlotNodeData>,
     });
   };
+
+  const splitPastedParams = (raw: string): string[] => {
+    const cleaned = raw.replace(/\r/g, '\n').trim();
+    if (!cleaned) return [];
+
+    const byLine = cleaned
+      .split(/\n+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (byLine.length >= 2) return byLine;
+
+    // Fallback for single-line pasted data.
+    return cleaned
+      .split(/[,\t]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+
+  const handleSlotPaste = useCallback(
+    (targetKey: string, e: React.ClipboardEvent<HTMLInputElement>) => {
+      const text = e.clipboardData.getData('text');
+      const params = splitPastedParams(text);
+      if (params.length === 0) return;
+
+      // We take over paste behavior so the slot value + auto-create happen deterministically.
+      e.preventDefault();
+
+      const isSingleVarTemplate = keys.length === 1;
+
+      if (!isSingleVarTemplate) {
+        // Multi-var template: only fill the targeted input with the first param.
+        dispatch({
+          type: 'UPDATE_NODE',
+          id: node.id,
+          updates: { values: { ...node.values, [targetKey]: params[0] } } as Partial<TemplateSlotNodeData>,
+        });
+        if (params.length === 1) window.setTimeout(() => runTemplateSlot(node.id), 0);
+        return;
+      }
+
+      const mainKey = keys[0];
+
+      // 1) Put first param into the current slot
+      dispatch({
+        type: 'UPDATE_NODE',
+        id: node.id,
+        updates: { values: { ...node.values, [mainKey]: params[0] } } as Partial<TemplateSlotNodeData>,
+      });
+
+      // 2) If multiple params, create additional slots for the rest
+      if (params.length >= 2) {
+        for (let i = 1; i < params.length; i++) {
+          const newSlotId = addTemplateSlotNode(node.templateNodeId);
+          if (!newSlotId) continue;
+          dispatch({
+            type: 'UPDATE_NODE',
+            id: newSlotId,
+            updates: { values: { [mainKey]: params[i] } } as Partial<TemplateSlotNodeData>,
+          });
+        }
+      }
+
+      // 3) Shortcut behavior: execute immediately for the first param
+      window.setTimeout(() => runTemplateSlot(node.id), 0);
+    },
+    [addTemplateSlotNode, dispatch, keys, node.id, node.templateNodeId, node.values, runTemplateSlot]
+  );
 
   if (!tpl) {
     return (
@@ -117,6 +184,7 @@ export function TemplateSlotNode({ node }: Props) {
               <input
                 value={node.values[k] ?? ''}
                 onChange={(e) => setSlotValue(k, e.target.value)}
+                onPaste={(e) => handleSlotPaste(k, e)}
                 className="border-input bg-background rounded-md border px-2 py-1 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
