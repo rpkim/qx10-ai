@@ -230,7 +230,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
   const recent = listRecentWorkspaces(10);
 
   return (
-    <header className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex items-start justify-between gap-4 p-4">
+    <header className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex flex-col items-stretch justify-between gap-2 p-2 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
       <Dialog open={newWorkspaceOpen} onOpenChange={setNewWorkspaceOpen}>
         <DialogContent className="border-border sm:max-w-md">
           <DialogHeader>
@@ -281,8 +281,8 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
       </Dialog>
 
       {/* Left: Logo + keyword + node search */}
-      <div className="pointer-events-auto flex max-w-[min(100%,520px)] min-w-0 flex-col gap-2 rounded-2xl border border-border bg-card/90 px-4 py-2.5 backdrop-blur-sm">
-        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
+      <div className="pointer-events-auto flex w-full max-w-[min(100%,520px)] min-w-0 flex-col gap-2 rounded-2xl border border-border bg-card/90 px-3 py-2 backdrop-blur-sm sm:px-4 sm:py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:gap-3">
           <svg width="22" height="22" viewBox="0 0 36 36" fill="none">
             <rect x="2" y="6" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" />
             <rect x="8" y="12" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" opacity="0.6" />
@@ -348,7 +348,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
       </div>
 
       {/* Right: Theme + save/load + dashboard + zoom */}
-      <div className="pointer-events-auto flex items-center gap-2">
+      <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2">
         <input
           ref={fileInputRef}
           type="file"
@@ -526,7 +526,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
         <button
           onClick={onToggleDashboard}
           className={[
-            'flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-all',
+            'flex items-center gap-2 rounded-xl border px-3 py-1.5 text-sm font-medium transition-all sm:px-4 sm:py-2',
             showDashboard
               ? 'border-primary bg-primary/10 text-primary'
               : 'border-border bg-card/90 text-muted-foreground hover:text-foreground backdrop-blur-sm',
@@ -552,7 +552,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
         {/* Auto layout button */}
         <button
           onClick={autoLayout}
-          className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:text-foreground hover:bg-secondary"
+          className="hidden items-center gap-2 rounded-xl border border-border bg-card/90 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground sm:flex"
           title={t('toolbar.layoutAutoHint')}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -562,7 +562,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
         </button>
 
         {/* Zoom controls */}
-        <div className="flex items-center gap-1 rounded-xl border border-border bg-card/90 p-1 backdrop-blur-sm">
+        <div className="hidden items-center gap-1 rounded-xl border border-border bg-card/90 p-1 backdrop-blur-sm sm:flex">
           <button
             onClick={zoomOut}
             className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"

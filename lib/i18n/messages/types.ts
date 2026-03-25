@@ -60,6 +60,8 @@ export type MessageKey =
   | 'toolbar.nodeSearchMatchCount'
   | 'dashboard.layoutSaved'
   | 'dashboard.edit'
+  | 'dashboard.autoArrange'
+  | 'dashboard.autoArrangeDone'
   | 'dashboard.shrinkPanel'
   | 'dashboard.expandPanel'
   | 'dashboard.editHint'
