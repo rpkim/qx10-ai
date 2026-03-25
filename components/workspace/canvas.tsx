@@ -9,6 +9,7 @@ import { NodeChrome } from './node-chrome';
 import { RootNode } from '@/components/nodes/root-node';
 import { QueryNode } from '@/components/nodes/query-node';
 import { QueryTemplateNode } from '@/components/nodes/query-template-node';
+import { TemplateSlotNode } from '@/components/nodes/template-slot-node';
 import { AnswerNode } from '@/components/nodes/answer-node';
 import { DataNode } from '@/components/nodes/data-node';
 import type { WorkspaceNode, Position } from '@/lib/types';
@@ -379,6 +380,9 @@ function NodeRenderer({
         {node.type === 'query' && <QueryNode node={node as any} />}
         {node.type === 'query-template' && (
           <QueryTemplateNode node={node as any} />
+        )}
+        {node.type === 'template-slot' && (
+          <TemplateSlotNode node={node as any} />
         )}
         {node.type === 'answer' && <AnswerNode node={node as any} />}
         {node.type === 'data' && <DataNode node={node as any} />}

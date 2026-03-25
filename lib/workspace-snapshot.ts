@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { WorkspaceState, WorkspaceNode } from './types';
+import type { Edge, TemplateSlotNodeData, WorkspaceState, WorkspaceNode } from './types';
+import { NODE_CANVAS_TOOLBAR_HEIGHT_PX } from './canvas-node-chrome';
 
 export const WORKSPACE_SNAPSHOT_VERSION = 1 as const;
 const STORAGE_PREFIX = 'qx10.workspace.v1';
@@ -46,7 +47,8 @@ const queryNodeSchema = z.object({
   toolChoice: z.enum(['auto', 'web', 'market']).optional(),
 });
 
-const templateSlotSchema = z.object({
+/** Legacy: slots embedded on `query-template` (expanded to `template-slot` nodes on load). */
+const embeddedTemplateSlotSchema = z.object({
   id: z.string(),
   values: z.record(z.string(), z.string()),
   linkedQueryId: z.string().optional(),
@@ -57,10 +59,18 @@ const queryTemplateNodeSchema = z.object({
   type: z.literal('query-template'),
   templateName: z.string(),
   pattern: z.string(),
-  slots: z.array(templateSlotSchema),
+  slots: z.array(embeddedTemplateSlotSchema).optional(),
   modelChoice: z.string().optional(),
   toolChoice: z.enum(['auto', 'web', 'market']).optional(),
   followUpQuestions: z.array(z.string()).optional(),
+});
+
+const templateSlotNodeSchema = z.object({
+  ...baseNode,
+  type: z.literal('template-slot'),
+  templateNodeId: z.string(),
+  values: z.record(z.string(), z.string()),
+  linkedQueryId: z.string().optional(),
 });
 
 const answerNodeSchema = z.object({
@@ -105,6 +115,7 @@ const workspaceNodeSchema = z.discriminatedUnion('type', [
   rootNodeSchema,
   queryNodeSchema,
   queryTemplateNodeSchema,
+  templateSlotNodeSchema,
   answerNodeSchema,
   dataNodeSchema,
 ]);
@@ -132,6 +143,120 @@ const workspaceSnapshotSchema = z.object({
 });
 
 export type WorkspaceSnapshotFile = z.infer<typeof workspaceSnapshotSchema>;
+
+/** Drop slot→slot edges; ensure each slot has slot→template (fixes older vertical chains). */
+export function normalizeTemplateSlotGraph(nodes: WorkspaceNode[], edges: Edge[]): Edge[] {
+  const slotNodes = nodes.filter((n): n is TemplateSlotNodeData => n.type === 'template-slot');
+  const slotById = new Map(slotNodes.map((n) => [n.id, n]));
+  let next = edges.filter((e) => {
+    const a = slotById.get(e.sourceId);
+    const b = slotById.get(e.targetId);
+    if (a && b && a.templateNodeId === b.templateNodeId) return false;
+    return true;
+  });
+  const byTemplate = new Map<string, TemplateSlotNodeData[]>();
+  for (const s of slotNodes) {
+    const arr = byTemplate.get(s.templateNodeId) ?? [];
+    arr.push(s);
+    byTemplate.set(s.templateNodeId, arr);
+  }
+  for (const [tid, slots] of byTemplate) {
+    if (!nodes.some((n) => n.id === tid && n.type === 'query-template')) continue;
+    for (const s of slots) {
+      const has = next.some((e) => e.sourceId === s.id && e.targetId === tid);
+      if (!has) {
+        next.push({
+          id: `e-${s.id}-${tid}-norm`,
+          sourceId: s.id,
+          targetId: tid,
+        });
+      }
+    }
+  }
+  const seen = new Set<string>();
+  return next.filter((e) => {
+    const k = `${e.sourceId}->${e.targetId}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+const LEGACY_SLOT_LAYOUT_GAP_Y = 108;
+const LEGACY_SLOT_NODE_H = 240;
+
+function snapshotHasLegacyEmbeddedSlots(
+  nodes: WorkspaceSnapshotFile['nodes']
+): boolean {
+  return nodes.some(
+    (n) =>
+      (n as { type: string }).type === 'query-template' &&
+      Array.isArray((n as { slots?: unknown }).slots) &&
+      ((n as { slots?: unknown[] }).slots?.length ?? 0) > 0
+  );
+}
+
+function expandLegacyEmbeddedSlots(
+  d: WorkspaceSnapshotFile
+): WorkspaceSnapshotFile {
+  const nextNodes: WorkspaceSnapshotFile['nodes'] = [];
+  const extraNodes: WorkspaceSnapshotFile['nodes'] = [];
+  const edges = [...d.edges];
+
+  for (const raw of d.nodes) {
+    if (raw.type !== 'query-template') {
+      nextNodes.push(raw);
+      continue;
+    }
+    const tpl = raw as typeof raw & {
+      slots?: z.infer<typeof embeddedTemplateSlotSchema>[];
+    };
+    const slots = tpl.slots;
+    if (!slots?.length) {
+      const { slots: _s, ...rest } = tpl;
+      nextNodes.push(rest as WorkspaceSnapshotFile['nodes'][number]);
+      continue;
+    }
+
+    const tw = tpl.width ?? 300;
+    const gapX = 64;
+    const rowY =
+      tpl.position.y - NODE_CANVAS_TOOLBAR_HEIGHT_PX - LEGACY_SLOT_NODE_H - LEGACY_SLOT_LAYOUT_GAP_Y;
+    const totalW = slots.length * tw + (slots.length - 1) * gapX;
+    let curX = tpl.position.x + tw / 2 - totalW / 2;
+    for (let i = 0; i < slots.length; i++) {
+      extraNodes.push({
+        id: slots[i].id,
+        type: 'template-slot',
+        templateNodeId: tpl.id,
+        values: slots[i].values,
+        ...(slots[i].linkedQueryId ? { linkedQueryId: slots[i].linkedQueryId } : {}),
+        position: { x: curX, y: rowY },
+        status: tpl.status,
+        width: tw,
+        height: LEGACY_SLOT_NODE_H,
+      } as WorkspaceSnapshotFile['nodes'][number]);
+      curX += tw + gapX;
+    }
+
+    for (const s of slots) {
+      edges.push({
+        id: `e-${s.id}-${tpl.id}-mig`,
+        sourceId: s.id,
+        targetId: tpl.id,
+      });
+    }
+
+    const { slots: _s, ...rest } = tpl;
+    nextNodes.push(rest as WorkspaceSnapshotFile['nodes'][number]);
+  }
+
+  return {
+    ...d,
+    nodes: [...nextNodes, ...extraNodes],
+    edges,
+  };
+}
 
 export type SnapshotErrorCode =
   | 'invalid_format'
@@ -181,12 +306,17 @@ export function parseWorkspaceSnapshot(raw: unknown): SnapshotOk | SnapshotErr {
   if (!parsed.success) {
     return { ok: false, code: 'invalid_format' };
   }
-  const d = parsed.data;
+  let d = parsed.data;
+  if (snapshotHasLegacyEmbeddedSlots(d.nodes)) {
+    d = expandLegacyEmbeddedSlots(d);
+  }
+  const nodes = d.nodes as WorkspaceNode[];
+  const edges = normalizeTemplateSlotGraph(nodes, d.edges);
   const state: WorkspaceState = {
     keyword: d.keyword,
     goal: d.goal,
-    nodes: d.nodes as WorkspaceNode[],
-    edges: d.edges,
+    nodes,
+    edges,
     viewport: d.viewport,
     selectedNodeId: null,
     dashboardNodeIds: d.dashboardNodeIds,

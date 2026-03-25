@@ -15,6 +15,7 @@ const NODE_COLORS: Record<NodeType, string> = {
   root: '#00C49A',
   query: '#60A5FA',
   'query-template': '#D97706',
+  'template-slot': '#14B8A6',
   answer: '#A3E635',
   data: '#F59E0B',
 };

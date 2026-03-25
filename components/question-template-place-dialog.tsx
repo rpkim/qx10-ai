@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -53,6 +54,9 @@ export function QuestionTemplatePlaceDialog({ open, onOpenChange, onPick }: Prop
       <DialogContent className="sm:max-w-md" showCloseButton>
         <DialogHeader>
           <DialogTitle>{t('templates.placeDialogTitle')}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {t('templates.chooseTemplate')}
+          </DialogDescription>
         </DialogHeader>
         {templates.length === 0 ? (
           <p className="text-muted-foreground text-sm">{t('templates.emptyList')}</p>

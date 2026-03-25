@@ -147,6 +147,8 @@ export type MessageKey =
   | 'templates.runSlot'
   | 'templates.removeSlot'
   | 'templates.slotFillRequired'
+  | 'templates.slotNodeBadge'
+  | 'templates.slotOrphaned'
   | 'nodes.generating'
   | 'nodes.answer'
   | 'nodes.pinAction'
