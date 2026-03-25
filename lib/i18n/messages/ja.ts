@@ -63,6 +63,8 @@ export const ja: Messages = {
   'toolbar.exportImageFail': '画像の書き出しに失敗しました。',
   'dashboard.layoutSaved': 'ダッシュボードのレイアウトを保存しました。',
   'dashboard.edit': 'レイアウトを編集',
+  'dashboard.autoArrange': '自動整列',
+  'dashboard.autoArrangeDone': 'ダッシュボードを自動整列しました。',
   'dashboard.shrinkPanel': 'キャンバス横に固定',
   'dashboard.expandPanel': 'ワークスペース全体に拡大',
   'dashboard.editHint': 'ウィジェットの見出しをドラッグして移動し、保存を押してください。',

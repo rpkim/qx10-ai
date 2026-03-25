@@ -62,6 +62,8 @@ export const ko: Messages = {
   'toolbar.exportImageFail': '이미지 내보내기에 실패했습니다.',
   'dashboard.layoutSaved': '대시보드 레이아웃을 저장했습니다.',
   'dashboard.edit': '수정',
+  'dashboard.autoArrange': '자동 정렬',
+  'dashboard.autoArrangeDone': '대시보드 위젯을 자동 정렬했습니다.',
   'dashboard.shrinkPanel': '캔버스 옆으로 축소',
   'dashboard.expandPanel': '전체 화면에 가깝게 확장',
   'dashboard.editHint': '위젯 제목 줄을 드래그해 위치를 옮긴 뒤 저장을 누르세요.',

@@ -63,6 +63,8 @@ export const en: Messages = {
   'toolbar.exportImageFail': 'Could not export image.',
   'dashboard.layoutSaved': 'Dashboard layout saved.',
   'dashboard.edit': 'Edit layout',
+  'dashboard.autoArrange': 'Auto arrange',
+  'dashboard.autoArrangeDone': 'Dashboard widgets auto-arranged.',
   'dashboard.shrinkPanel': 'Dock beside canvas',
   'dashboard.expandPanel': 'Expand to full workspace',
   'dashboard.editHint': 'Drag the widget header to move, then press Save.',
