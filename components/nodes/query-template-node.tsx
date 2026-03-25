@@ -59,41 +59,24 @@ export function QueryTemplateNode({ node }: Props) {
       e.stopPropagation();
 
       const mainKey = keys[0];
-      const slotPeers = state.nodes
-        .filter(
-          (n): n is TemplateSlotNodeData => n.type === 'template-slot' && n.templateNodeId === node.id
-        )
-        .sort((a, b) => a.position.x - b.position.x || a.id.localeCompare(b.id));
 
-      const ensureFirstSlot = (): string | null => {
-        if (slotPeers[0]?.id) return slotPeers[0].id;
-        return addTemplateSlotNode(node.id) ?? null;
-      };
-
-      const firstSlotId = ensureFirstSlot();
-      if (!firstSlotId) return;
-
-      const valuesFor = (v: string) => ({ [mainKey]: v });
-
-      dispatch({
-        type: 'UPDATE_NODE',
-        id: firstSlotId,
-        updates: { values: valuesFor(params[0]) } as any,
-      });
-
-      if (params.length >= 2) {
-        for (let i = 1; i < params.length; i++) {
-          const newSlotId = addTemplateSlotNode(node.id);
-          if (!newSlotId) continue;
-          dispatch({
-            type: 'UPDATE_NODE',
-            id: newSlotId,
-            updates: { values: valuesFor(params[i]) } as any,
-          });
-        }
+      // Important: when a slot already exists, keep it and append new slots.
+      const createdSlotIds: string[] = [];
+      for (let i = 0; i < params.length; i++) {
+        const newSlotId = addTemplateSlotNode(node.id);
+        if (!newSlotId) continue;
+        createdSlotIds.push(newSlotId);
+        dispatch({
+          type: 'UPDATE_NODE',
+          id: newSlotId,
+          updates: { values: { [mainKey]: params[i] } } as any,
+        });
       }
 
-      window.setTimeout(() => runTemplateSlot(firstSlotId), 0);
+      const firstNewSlotId = createdSlotIds[0];
+      if (!firstNewSlotId) return;
+
+      window.setTimeout(() => runTemplateSlot(firstNewSlotId), 0);
     },
     [addTemplateSlotNode, dispatch, keys, node.id, runTemplateSlot, splitPastedParams, state.nodes]
   );
@@ -122,40 +105,23 @@ export function QueryTemplateNode({ node }: Props) {
       e.stopPropagation();
 
       const mainKey = keys[0];
-      const slotPeers = state.nodes
-        .filter(
-          (n): n is TemplateSlotNodeData => n.type === 'template-slot' && n.templateNodeId === node.id
-        )
-        .sort((a, b) => a.position.x - b.position.x || a.id.localeCompare(b.id));
-
-      const ensureFirstSlot = (): string | null => {
-        if (slotPeers[0]?.id) return slotPeers[0].id;
-        return addTemplateSlotNode(node.id) ?? null;
-      };
-
-      const firstSlotId = ensureFirstSlot();
-      if (!firstSlotId) return;
-
-      const valuesFor = (v: string) => ({ [mainKey]: v });
-      dispatch({
-        type: 'UPDATE_NODE',
-        id: firstSlotId,
-        updates: { values: valuesFor(params[0]) } as any,
-      });
-
-      if (params.length >= 2) {
-        for (let i = 1; i < params.length; i++) {
-          const newSlotId = addTemplateSlotNode(node.id);
-          if (!newSlotId) continue;
-          dispatch({
-            type: 'UPDATE_NODE',
-            id: newSlotId,
-            updates: { values: valuesFor(params[i]) } as any,
-          });
-        }
+      // Important: keep existing slots and append new ones.
+      const createdSlotIds: string[] = [];
+      for (let i = 0; i < params.length; i++) {
+        const newSlotId = addTemplateSlotNode(node.id);
+        if (!newSlotId) continue;
+        createdSlotIds.push(newSlotId);
+        dispatch({
+          type: 'UPDATE_NODE',
+          id: newSlotId,
+          updates: { values: { [mainKey]: params[i] } } as any,
+        });
       }
 
-      window.setTimeout(() => runTemplateSlot(firstSlotId), 0);
+      const firstNewSlotId = createdSlotIds[0];
+      if (!firstNewSlotId) return;
+
+      window.setTimeout(() => runTemplateSlot(firstNewSlotId), 0);
     };
 
     window.addEventListener('paste', onPaste, true);
