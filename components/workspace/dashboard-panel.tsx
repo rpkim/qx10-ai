@@ -13,7 +13,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Maximize2, Minimize2, Pencil, RefreshCw, Save, X } from 'lucide-react';
+import { LayoutGrid, Maximize2, Minimize2, Pencil, RefreshCw, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/components/i18n-provider';
@@ -28,6 +28,7 @@ import {
   fetchMarketQuotePayload,
   marketDataNodeRefreshSymbol,
 } from '@/lib/market-data-node-refresh';
+import { exportDashboardOnlyPdf, exportDashboardOnlyPng } from '@/lib/workspace-visual-export';
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -46,6 +47,7 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
   const [widgetOrder, setWidgetOrder] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [usePointerDnD, setUsePointerDnD] = useState(false);
 
   const [gridLayout, setGridLayout] = useState<DashboardGridItem[]>([]);
   const [editingGrid, setEditingGrid] = useState(false);
@@ -77,6 +79,14 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
   } | null>(null);
 
   const pinnedNodes = nodes.filter((n) => dashboardNodeIds.includes(n.id));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const touchCapable =
+      'ontouchstart' in window || (navigator.maxTouchPoints ?? 0) > 0;
+    // HTML5 drag/drop is unreliable on mobile browsers.
+    setUsePointerDnD(touchCapable);
+  }, []);
 
   const orderedIds = useMemo(
     () => [
@@ -142,6 +152,33 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
     toast.success(t('dashboard.layoutSaved'));
   };
 
+  const autoArrangeLayout = () => {
+    const n = orderedIds.length;
+    if (n === 0) return;
+    const gap = 2;
+    const cols = Math.min(5, Math.max(3, Math.ceil(Math.sqrt(n * 1.8))));
+    const w = (100 - gap * (cols + 1)) / cols;
+    const h = 22; // keep cards readable; container can scroll vertically when rows increase
+    const arranged = orderedIds.map((id, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      return {
+        id,
+        x: gap + col * (w + gap),
+        y: gap + row * (h + gap),
+        w,
+        h,
+      } as DashboardGridItem;
+    });
+    setGridLayout(arranged);
+    toast.success(t('dashboard.autoArrangeDone'));
+  };
+
+  const expandedGridHeightPct = useMemo(() => {
+    const maxBottom = gridLayout.reduce((m, g) => Math.max(m, g.y + g.h), 0);
+    return Math.max(100, Math.ceil(maxBottom + 2));
+  }, [gridLayout]);
+
   const collapseExpanded = () => {
     if (editingGrid) cancelEditLayout();
     onExpandedChange(false);
@@ -166,6 +203,66 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
     setDragOver(null);
   };
 
+  const compactDragRef = useRef<{
+    id: string;
+    pointerId: number;
+  } | null>(null);
+  const compactOverRef = useRef<string | null>(null);
+
+  const handleCompactPointerDown = (id: string) => (e: React.PointerEvent) => {
+    if (!usePointerDnD) return;
+    if (e.button !== 0) return;
+
+    // Let buttons (pin/remove/etc) work normally.
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('button,[role="button"],a,input,textarea,select')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    compactDragRef.current = { id, pointerId: e.pointerId };
+    setDragging(id);
+    setDragOver(id);
+    compactOverRef.current = id;
+
+    const onMove = (ev: PointerEvent) => {
+      if (!compactDragRef.current) return;
+      const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+      const widgetEl = el?.closest('[data-dashboard-compact-widget-id]') as HTMLElement | null;
+      const overId = widgetEl?.dataset.dashboardCompactWidgetId ?? null;
+      compactOverRef.current = overId;
+      setDragOver(overId);
+    };
+
+    const onUp = () => {
+      const d = compactDragRef.current;
+      compactDragRef.current = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (!d) return;
+      const overId = compactOverRef.current;
+      if (!overId || overId === d.id) {
+        setDragging(null);
+        setDragOver(null);
+        return;
+      }
+      const base = orderedIds.filter((x) => x !== d.id);
+      const idx = base.indexOf(overId);
+      if (idx < 0) {
+        setDragging(null);
+        setDragOver(null);
+        return;
+      }
+      base.splice(idx, 0, d.id);
+      setWidgetOrder(base);
+      setDragging(null);
+      setDragOver(null);
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+  };
+
   const handleExport = () => {
     const data = orderedNodes.map((n) => ({
       type: n.type,
@@ -182,6 +279,18 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
     a.download = `qx10-dashboard-${keyword.replace(/\s+/g, '-').toLowerCase()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportDashboardPng = () => {
+    void exportDashboardOnlyPng(keyword)
+      .then(() => toast.success(t('dashboard.exportPngDone')))
+      .catch(() => toast.error(t('dashboard.exportImageFail')));
+  };
+
+  const handleExportDashboardPdf = () => {
+    void exportDashboardOnlyPdf(keyword)
+      .then(() => toast.success(t('dashboard.exportPdfDone')))
+      .catch(() => toast.error(t('dashboard.exportImageFail')));
   };
 
   const onHeaderPointerDown = useCallback(
@@ -319,8 +428,8 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
   );
 
   const shellClass = expanded
-    ? 'fixed inset-x-0 bottom-0 top-24 z-30 flex flex-col border-t border-border bg-card'
-    : 'absolute right-0 bottom-0 top-24 z-30 flex w-[480px] flex-col border-l border-border bg-card';
+    ? 'fixed inset-x-0 bottom-0 top-20 z-30 flex flex-col border-t border-border bg-card sm:top-24'
+    : 'absolute right-0 bottom-0 top-20 z-30 flex w-full max-w-[480px] flex-col border-l border-border bg-card sm:top-24';
 
   return (
     <div className={shellClass}>
@@ -380,6 +489,16 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                     variant="outline"
                     size="sm"
                     className="h-8 gap-1 text-xs"
+                    onClick={autoArrangeLayout}
+                  >
+                    <LayoutGrid className="size-3.5" />
+                    {t('dashboard.autoArrange')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1 text-xs"
                     onClick={cancelEditLayout}
                   >
                     <X className="size-3.5" />
@@ -410,15 +529,35 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
             {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
           </Button>
           {pinnedNodes.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="hidden h-8 text-xs sm:inline-flex"
-              onClick={handleExport}
-            >
-              {t('dashboard.export')}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden h-8 text-xs sm:inline-flex"
+                onClick={handleExportDashboardPng}
+              >
+                {t('dashboard.exportPng')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden h-8 text-xs sm:inline-flex"
+                onClick={handleExportDashboardPdf}
+              >
+                {t('dashboard.exportPdf')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden h-8 text-xs sm:inline-flex"
+                onClick={handleExport}
+              >
+                {t('dashboard.export')}
+              </Button>
+            </>
           )}
           <Button
             type="button"
@@ -443,26 +582,28 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {orderedNodes.length === 0 ? (
-          <div className="flex-1 overflow-y-auto">
+          <div id="dashboard-export-target" className="flex-1 overflow-y-auto">
             <EmptyState />
           </div>
         ) : expanded ? (
-          <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+          <div className="flex min-h-0 flex-1 flex-col overflow-auto p-3 sm:p-4">
             <div
+              id="dashboard-export-target"
               ref={boardRef}
               className={[
-                'relative min-h-[min(70vh,720px)] flex-1 overflow-hidden rounded-2xl border bg-background/40',
+                'relative min-h-[min(70vh,720px)] rounded-2xl border bg-background/40',
                 editingGrid ? 'border-dashed border-primary/40' : 'border-border',
               ].join(' ')}
-              style={
-                editingGrid
+              style={{
+                minHeight: `${expandedGridHeightPct}%`,
+                ...(editingGrid
                   ? {
                       backgroundImage:
                         'linear-gradient(to right, rgba(0,196,154,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,196,154,0.06) 1px, transparent 1px)',
                       backgroundSize: '24px 24px',
                     }
-                  : undefined
-              }
+                  : {}),
+              }}
             >
               {orderedNodes.map((node) => {
                 const box = gridLayout.find((g) => g.id === node.id);
@@ -508,20 +649,25 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
-            <div className="flex flex-col gap-3 p-4">
+            <div id="dashboard-export-target" className="flex flex-col gap-3 p-4">
               {pinnedNodes.length > 1 && (
                 <p className="text-xs text-muted-foreground/60">{t('dashboard.dragReorder')}</p>
               )}
               {orderedNodes.map((node) => (
                 <div
                   key={node.id}
-                  draggable
-                  onDragStart={() => handleDragStart(node.id)}
-                  onDragOver={(e) => handleDragOver(e, node.id)}
-                  onDrop={() => handleDrop(node.id)}
-                  onDragEnd={handleDragEnd}
+                  data-dashboard-compact-widget-id={node.id}
+                  draggable={!usePointerDnD}
+                  onDragStart={!usePointerDnD ? () => handleDragStart(node.id) : undefined}
+                  onDragOver={
+                    !usePointerDnD ? (e) => handleDragOver(e, node.id) : undefined
+                  }
+                  onDrop={!usePointerDnD ? () => handleDrop(node.id) : undefined}
+                  onDragEnd={!usePointerDnD ? handleDragEnd : undefined}
+                  onPointerDown={usePointerDnD ? handleCompactPointerDown(node.id) : undefined}
                   style={{
                     opacity: dragging === node.id ? 0.4 : 1,
+                    touchAction: usePointerDnD ? 'none' : undefined,
                     outline:
                       dragOver === node.id && dragging !== node.id
                         ? '2px solid rgba(0,196,154,0.6)'

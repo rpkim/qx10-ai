@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import type { QueryTemplateNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
-import { parseTemplateVariableKeys, substituteTemplate } from '@/lib/question-templates';
+import { parseTemplateVariableKeys } from '@/lib/question-templates';
 import {
   Select,
   SelectContent,
@@ -19,7 +19,7 @@ interface Props {
 
 export function QueryTemplateNode({ node }: Props) {
   const { t } = useI18n();
-  const { dispatch, aiCatalog, runTemplateSlot } = useWorkspace();
+  const { dispatch, aiCatalog, addTemplateSlotNode } = useWorkspace();
 
   const keys = useMemo(() => parseTemplateVariableKeys(node.pattern), [node.pattern]);
 
@@ -29,54 +29,6 @@ export function QueryTemplateNode({ node }: Props) {
     aiCatalog?.options[0]?.id ??
     '';
   const effectiveTool = node.toolChoice ?? 'auto';
-
-  const addSlot = () => {
-    const emptyValues =
-      keys.length > 0
-        ? Object.fromEntries(keys.map((k) => [k, ''])) as Record<string, string>
-        : {};
-    const nextSlots = [
-      ...node.slots,
-      { id: `slot-${Date.now()}`, values: emptyValues },
-    ];
-    const nextH = 96 + Math.min(nextSlots.length, 8) * 56 + (nextSlots.length > 8 ? 40 : 0);
-    dispatch({
-      type: 'UPDATE_NODE',
-      id: node.id,
-      updates: {
-        slots: nextSlots,
-        height: Math.max(160, nextH),
-      } as Partial<QueryTemplateNodeData>,
-    });
-  };
-
-  const setSlotValue = (slotId: string, key: string, value: string) => {
-    const nextSlots = node.slots.map((s) =>
-      s.id === slotId ? { ...s, values: { ...s.values, [key]: value } } : s
-    );
-    dispatch({
-      type: 'UPDATE_NODE',
-      id: node.id,
-      updates: { slots: nextSlots } as Partial<QueryTemplateNodeData>,
-    });
-  };
-
-  const removeSlot = (slotId: string) => {
-    const victim = node.slots.find((s) => s.id === slotId);
-    if (victim?.linkedQueryId) {
-      dispatch({ type: 'DELETE_NODE', id: victim.linkedQueryId });
-    }
-    const nextSlots = node.slots.filter((s) => s.id !== slotId);
-    const nextH = 96 + Math.min(Math.max(nextSlots.length, 1), 8) * 56;
-    dispatch({
-      type: 'UPDATE_NODE',
-      id: node.id,
-      updates: {
-        slots: nextSlots,
-        height: Math.max(160, nextH),
-      } as Partial<QueryTemplateNodeData>,
-    });
-  };
 
   return (
     <div
@@ -97,12 +49,16 @@ export function QueryTemplateNode({ node }: Props) {
         <button
           type="button"
           title={t('templates.addSlotTooltip')}
-          onClick={addSlot}
+          onClick={() => addTemplateSlotNode(node.id)}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-500/40 bg-amber-500/15 text-lg font-semibold text-amber-700 transition-colors hover:bg-amber-500/25 dark:text-amber-300"
         >
           +
         </button>
       </div>
+
+      <p className="text-muted-foreground text-center text-[11px] leading-snug">
+        {t('templates.addSlotHint')}
+      </p>
 
       <div className="flex flex-col gap-1">
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -170,70 +126,21 @@ export function QueryTemplateNode({ node }: Props) {
         </Select>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5">
-        {node.slots.length === 0 ? (
-          <p className="text-muted-foreground text-center text-xs">{t('templates.addSlotHint')}</p>
-        ) : (
-          node.slots.map((slot, idx) => (
-            <div
-              key={slot.id}
-              className="border-border space-y-2 rounded-lg border bg-background/40 p-2"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground text-[10px] font-medium">
-                  {t('templates.slotLabel', { n: idx + 1 })}
-                </span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    title={t('templates.runSlot')}
-                    onClick={() => runTemplateSlot(node.id, slot.id)}
-                    className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00C49A] text-[#080C12] shadow-sm transition-opacity hover:opacity-90"
-                  >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="5,3 19,12 5,21" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    title={t('templates.removeSlot')}
-                    onClick={() => removeSlot(slot.id)}
-                    className="text-muted-foreground hover:text-destructive px-1 text-xs"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-              {keys.length === 0 ? (
-                <p className="text-muted-foreground text-[11px]">
-                  {substituteTemplate(node.pattern, {}) || '—'}
-                </p>
-              ) : (
-                <div className="grid gap-1.5">
-                  {keys.map((k) => (
-                    <div key={k} className="flex flex-col gap-0.5">
-                      <label className="text-muted-foreground font-mono text-[9px]">{`{{${k}}}`}</label>
-                      <input
-                        value={slot.values[k] ?? ''}
-                        onChange={(e) => setSlotValue(slot.id, k, e.target.value)}
-                        className="border-input bg-background rounded-md border px-2 py-1 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="border-border border-t pt-1">
-                <span className="text-muted-foreground text-[9px] uppercase">
-                  {t('templates.preview')}
-                </span>
-                <p className="text-foreground mt-0.5 text-[11px] leading-snug">
-                  {substituteTemplate(node.pattern, slot.values)}
-                </p>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+      {keys.length > 0 && (
+        <div className="flex flex-col gap-1 border-border/50 border-t pt-2">
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t('templates.detectedVars')}
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {keys.map((k) => (
+              <span
+                key={k}
+                className="rounded-md bg-secondary px-2 py-0.5 font-mono text-[10px]"
+              >{`{{${k}}}`}</span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

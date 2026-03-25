@@ -9,6 +9,7 @@ import { NodeChrome } from './node-chrome';
 import { RootNode } from '@/components/nodes/root-node';
 import { QueryNode } from '@/components/nodes/query-node';
 import { QueryTemplateNode } from '@/components/nodes/query-template-node';
+import { TemplateSlotNode } from '@/components/nodes/template-slot-node';
 import { AnswerNode } from '@/components/nodes/answer-node';
 import { DataNode } from '@/components/nodes/data-node';
 import type { WorkspaceNode, Position } from '@/lib/types';
@@ -21,7 +22,7 @@ import {
 export function Canvas() {
   const { t } = useI18n();
   const { state, dispatch, addQueryTemplateNode } = useWorkspace();
-  const { nodes, edges, viewport, selectedNodeId, collapsedNodeIds } = state;
+  const { nodes, edges, viewport, selectedNodeIds, collapsedNodeIds } = state;
   const { x: panX, y: panY, zoom } = viewport;
 
   const childrenMap = useMemo(() => buildOutgoingChildrenMap(edges), [edges]);
@@ -38,7 +39,13 @@ export function Canvas() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
-  const draggingNode = useRef<{ id: string; startMouse: Position; startNode: Position } | null>(null);
+  const selectedRef = useRef<string[]>([]);
+  const touchPanning = useRef(false);
+  const draggingNode = useRef<{
+    ids: string[];
+    startMouse: Position;
+    starts: Record<string, Position>;
+  } | null>(null);
   const spaceHeld = useRef(false);
   const [cursor, setCursor] = useState<'default' | 'grab' | 'grabbing'>('default');
   const [canvasCtx, setCanvasCtx] = useState<{ x: number; y: number } | null>(null);
@@ -47,6 +54,10 @@ export function Canvas() {
     world: Position | null;
   }>({ open: false, world: null });
   const canvasCtxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    selectedRef.current = selectedNodeIds;
+  }, [selectedNodeIds]);
 
   useEffect(() => {
     if (!canvasCtx) return;
@@ -140,10 +151,13 @@ export function Canvas() {
   /* ── Mouse down: start pan on blank canvas, or space+drag anywhere ── */
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      const onBlankCanvas = e.target === canvasRef.current ||
-        (e.target as HTMLElement).dataset.canvasBg === 'true';
+      const target = e.target as HTMLElement;
+      const onNode = !!target.closest('[data-workspace-node]');
+      const onContextMenu = !!target.closest('[data-canvas-context-menu]');
+      const onBlankCanvas = e.target === canvasRef.current || target.dataset.canvasBg === 'true';
+      const onPanSurface = !onNode && !onContextMenu;
       const isMiddleClick = e.button === 1;
-      const isPanIntent = isMiddleClick || spaceHeld.current || onBlankCanvas;
+      const isPanIntent = isMiddleClick || spaceHeld.current || onBlankCanvas || onPanSurface;
 
       if (isPanIntent && e.button !== 2) {
         e.preventDefault();
@@ -157,40 +171,62 @@ export function Canvas() {
 
   /* ── Global mouse move / up (so pan works even when cursor leaves nodes) ── */
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
+    const applyMove = (clientX: number, clientY: number) => {
       if (isPanning.current) {
         dispatch({
           type: 'SET_VIEWPORT',
           viewport: {
-            x: e.clientX - panStart.current.x,
-            y: e.clientY - panStart.current.y,
+            x: clientX - panStart.current.x,
+            y: clientY - panStart.current.y,
           },
         });
       }
       if (draggingNode.current) {
-        const { id, startMouse, startNode } = draggingNode.current;
+        const { ids, startMouse, starts } = draggingNode.current;
         const currentZoom = (window as any).__qx10Zoom ?? 1;
-        const dx = (e.clientX - startMouse.x) / currentZoom;
-        const dy = (e.clientY - startMouse.y) / currentZoom;
+        const dx = (clientX - startMouse.x) / currentZoom;
+        const dy = (clientY - startMouse.y) / currentZoom;
         dispatch({
-          type: 'MOVE_NODE',
-          id,
-          position: { x: startNode.x + dx, y: startNode.y + dy },
+          type: 'MOVE_NODES',
+          updates: ids.map((id) => ({
+            id,
+            position: { x: starts[id].x + dx, y: starts[id].y + dy },
+          })),
         });
       }
+    };
+    const onMove = (e: MouseEvent) => {
+      applyMove(e.clientX, e.clientY);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isPanning.current && !draggingNode.current) return;
+      if (e.touches.length === 0) return;
+      const t = e.touches[0];
+      applyMove(t.clientX, t.clientY);
+      e.preventDefault();
     };
     const onUp = () => {
       if (isPanning.current) {
         isPanning.current = false;
+        touchPanning.current = false;
         setCursor(spaceHeld.current ? 'grab' : 'default');
       }
       draggingNode.current = null;
     };
+    const onTouchEnd = () => {
+      onUp();
+    };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
     return () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
     };
   }, [dispatch]);
 
@@ -200,24 +236,70 @@ export function Canvas() {
   }, [zoom]);
 
   const startNodeDrag = useCallback(
-    (nodeId: string, nodePos: Position, e: React.MouseEvent) => {
-      if (e.button !== 0) return; // only primary button drags; right-click keeps context menu
-      if (spaceHeld.current) return; // space held → pan, not node drag
+    (nodeId: string, _nodePos: Position, e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      if (spaceHeld.current) return;
       e.stopPropagation();
+
+      let dragIds: string[];
+      const cur = selectedRef.current;
+      if (e.shiftKey) {
+        const set = new Set(cur);
+        if (set.has(nodeId)) set.delete(nodeId);
+        else set.add(nodeId);
+        dragIds = Array.from(set);
+        dispatch({ type: 'SET_SELECTED_NODES', ids: dragIds });
+      } else if (cur.includes(nodeId) && cur.length > 1) {
+        dragIds = [...cur];
+      } else {
+        dragIds = [nodeId];
+        dispatch({ type: 'SET_SELECTED_NODES', ids: dragIds });
+      }
+
+      const starts: Record<string, Position> = {};
+      for (const id of dragIds) {
+        const n = nodes.find((x) => x.id === id);
+        if (n) starts[id] = { ...n.position };
+      }
       draggingNode.current = {
-        id: nodeId,
+        ids: dragIds,
         startMouse: { x: e.clientX, y: e.clientY },
-        startNode: { ...nodePos },
+        starts,
       };
     },
-    []
+    [dispatch, nodes]
+  );
+
+  const startNodeTouchDrag = useCallback(
+    (nodeId: string, _nodePos: Position, t: { clientX: number; clientY: number }) => {
+      let dragIds: string[];
+      const cur = selectedRef.current;
+      if (cur.includes(nodeId) && cur.length > 1) {
+        dragIds = [...cur];
+      } else {
+        dragIds = [nodeId];
+        dispatch({ type: 'SET_SELECTED_NODES', ids: dragIds });
+      }
+
+      const starts: Record<string, Position> = {};
+      for (const id of dragIds) {
+        const n = nodes.find((x) => x.id === id);
+        if (n) starts[id] = { ...n.position };
+      }
+      draggingNode.current = {
+        ids: dragIds,
+        startMouse: { x: t.clientX, y: t.clientY },
+        starts,
+      };
+    },
+    [dispatch, nodes]
   );
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
       if (e.target === canvasRef.current ||
           (e.target as HTMLElement).dataset.canvasBg === 'true') {
-        dispatch({ type: 'SELECT_NODE', id: null });
+        dispatch({ type: 'SET_SELECTED_NODES', ids: [] });
       }
     },
     [dispatch]
@@ -236,10 +318,27 @@ export function Canvas() {
 
   return (
     <div
+      id="workspace-canvas"
       ref={canvasRef}
       className="absolute inset-0 overflow-hidden select-none"
       style={{ cursor: cursorStyle, background: 'var(--background)' }}
       onMouseDown={handleMouseDown}
+      onTouchStart={(e) => {
+        if (e.touches.length !== 1) return;
+        const target = e.target as HTMLElement;
+        const onNode = !!target.closest('[data-workspace-node]');
+        const onContextMenu = !!target.closest('[data-canvas-context-menu]');
+        const onBlankCanvas =
+          e.target === canvasRef.current || target.dataset.canvasBg === 'true';
+        const onPanSurface = !onNode && !onContextMenu;
+        if (!onBlankCanvas && !onPanSurface) return;
+        const t = e.touches[0];
+        isPanning.current = true;
+        touchPanning.current = true;
+        panStart.current = { x: t.clientX - panX, y: t.clientY - panY };
+        setCursor('grabbing');
+        e.preventDefault();
+      }}
       onClick={handleCanvasClick}
       onContextMenu={handleCanvasContextMenu}
     >
@@ -273,8 +372,9 @@ export function Canvas() {
           <NodeRenderer
             key={node.id}
             node={node}
-            isSelected={selectedNodeId === node.id}
+            isSelected={selectedNodeIds.includes(node.id)}
             onDragStart={startNodeDrag}
+            onTouchDragStart={startNodeTouchDrag}
             hasChildren={(childrenMap.get(node.id)?.length ?? 0) > 0}
             isCollapsed={collapsedSet.has(node.id)}
           />
@@ -284,7 +384,8 @@ export function Canvas() {
       {canvasCtx && (
         <div
           ref={canvasCtxRef}
-          className="border-border bg-popover text-popover-foreground fixed z-[200] min-w-[220px] rounded-lg border py-1 shadow-lg"
+          data-canvas-context-menu="true"
+          className="border-border bg-popover text-popover-foreground fixed z-200 min-w-[220px] rounded-lg border py-1 shadow-lg"
           style={{ left: canvasCtx.x, top: canvasCtx.y }}
           onContextMenu={(e) => e.preventDefault()}
         >
@@ -335,19 +436,18 @@ function NodeRenderer({
   node,
   isSelected,
   onDragStart,
+  onTouchDragStart,
   hasChildren,
   isCollapsed,
 }: {
   node: WorkspaceNode;
   isSelected: boolean;
   onDragStart: (id: string, pos: Position, e: React.MouseEvent) => void;
+  onTouchDragStart: (id: string, pos: Position, t: { clientX: number; clientY: number }) => void;
   hasChildren: boolean;
   isCollapsed: boolean;
 }) {
-  const { dispatch } = useWorkspace();
-
   const handleMouseDown = (e: React.MouseEvent) => {
-    dispatch({ type: 'SELECT_NODE', id: node.id });
     if (e.button === 0) {
       onDragStart(node.id, node.position, e);
     }
@@ -369,9 +469,16 @@ function NodeRenderer({
   return (
     <div
       data-workspace-node="true"
+      data-workspace-node-id={node.id}
       style={style}
       className={wrapperClass}
       onMouseDown={handleMouseDown}
+      onTouchStart={(e) => {
+        if (e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        onTouchDragStart(node.id, node.position, touch);
+        e.preventDefault();
+      }}
     >
       <NodeChrome node={node} hasChildren={hasChildren} isCollapsed={isCollapsed} />
       <div className="min-h-0 min-w-0 flex-1">
@@ -379,6 +486,9 @@ function NodeRenderer({
         {node.type === 'query' && <QueryNode node={node as any} />}
         {node.type === 'query-template' && (
           <QueryTemplateNode node={node as any} />
+        )}
+        {node.type === 'template-slot' && (
+          <TemplateSlotNode node={node as any} />
         )}
         {node.type === 'answer' && <AnswerNode node={node as any} />}
         {node.type === 'data' && <DataNode node={node as any} />}

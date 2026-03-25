@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -83,6 +84,9 @@ export function QuestionTemplateDesignerDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" showCloseButton>
         <DialogHeader>
           <DialogTitle>{t('templates.designerTitle')}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {t('templates.designerHint')}
+          </DialogDescription>
         </DialogHeader>
         <p className="text-muted-foreground text-sm">{t('templates.designerHint')}</p>
         <div className="flex flex-col gap-1.5">

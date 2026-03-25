@@ -1,4 +1,6 @@
 const EXPORT_TARGET_ID = 'workspace-tree-export-target';
+const EXPORT_ALL_TARGET_ID = 'workspace-export-all-target';
+const EXPORT_DASHBOARD_ID = 'dashboard-export-target';
 const GRAPH_CAPTURE_ID = 'workspace-graph-capture-root';
 
 /** Stay under common browser canvas limits (width/height / memory). */
@@ -8,6 +10,22 @@ function getExportTarget(): HTMLElement {
   const el = document.getElementById(EXPORT_TARGET_ID);
   if (!el) {
     throw new Error('EXPORT_TARGET_MISSING');
+  }
+  return el;
+}
+
+function getExportAllTarget(): HTMLElement {
+  const el = document.getElementById(EXPORT_ALL_TARGET_ID);
+  if (!el) {
+    throw new Error('EXPORT_ALL_TARGET_MISSING');
+  }
+  return el;
+}
+
+function getDashboardExportTarget(): HTMLElement {
+  const el = document.getElementById(EXPORT_DASHBOARD_ID);
+  if (!el) {
+    throw new Error('EXPORT_DASHBOARD_TARGET_MISSING');
   }
   return el;
 }
@@ -242,6 +260,61 @@ async function captureTreeToCanvas(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
+async function captureElementToCanvas(
+  el: HTMLElement,
+  maxScale: number,
+  backgroundColor: string | null
+): Promise<HTMLCanvasElement> {
+  const rect = el.getBoundingClientRect();
+  const html2canvas = (await import('html2canvas')).default;
+  const scales = normalizeCaptureScales(rect.width, rect.height, maxScale);
+  const scrollX = typeof window !== 'undefined' ? window.pageXOffset : 0;
+  const scrollY = typeof window !== 'undefined' ? window.pageYOffset : 0;
+  const windowWidth = Math.max(
+    typeof window !== 'undefined' ? window.innerWidth : 0,
+    Math.ceil(rect.width)
+  );
+  const windowHeight = Math.max(
+    typeof window !== 'undefined' ? window.innerHeight : 0,
+    Math.ceil(rect.height)
+  );
+
+  let lastError: unknown;
+  for (let i = 0; i < scales.length; i++) {
+    const scale = scales[i];
+    const foreignObjectRendering = i === scales.length - 1;
+    try {
+      return await html2canvas(el, {
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor,
+        width: Math.max(1, Math.ceil(rect.width)),
+        height: Math.max(1, Math.ceil(rect.height)),
+        windowWidth,
+        windowHeight,
+        scrollX,
+        scrollY,
+        scale,
+        logging: false,
+        removeContainer: true,
+        foreignObjectRendering,
+        onclone: (doc) => {
+          const target = el.id ? (doc.getElementById(el.id) as HTMLElement | null) : null;
+          if (!target) return;
+          target.style.opacity = '1';
+          target.style.visibility = 'visible';
+          target.style.transform = 'none';
+          target.style.clipPath = 'none';
+          target.style.overflow = 'visible';
+        },
+      });
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 async function canvasToJpegBytes(canvas: HTMLCanvasElement, quality: number): Promise<Uint8Array> {
   const blob = await new Promise<Blob | null>((resolve) => {
     canvas.toBlob((b) => resolve(b), 'image/jpeg', quality);
@@ -282,9 +355,52 @@ export async function exportWorkspaceTreePng(keyword: string): Promise<void> {
   getExportTarget();
   const graphRoot = getGraphCaptureElement();
   await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
-  const canvas = await captureTreeToCanvas(graphRoot, 1.5, null);
+  const canvas = await captureTreeToCanvas(graphRoot, 1.5, '#ffffff');
   const pngBytes = await canvasToPngBytes(canvas);
   triggerBrowserDownload(new Blob([pngBytes], { type: 'image/png' }), `${buildFileStem(keyword)}.png`);
+}
+
+export async function exportWorkspaceWithDashboardPng(keyword: string): Promise<void> {
+  const target = getExportAllTarget();
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  const rect = target.getBoundingClientRect();
+  const html2canvas = (await import('html2canvas')).default;
+  const scale = pickCaptureScale(rect.width, rect.height, 1.25);
+  const canvas = await html2canvas(target, {
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: null,
+    width: Math.max(1, Math.ceil(rect.width)),
+    height: Math.max(1, Math.ceil(rect.height)),
+    windowWidth: Math.max(typeof window !== 'undefined' ? window.innerWidth : 0, Math.ceil(rect.width)),
+    windowHeight: Math.max(typeof window !== 'undefined' ? window.innerHeight : 0, Math.ceil(rect.height)),
+    scale,
+    logging: false,
+    removeContainer: true,
+    foreignObjectRendering: false,
+    onclone: (doc, cloned) => {
+      onCloneForCapture(doc, cloned);
+      const root = doc.getElementById(EXPORT_ALL_TARGET_ID);
+      if (root) {
+        root.style.opacity = '1';
+        root.style.visibility = 'visible';
+        root.style.overflow = 'visible';
+      }
+    },
+  });
+  const pngBytes = await canvasToPngBytes(canvas);
+  triggerBrowserDownload(
+    new Blob([pngBytes], { type: 'image/png' }),
+    `${buildFileStem(keyword)}-with-dashboard.png`
+  );
+}
+
+export async function exportDashboardOnlyPng(keyword: string): Promise<void> {
+  const target = getDashboardExportTarget();
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  const canvas = await captureElementToCanvas(target, 1.25, '#ffffff');
+  const pngBytes = await canvasToPngBytes(canvas);
+  triggerBrowserDownload(new Blob([pngBytes], { type: 'image/png' }), `${buildFileStem(keyword)}-dashboard.png`);
 }
 
 export async function exportWorkspaceTreePdf(keyword: string): Promise<void> {
@@ -292,7 +408,7 @@ export async function exportWorkspaceTreePdf(keyword: string): Promise<void> {
   getExportTarget();
   const graphRoot = getGraphCaptureElement();
   await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
-  const canvas = await captureTreeToCanvas(graphRoot, 1.25, '#080C12');
+  const canvas = await captureTreeToCanvas(graphRoot, 1.25, '#ffffff');
 
   if (canvas.width < 2 || canvas.height < 2) {
     throw new Error('CAPTURE_EMPTY');
@@ -326,4 +442,114 @@ export async function exportWorkspaceTreePdf(keyword: string): Promise<void> {
 
   const bytes = await pdfDoc.save();
   triggerBrowserDownload(new Blob([bytes], { type: 'application/pdf' }), `${buildFileStem(keyword)}.pdf`);
+}
+
+export async function exportWorkspaceWithDashboardPdf(keyword: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const target = getExportAllTarget();
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  const rect = target.getBoundingClientRect();
+  const html2canvas = (await import('html2canvas')).default;
+  const scale = pickCaptureScale(rect.width, rect.height, 1.1);
+  const canvas = await html2canvas(target, {
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: '#080C12',
+    width: Math.max(1, Math.ceil(rect.width)),
+    height: Math.max(1, Math.ceil(rect.height)),
+    windowWidth: Math.max(typeof window !== 'undefined' ? window.innerWidth : 0, Math.ceil(rect.width)),
+    windowHeight: Math.max(typeof window !== 'undefined' ? window.innerHeight : 0, Math.ceil(rect.height)),
+    scale,
+    logging: false,
+    removeContainer: true,
+    foreignObjectRendering: false,
+    onclone: (doc, cloned) => {
+      onCloneForCapture(doc, cloned);
+      const root = doc.getElementById(EXPORT_ALL_TARGET_ID);
+      if (root) {
+        root.style.opacity = '1';
+        root.style.visibility = 'visible';
+        root.style.overflow = 'visible';
+      }
+    },
+  });
+
+  if (canvas.width < 2 || canvas.height < 2) {
+    throw new Error('CAPTURE_EMPTY');
+  }
+
+  const pageLandscape = canvas.width >= canvas.height;
+  const pageW = pageLandscape ? 841.89 : 595.28; // A4 pt
+  const pageH = pageLandscape ? 595.28 : 841.89;
+  const margin = 24;
+  const maxW = pageW - margin * 2;
+  const maxH = pageH - margin * 2;
+  const fit = Math.min(maxW / canvas.width, maxH / canvas.height);
+  const drawW = canvas.width * fit;
+  const drawH = canvas.height * fit;
+  const x = (pageW - drawW) / 2;
+  const y = (pageH - drawH) / 2;
+  const { PDFDocument } = await import('pdf-lib');
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([pageW, pageH]);
+
+  let img;
+  try {
+    const jpegBytes = await canvasToJpegBytes(canvas, 0.88);
+    img = await pdfDoc.embedJpg(jpegBytes);
+  } catch {
+    const pngBytes = await canvasToPngBytes(canvas);
+    img = await pdfDoc.embedPng(pngBytes);
+  }
+
+  page.drawImage(img, { x, y, width: drawW, height: drawH });
+
+  const bytes = await pdfDoc.save();
+  triggerBrowserDownload(
+    new Blob([bytes], { type: 'application/pdf' }),
+    `${buildFileStem(keyword)}-with-dashboard.pdf`
+  );
+}
+
+export async function exportDashboardOnlyPdf(keyword: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const target = getDashboardExportTarget();
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  const canvas = await captureElementToCanvas(target, 1.1, '#ffffff');
+
+  if (canvas.width < 2 || canvas.height < 2) {
+    throw new Error('CAPTURE_EMPTY');
+  }
+
+  const pageLandscape = canvas.width >= canvas.height;
+  const pageW = pageLandscape ? 841.89 : 595.28;
+  const pageH = pageLandscape ? 595.28 : 841.89;
+  const margin = 24;
+  const maxW = pageW - margin * 2;
+  const maxH = pageH - margin * 2;
+  const fit = Math.min(maxW / canvas.width, maxH / canvas.height);
+  const drawW = canvas.width * fit;
+  const drawH = canvas.height * fit;
+  const x = (pageW - drawW) / 2;
+  const y = (pageH - drawH) / 2;
+
+  const { PDFDocument } = await import('pdf-lib');
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([pageW, pageH]);
+
+  let img;
+  try {
+    const jpegBytes = await canvasToJpegBytes(canvas, 0.88);
+    img = await pdfDoc.embedJpg(jpegBytes);
+  } catch {
+    const pngBytes = await canvasToPngBytes(canvas);
+    img = await pdfDoc.embedPng(pngBytes);
+  }
+
+  page.drawImage(img, { x, y, width: drawW, height: drawH });
+  const bytes = await pdfDoc.save();
+  triggerBrowserDownload(
+    new Blob([bytes], { type: 'application/pdf' }),
+    `${buildFileStem(keyword)}-dashboard.pdf`
+  );
 }

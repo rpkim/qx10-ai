@@ -56,7 +56,15 @@ function WorkspaceInner() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardExpanded, setDashboardExpanded] = useState(false);
   const [ready, setReady] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const initialView = searchParams.get('view');
+
+  useEffect(() => {
+    const apply = () => setIsMobile(window.innerWidth < 768);
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, []);
 
   useEffect(() => {
     const launch = readWorkspaceLaunch(searchParams);
@@ -145,15 +153,16 @@ function WorkspaceInner() {
   const canvasObscured = showDashboard && dashboardExpanded;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-background">
+    <div id="workspace-export-all-target" className="relative h-screen w-screen overflow-hidden bg-background">
       <Toolbar
         onToggleDashboard={() => {
           setShowDashboard((v) => {
             if (v) {
               setDashboardExpanded(false);
             } else {
+              const mobile = typeof window !== 'undefined' && window.innerWidth < 768;
               const wide = typeof window !== 'undefined' && window.innerWidth >= 1280;
-              setDashboardExpanded(wide);
+              setDashboardExpanded(mobile || wide);
             }
             return !v;
           });
@@ -165,7 +174,7 @@ function WorkspaceInner() {
         id="workspace-tree-export-target"
         className="absolute inset-0"
         style={{
-          right: showDashboard && !dashboardExpanded ? '480px' : 0,
+          right: showDashboard && !dashboardExpanded && !isMobile ? '480px' : 0,
           opacity: canvasObscured ? 0 : 1,
           pointerEvents: canvasObscured ? 'none' : 'auto',
           transition: 'right 0.3s ease, opacity 0.25s ease',
@@ -174,7 +183,7 @@ function WorkspaceInner() {
         <Canvas />
       </div>
 
-      {!canvasObscured && <MiniMap />}
+      {!canvasObscured && !isMobile && <MiniMap />}
 
       {showDashboard && (
         <DashboardPanel
@@ -190,6 +199,7 @@ function WorkspaceInner() {
       <div
         className={`absolute bottom-4 left-4 z-10 flex flex-col gap-1.5 rounded-xl border border-border bg-card/90 px-3 py-3 backdrop-blur-sm transition-opacity ${canvasObscured ? 'pointer-events-none opacity-0' : ''}`}
         aria-label={t('workspace.legendTitle')}
+        style={{ display: isMobile ? 'none' : undefined }}
       >
         <span className="mb-0.5 text-xs font-medium text-muted-foreground">{t('workspace.legendTitle')}</span>
         {[
