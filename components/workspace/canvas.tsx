@@ -22,7 +22,7 @@ import {
 export function Canvas() {
   const { t } = useI18n();
   const { state, dispatch, addQueryTemplateNode } = useWorkspace();
-  const { nodes, edges, viewport, selectedNodeId, collapsedNodeIds } = state;
+  const { nodes, edges, viewport, selectedNodeIds, collapsedNodeIds } = state;
   const { x: panX, y: panY, zoom } = viewport;
 
   const childrenMap = useMemo(() => buildOutgoingChildrenMap(edges), [edges]);
@@ -39,7 +39,12 @@ export function Canvas() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0 });
-  const draggingNode = useRef<{ id: string; startMouse: Position; startNode: Position } | null>(null);
+  const selectedRef = useRef<string[]>([]);
+  const draggingNode = useRef<{
+    ids: string[];
+    startMouse: Position;
+    starts: Record<string, Position>;
+  } | null>(null);
   const spaceHeld = useRef(false);
   const [cursor, setCursor] = useState<'default' | 'grab' | 'grabbing'>('default');
   const [canvasCtx, setCanvasCtx] = useState<{ x: number; y: number } | null>(null);
@@ -48,6 +53,10 @@ export function Canvas() {
     world: Position | null;
   }>({ open: false, world: null });
   const canvasCtxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    selectedRef.current = selectedNodeIds;
+  }, [selectedNodeIds]);
 
   useEffect(() => {
     if (!canvasCtx) return;
@@ -169,14 +178,16 @@ export function Canvas() {
         });
       }
       if (draggingNode.current) {
-        const { id, startMouse, startNode } = draggingNode.current;
+        const { ids, startMouse, starts } = draggingNode.current;
         const currentZoom = (window as any).__qx10Zoom ?? 1;
         const dx = (e.clientX - startMouse.x) / currentZoom;
         const dy = (e.clientY - startMouse.y) / currentZoom;
         dispatch({
-          type: 'MOVE_NODE',
-          id,
-          position: { x: startNode.x + dx, y: startNode.y + dy },
+          type: 'MOVE_NODES',
+          updates: ids.map((id) => ({
+            id,
+            position: { x: starts[id].x + dx, y: starts[id].y + dy },
+          })),
         });
       }
     };
@@ -201,24 +212,45 @@ export function Canvas() {
   }, [zoom]);
 
   const startNodeDrag = useCallback(
-    (nodeId: string, nodePos: Position, e: React.MouseEvent) => {
-      if (e.button !== 0) return; // only primary button drags; right-click keeps context menu
-      if (spaceHeld.current) return; // space held → pan, not node drag
+    (nodeId: string, _nodePos: Position, e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      if (spaceHeld.current) return;
       e.stopPropagation();
+
+      let dragIds: string[];
+      const cur = selectedRef.current;
+      if (e.shiftKey) {
+        const set = new Set(cur);
+        if (set.has(nodeId)) set.delete(nodeId);
+        else set.add(nodeId);
+        dragIds = Array.from(set);
+        dispatch({ type: 'SET_SELECTED_NODES', ids: dragIds });
+      } else if (cur.includes(nodeId) && cur.length > 1) {
+        dragIds = [...cur];
+      } else {
+        dragIds = [nodeId];
+        dispatch({ type: 'SET_SELECTED_NODES', ids: dragIds });
+      }
+
+      const starts: Record<string, Position> = {};
+      for (const id of dragIds) {
+        const n = nodes.find((x) => x.id === id);
+        if (n) starts[id] = { ...n.position };
+      }
       draggingNode.current = {
-        id: nodeId,
+        ids: dragIds,
         startMouse: { x: e.clientX, y: e.clientY },
-        startNode: { ...nodePos },
+        starts,
       };
     },
-    []
+    [dispatch, nodes]
   );
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent) => {
       if (e.target === canvasRef.current ||
           (e.target as HTMLElement).dataset.canvasBg === 'true') {
-        dispatch({ type: 'SELECT_NODE', id: null });
+        dispatch({ type: 'SET_SELECTED_NODES', ids: [] });
       }
     },
     [dispatch]
@@ -237,6 +269,7 @@ export function Canvas() {
 
   return (
     <div
+      id="workspace-canvas"
       ref={canvasRef}
       className="absolute inset-0 overflow-hidden select-none"
       style={{ cursor: cursorStyle, background: 'var(--background)' }}
@@ -274,7 +307,7 @@ export function Canvas() {
           <NodeRenderer
             key={node.id}
             node={node}
-            isSelected={selectedNodeId === node.id}
+            isSelected={selectedNodeIds.includes(node.id)}
             onDragStart={startNodeDrag}
             hasChildren={(childrenMap.get(node.id)?.length ?? 0) > 0}
             isCollapsed={collapsedSet.has(node.id)}
@@ -345,10 +378,7 @@ function NodeRenderer({
   hasChildren: boolean;
   isCollapsed: boolean;
 }) {
-  const { dispatch } = useWorkspace();
-
   const handleMouseDown = (e: React.MouseEvent) => {
-    dispatch({ type: 'SELECT_NODE', id: node.id });
     if (e.button === 0) {
       onDragStart(node.id, node.position, e);
     }
@@ -370,6 +400,7 @@ function NodeRenderer({
   return (
     <div
       data-workspace-node="true"
+      data-workspace-node-id={node.id}
       style={style}
       className={wrapperClass}
       onMouseDown={handleMouseDown}

@@ -35,6 +35,7 @@ import {
   saveWorkspaceToLocalStorage,
   normalizeTemplateSlotGraph,
 } from './workspace-snapshot';
+import { findIncomingAncestorIds } from '@/lib/workspace-node-search';
 
 /* ─────────────────────────────────────────────
    Canvas layout (tree-aware — avoids Answer / Query overlap)
@@ -522,9 +523,11 @@ type Action =
   | { type: 'ADD_EDGE'; edge: Edge }
   | { type: 'DELETE_TEMPLATE_SLOT'; slotId: string }
   | { type: 'SET_VIEWPORT'; viewport: Partial<Viewport> }
-  | { type: 'SELECT_NODE'; id: string | null }
+  | { type: 'SET_SELECTED_NODES'; ids: string[] }
+  | { type: 'EXPAND_TO_SHOW_NODE'; nodeId: string }
   | { type: 'TOGGLE_DASHBOARD_PIN'; id: string }
   | { type: 'MOVE_NODE'; id: string; position: Position }
+  | { type: 'MOVE_NODES'; updates: { id: string; position: Position }[] }
   | { type: 'DELETE_NODE'; id: string }
   | { type: 'TOGGLE_COLLAPSE_BRANCH'; nodeId: string }
   | { type: 'RUN_QUERY'; queryId: string }
@@ -545,7 +548,7 @@ const initialState: WorkspaceState = {
   nodes: [],
   edges: [],
   viewport: { x: 0, y: 0, zoom: 0.75 },
-  selectedNodeId: null,
+  selectedNodeIds: [],
   dashboardNodeIds: [],
   collapsedNodeIds: [],
 };
@@ -562,6 +565,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         edges,
         viewport: { x: 120, y: 80, zoom: 0.72 },
         collapsedNodeIds: [],
+        selectedNodeIds: [],
       };
     }
     case 'SET_SEED_QUERIES': {
@@ -639,15 +643,29 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         nodes: state.nodes.filter((n) => n.id !== slotId),
         edges: nextEdges,
         dashboardNodeIds: state.dashboardNodeIds.filter((id) => id !== slotId),
-        selectedNodeId: state.selectedNodeId === slotId ? null : state.selectedNodeId,
+        selectedNodeIds: state.selectedNodeIds.filter((id) => id !== slotId),
         collapsedNodeIds: state.collapsedNodeIds.filter((cid) => cid !== slotId),
       };
     }
     case 'SET_VIEWPORT': {
       return { ...state, viewport: { ...state.viewport, ...action.viewport } };
     }
-    case 'SELECT_NODE': {
-      return { ...state, selectedNodeId: action.id };
+    case 'SET_SELECTED_NODES': {
+      const seen = new Set<string>();
+      const ids = action.ids.filter((id) => {
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+      return { ...state, selectedNodeIds: ids };
+    }
+    case 'EXPAND_TO_SHOW_NODE': {
+      const ancestors = findIncomingAncestorIds(action.nodeId, state.edges);
+      const drop = new Set(ancestors);
+      return {
+        ...state,
+        collapsedNodeIds: state.collapsedNodeIds.filter((id) => !drop.has(id)),
+      };
     }
     case 'TOGGLE_DASHBOARD_PIN': {
       const pinned = state.dashboardNodeIds.includes(action.id)
@@ -661,6 +679,16 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         nodes: state.nodes.map((n) =>
           n.id === action.id ? { ...n, position: action.position } : n
         ),
+      };
+    }
+    case 'MOVE_NODES': {
+      const posById = new Map(action.updates.map((u) => [u.id, u.position]));
+      return {
+        ...state,
+        nodes: state.nodes.map((n) => {
+          const p = posById.get(n.id);
+          return p ? { ...n, position: p } : n;
+        }),
       };
     }
     case 'TOGGLE_COLLAPSE_BRANCH': {
@@ -694,7 +722,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
           (e) => !toDelete.has(e.sourceId) && !toDelete.has(e.targetId)
         ),
         dashboardNodeIds: state.dashboardNodeIds.filter((id) => !toDelete.has(id)),
-        selectedNodeId: toDelete.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
+        selectedNodeIds: state.selectedNodeIds.filter((id) => !toDelete.has(id)),
         collapsedNodeIds: state.collapsedNodeIds.filter((cid) => !toDelete.has(cid)),
       };
     }
@@ -720,7 +748,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
           (e) => !toDelete.has(e.sourceId) && !toDelete.has(e.targetId)
         ),
         dashboardNodeIds: state.dashboardNodeIds.filter((id) => !toDelete.has(id)),
-        selectedNodeId: toDelete.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
+        selectedNodeIds: state.selectedNodeIds.filter((id) => !toDelete.has(id)),
         collapsedNodeIds: state.collapsedNodeIds.filter((cid) => !toDelete.has(cid)),
       };
     }
@@ -743,7 +771,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         nodes: s.nodes,
         edges,
         viewport: s.viewport,
-        selectedNodeId: null,
+        selectedNodeIds: [],
         dashboardNodeIds: s.dashboardNodeIds,
         collapsedNodeIds: s.collapsedNodeIds,
       };

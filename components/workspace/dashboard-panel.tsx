@@ -28,6 +28,7 @@ import {
   fetchMarketQuotePayload,
   marketDataNodeRefreshSymbol,
 } from '@/lib/market-data-node-refresh';
+import { exportDashboardOnlyPdf, exportDashboardOnlyPng } from '@/lib/workspace-visual-export';
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -184,6 +185,18 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportDashboardPng = () => {
+    void exportDashboardOnlyPng(keyword)
+      .then(() => toast.success(t('dashboard.exportPngDone')))
+      .catch(() => toast.error(t('dashboard.exportImageFail')));
+  };
+
+  const handleExportDashboardPdf = () => {
+    void exportDashboardOnlyPdf(keyword)
+      .then(() => toast.success(t('dashboard.exportPdfDone')))
+      .catch(() => toast.error(t('dashboard.exportImageFail')));
+  };
+
   const onHeaderPointerDown = useCallback(
     (id: string) => (e: React.PointerEvent) => {
       if (!editingGrid || !boardRef.current) return;
@@ -323,7 +336,7 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
     : 'absolute right-0 bottom-0 top-24 z-30 flex w-[480px] flex-col border-l border-border bg-card';
 
   return (
-    <div className={shellClass}>
+    <div id="dashboard-export-target" className={shellClass}>
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-5 sm:py-4">
         <div className="min-w-0 flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
@@ -410,15 +423,35 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
             {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
           </Button>
           {pinnedNodes.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="hidden h-8 text-xs sm:inline-flex"
-              onClick={handleExport}
-            >
-              {t('dashboard.export')}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden h-8 text-xs sm:inline-flex"
+                onClick={handleExportDashboardPng}
+              >
+                {t('dashboard.exportPng')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden h-8 text-xs sm:inline-flex"
+                onClick={handleExportDashboardPdf}
+              >
+                {t('dashboard.exportPdf')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden h-8 text-xs sm:inline-flex"
+                onClick={handleExport}
+              >
+                {t('dashboard.export')}
+              </Button>
+            </>
           )}
           <Button
             type="button"

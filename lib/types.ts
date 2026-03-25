@@ -141,7 +141,8 @@ export interface WorkspaceState {
   nodes: WorkspaceNode[];
   edges: Edge[];
   viewport: Viewport;
-  selectedNodeId: string | null;
+  /** Multi-select with Shift+click; drag moves all selected together. */
+  selectedNodeIds: string[];
   dashboardNodeIds: string[];
   /** Branches under these node ids are hidden on the canvas (folded). */
   collapsedNodeIds: string[];

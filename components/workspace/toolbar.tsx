@@ -44,7 +44,10 @@ import {
   downloadWorkspaceJson,
   parseWorkspaceSnapshotString,
 } from '@/lib/workspace-snapshot';
-import { exportWorkspaceTreePdf, exportWorkspaceTreePng } from '@/lib/workspace-visual-export';
+import {
+  exportWorkspaceTreePdf,
+  exportWorkspaceTreePng,
+} from '@/lib/workspace-visual-export';
 import { listRecentWorkspaces } from '@/lib/workspace-index';
 import { workspaceUrl } from '@/lib/workspace-url';
 import {
@@ -57,6 +60,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { QuestionTemplateDesignerDialog } from '@/components/question-template-designer-dialog';
+import { WorkspaceNodeSearchBar } from '@/components/workspace/node-search-bar';
 import {
   deleteQuestionTemplate,
   loadQuestionTemplates,
@@ -213,11 +217,13 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
       .catch(() => toast.error(t('toolbar.exportImageFail')));
   };
 
+
   const exportPdf = () => {
     void exportWorkspaceTreePdf(state.keyword)
       .then(() => toast.success(t('toolbar.exportPdfDone')))
       .catch(() => toast.error(t('toolbar.exportImageFail')));
   };
+
 
   const zoomPct = Math.round(viewport.zoom * 100);
 
@@ -274,68 +280,71 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Left: Logo + keyword */}
-      <div className="pointer-events-auto flex max-w-[min(100%,520px)] flex-wrap items-center gap-2 rounded-2xl border border-border bg-card/90 px-4 py-2.5 backdrop-blur-sm sm:flex-nowrap sm:gap-3">
-        <svg width="22" height="22" viewBox="0 0 36 36" fill="none">
-          <rect x="2" y="6" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" />
-          <rect x="8" y="12" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" opacity="0.6" />
-          <line x1="2" y1="6" x2="8" y2="12" stroke="#00C49A" strokeWidth="1.5" />
-          <line x1="18" y1="6" x2="24" y2="12" stroke="#00C49A" strokeWidth="1.5" />
-          <line x1="2" y1="22" x2="8" y2="28" stroke="#00C49A" strokeWidth="1.5" />
-          <line x1="18" y1="22" x2="24" y2="28" stroke="#00C49A" strokeWidth="1.5" />
-          <circle cx="18" cy="18" r="2" fill="#00C49A" />
-        </svg>
-        <span className="font-bold text-foreground" style={{ fontFamily: 'var(--font-space-grotesk)' }}>
-          qx<span style={{ color: '#00C49A' }}>10</span>.lol
-        </span>
-        <div className="mx-1 h-4 w-px bg-border" />
-        <span className="text-sm font-medium text-foreground">{keyword}</span>
-        <span
-          className="rounded-full px-2 py-0.5 text-xs font-medium"
-          style={{ background: 'rgba(0,196,154,0.15)', color: '#00C49A' }}
-        >
-          {t(GOAL_LABEL_KEYS[goal])}
-        </span>
-        <DropdownMenu open={recentOpen} onOpenChange={setRecentOpen}>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/60 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              <LayoutGrid className="size-3.5" />
-              {t('toolbar.workspaces')}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
-                setRecentOpen(false);
-                window.setTimeout(() => openNewWorkspaceDialog(), 0);
-              }}
-            >
-              {t('toolbar.newWorkspaceEllipsis')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-              {t('toolbar.recentTopics')}
-            </DropdownMenuLabel>
-            {recent.length === 0 ? (
-              <div className="px-2 py-2 text-xs text-muted-foreground">{t('toolbar.noRecent')}</div>
-            ) : (
-              recent.map((e) => (
-                <DropdownMenuItem
-                  key={`${e.keyword}-${e.updatedAt}`}
-                  onSelect={() => goToRecent(e)}
-                  className="flex flex-col items-start gap-0.5"
-                >
-                  <span className="font-medium text-foreground">{e.keyword}</span>
-                  <span className="text-xs text-muted-foreground">{t(GOAL_LABEL_KEYS[e.goal])}</span>
-                </DropdownMenuItem>
-              ))
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {/* Left: Logo + keyword + node search */}
+      <div className="pointer-events-auto flex max-w-[min(100%,520px)] min-w-0 flex-col gap-2 rounded-2xl border border-border bg-card/90 px-4 py-2.5 backdrop-blur-sm">
+        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
+          <svg width="22" height="22" viewBox="0 0 36 36" fill="none">
+            <rect x="2" y="6" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" />
+            <rect x="8" y="12" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" opacity="0.6" />
+            <line x1="2" y1="6" x2="8" y2="12" stroke="#00C49A" strokeWidth="1.5" />
+            <line x1="18" y1="6" x2="24" y2="12" stroke="#00C49A" strokeWidth="1.5" />
+            <line x1="2" y1="22" x2="8" y2="28" stroke="#00C49A" strokeWidth="1.5" />
+            <line x1="18" y1="22" x2="24" y2="28" stroke="#00C49A" strokeWidth="1.5" />
+            <circle cx="18" cy="18" r="2" fill="#00C49A" />
+          </svg>
+          <span className="font-bold text-foreground" style={{ fontFamily: 'var(--font-space-grotesk)' }}>
+            qx<span style={{ color: '#00C49A' }}>10</span>.lol
+          </span>
+          <div className="mx-1 h-4 w-px bg-border" />
+          <span className="text-sm font-medium text-foreground">{keyword}</span>
+          <span
+            className="rounded-full px-2 py-0.5 text-xs font-medium"
+            style={{ background: 'rgba(0,196,154,0.15)', color: '#00C49A' }}
+          >
+            {t(GOAL_LABEL_KEYS[goal])}
+          </span>
+          <DropdownMenu open={recentOpen} onOpenChange={setRecentOpen}>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/60 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <LayoutGrid className="size-3.5" />
+                {t('toolbar.workspaces')}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setRecentOpen(false);
+                  window.setTimeout(() => openNewWorkspaceDialog(), 0);
+                }}
+              >
+                {t('toolbar.newWorkspaceEllipsis')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                {t('toolbar.recentTopics')}
+              </DropdownMenuLabel>
+              {recent.length === 0 ? (
+                <div className="px-2 py-2 text-xs text-muted-foreground">{t('toolbar.noRecent')}</div>
+              ) : (
+                recent.map((e) => (
+                  <DropdownMenuItem
+                    key={`${e.keyword}-${e.updatedAt}`}
+                    onSelect={() => goToRecent(e)}
+                    className="flex flex-col items-start gap-0.5"
+                  >
+                    <span className="font-medium text-foreground">{e.keyword}</span>
+                    <span className="text-xs text-muted-foreground">{t(GOAL_LABEL_KEYS[e.goal])}</span>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <WorkspaceNodeSearchBar />
       </div>
 
       {/* Right: Theme + save/load + dashboard + zoom */}

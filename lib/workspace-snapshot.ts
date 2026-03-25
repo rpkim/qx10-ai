@@ -318,7 +318,7 @@ export function parseWorkspaceSnapshot(raw: unknown): SnapshotOk | SnapshotErr {
     nodes,
     edges,
     viewport: d.viewport,
-    selectedNodeId: null,
+    selectedNodeIds: [],
     dashboardNodeIds: d.dashboardNodeIds,
     collapsedNodeIds: d.collapsedNodeIds,
   };
