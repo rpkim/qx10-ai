@@ -72,6 +72,7 @@ export function TemplateSlotNode({ node }: Props) {
 
       // We take over paste behavior so the slot value + auto-create happen deterministically.
       e.preventDefault();
+      e.stopPropagation();
 
       const isSingleVarTemplate = keys.length === 1;
 
