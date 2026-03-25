@@ -119,9 +119,15 @@ export function AnswerNode({ node }: Props) {
 
       {/* Answer content */}
       <div
-        className="max-h-52 overflow-y-auto pr-1"
+        className="max-h-52 overflow-y-auto pr-1 select-text"
         data-node-scroll="true"
-        style={{ scrollbarWidth: 'thin', touchAction: 'pan-y', overscrollBehavior: 'contain' }}
+        style={{
+          scrollbarWidth: 'thin',
+          touchAction: 'pan-y',
+          overscrollBehavior: 'contain',
+          userSelect: 'text',
+          WebkitUserSelect: 'text',
+        }}
         onMouseDown={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
         onWheel={(e) => e.stopPropagation()}
