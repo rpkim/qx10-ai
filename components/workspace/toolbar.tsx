@@ -361,7 +361,36 @@ export function Toolbar({
             <DialogTitle>Workspace Summary</DialogTitle>
           </DialogHeader>
           <div className="max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-card/50 p-4">
-            {summaryBusy && <div className="text-sm text-muted-foreground">Generating summary...</div>}
+            {summaryBusy && (
+              <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-background/70 p-4">
+                <div
+                  className="pointer-events-none absolute inset-0 opacity-[0.08]"
+                  style={{
+                    backgroundImage:
+                      'linear-gradient(to right, #00C49A 1px, transparent 1px), linear-gradient(to bottom, #00C49A 1px, transparent 1px)',
+                    backgroundSize: '22px 22px',
+                  }}
+                />
+                <div className="relative flex items-start gap-3">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10">
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-foreground">Processing your workspace with AI...</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Connecting questions, extracting signals, and drafting a one-page summary.
+                    </div>
+                    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-secondary/80">
+                      <div className="h-full w-2/5 animate-pulse rounded-full bg-primary" />
+                    </div>
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-primary/80">
+                      <span className="h-1.5 w-1.5 animate-ping rounded-full bg-primary" />
+                      <span>AI is working</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {!summaryBusy && summaryError && (
               <div className="text-sm text-destructive">{summaryError}</div>
             )}
