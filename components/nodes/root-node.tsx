@@ -7,6 +7,38 @@ import { useI18n } from '@/components/i18n-provider';
 import { getSuggestedQueries } from '@/lib/mock-data';
 
 const seedSuggestionCache = new Map<string, { questions: string[]; status: 'ai' | 'fallback' }>();
+const ROOT_SEED_CACHE_PREFIX = 'qx10.root.seed.v1:';
+
+function readSeedSuggestionsFromStorage(
+  cacheKey: string
+): { questions: string[]; status: 'ai' | 'fallback' } | null {
+  try {
+    const raw = window.localStorage.getItem(`${ROOT_SEED_CACHE_PREFIX}${cacheKey}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { questions?: unknown; status?: unknown };
+    if (!Array.isArray(parsed.questions)) return null;
+    const questions = parsed.questions
+      .map((q) => (typeof q === 'string' ? q.trim() : ''))
+      .filter(Boolean)
+      .slice(0, 6);
+    if (questions.length === 0) return null;
+    const status = parsed.status === 'ai' ? 'ai' : 'fallback';
+    return { questions, status };
+  } catch {
+    return null;
+  }
+}
+
+function writeSeedSuggestionsToStorage(
+  cacheKey: string,
+  payload: { questions: string[]; status: 'ai' | 'fallback' }
+) {
+  try {
+    window.localStorage.setItem(`${ROOT_SEED_CACHE_PREFIX}${cacheKey}`, JSON.stringify(payload));
+  } catch {
+    // Ignore storage errors (private mode/quota).
+  }
+}
 
 interface Props {
   node: RootNodeData;
@@ -23,6 +55,14 @@ export function RootNode({ node }: Props) {
 
   useEffect(() => {
     const cacheKey = `${node.keyword}::${node.goal}`;
+    const stored = readSeedSuggestionsFromStorage(cacheKey);
+    if (stored) {
+      seedSuggestionCache.set(cacheKey, stored);
+      setSeedSuggestions(stored.questions);
+      setSuggestionStatus(stored.status);
+      setIsLoadingSuggestions(false);
+      return;
+    }
     const cached = seedSuggestionCache.get(cacheKey);
     if (cached) {
       setSeedSuggestions(cached.questions);
@@ -51,14 +91,18 @@ export function RootNode({ node }: Props) {
           qs.slice(0, Math.min(qs.length, 3)).every((q, i) => q === (fallback[i] ?? ''));
         if (!looksFallback) {
           const next = qs.slice(0, 6);
-          seedSuggestionCache.set(cacheKey, { questions: next, status: 'ai' });
+          const payload = { questions: next, status: 'ai' as const };
+          seedSuggestionCache.set(cacheKey, payload);
+          writeSeedSuggestionsToStorage(cacheKey, payload);
           setSeedSuggestions(next);
           setSuggestionStatus('ai');
           setIsLoadingSuggestions(false);
           return;
         }
         if (!isBrowserGeminiUnlocked) {
-          seedSuggestionCache.set(cacheKey, { questions: fallback, status: 'fallback' });
+          const payload = { questions: fallback, status: 'fallback' as const };
+          seedSuggestionCache.set(cacheKey, payload);
+          writeSeedSuggestionsToStorage(cacheKey, payload);
           setSeedSuggestions(fallback);
           setSuggestionStatus('fallback');
           setIsLoadingSuggestions(false);
@@ -67,11 +111,15 @@ export function RootNode({ node }: Props) {
         void generateBrowserSeedQueries(node.keyword, node.goal).then((browserQs) => {
           if (cancelled) return;
           if (browserQs.length >= 3) {
-            seedSuggestionCache.set(cacheKey, { questions: browserQs, status: 'ai' });
+            const payload = { questions: browserQs, status: 'ai' as const };
+            seedSuggestionCache.set(cacheKey, payload);
+            writeSeedSuggestionsToStorage(cacheKey, payload);
             setSeedSuggestions(browserQs);
             setSuggestionStatus('ai');
           } else {
-            seedSuggestionCache.set(cacheKey, { questions: fallback, status: 'fallback' });
+            const payload = { questions: fallback, status: 'fallback' as const };
+            seedSuggestionCache.set(cacheKey, payload);
+            writeSeedSuggestionsToStorage(cacheKey, payload);
             setSeedSuggestions(fallback);
             setSuggestionStatus('fallback');
           }
@@ -82,7 +130,9 @@ export function RootNode({ node }: Props) {
         if (cancelled) return;
         const fallback = getSuggestedQueries(node.keyword).slice(0, 6);
         if (!isBrowserGeminiUnlocked) {
-          seedSuggestionCache.set(cacheKey, { questions: fallback, status: 'fallback' });
+          const payload = { questions: fallback, status: 'fallback' as const };
+          seedSuggestionCache.set(cacheKey, payload);
+          writeSeedSuggestionsToStorage(cacheKey, payload);
           setSeedSuggestions(fallback);
           setSuggestionStatus('fallback');
           setIsLoadingSuggestions(false);
@@ -91,11 +141,15 @@ export function RootNode({ node }: Props) {
         void generateBrowserSeedQueries(node.keyword, node.goal).then((browserQs) => {
           if (cancelled) return;
           if (browserQs.length >= 3) {
-            seedSuggestionCache.set(cacheKey, { questions: browserQs, status: 'ai' });
+            const payload = { questions: browserQs, status: 'ai' as const };
+            seedSuggestionCache.set(cacheKey, payload);
+            writeSeedSuggestionsToStorage(cacheKey, payload);
             setSeedSuggestions(browserQs);
             setSuggestionStatus('ai');
           } else {
-            seedSuggestionCache.set(cacheKey, { questions: fallback, status: 'fallback' });
+            const payload = { questions: fallback, status: 'fallback' as const };
+            seedSuggestionCache.set(cacheKey, payload);
+            writeSeedSuggestionsToStorage(cacheKey, payload);
             setSeedSuggestions(fallback);
             setSuggestionStatus('fallback');
           }

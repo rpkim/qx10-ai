@@ -154,12 +154,17 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
     return aiCatalog?.options.find((o) => o.id === id)?.label ?? (id || 'Default');
   };
   const scrollToQueryCard = (queryId: string) => {
-    window.setTimeout(() => {
-      const el = document.querySelector(`[data-mobile-query-card-id="${queryId}"]`) as HTMLElement | null;
+    const selector = `[data-mobile-query-card-id="${queryId}"]`;
+    const tryScroll = (attempt = 0) => {
+      const el = document.querySelector(selector) as HTMLElement | null;
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
       }
-    }, 90);
+      if (attempt >= 10) return;
+      window.setTimeout(() => tryScroll(attempt + 1), 80);
+    };
+    window.setTimeout(() => tryScroll(0), 40);
   };
 
   return (
