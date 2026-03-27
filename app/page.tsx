@@ -271,6 +271,7 @@ export default function LandingPage() {
             <span
               className="text-4xl font-bold tracking-tight text-foreground"
               style={{ fontFamily: 'var(--font-space-grotesk)' }}
+              suppressHydrationWarning
             >
               Qx<span style={{ color: '#00C49A' }}>10</span>.lol
             </span>

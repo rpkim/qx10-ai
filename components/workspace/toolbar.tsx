@@ -464,7 +464,11 @@ export function Toolbar({
             <line x1="18" y1="22" x2="24" y2="28" stroke="#00C49A" strokeWidth="1.5" />
             <circle cx="18" cy="18" r="2" fill="#00C49A" />
           </svg>
-          <span className="font-bold text-foreground" style={{ fontFamily: 'var(--font-space-grotesk)' }}>
+          <span
+            className="font-bold text-foreground"
+            style={{ fontFamily: 'var(--font-space-grotesk)' }}
+            suppressHydrationWarning
+          >
             Qx<span style={{ color: '#00C49A' }}>10</span>.lol
           </span>
           <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
