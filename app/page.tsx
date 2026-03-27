@@ -13,12 +13,7 @@ import { KeyRound, Lock, LockOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  clearGeminiKeyEncrypted,
-  hasEncryptedGeminiKey,
-  loadGeminiKeyEncrypted,
-  saveGeminiKeyEncrypted,
-} from '@/lib/byok-gemini';
+import { clearGeminiKeyEncrypted, hasEncryptedGeminiKey, saveGeminiKeyEncrypted } from '@/lib/byok-gemini';
 import {
   listRecentWorkspaces,
   removeWorkspaceVisit,
@@ -138,24 +133,6 @@ export default function LandingPage() {
     }
   };
 
-  const unlockByok = async () => {
-    if (!passphraseInput.trim()) {
-      toast.error('Passphrase is required.');
-      return;
-    }
-    setByokBusy(true);
-    try {
-      await loadGeminiKeyEncrypted(passphraseInput);
-      setByokUnlocked(true);
-      setPassphraseInput('');
-      toast.success('Gemini key verified and unlock-ready.');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to unlock key');
-    } finally {
-      setByokBusy(false);
-    }
-  };
-
   const clearByok = async () => {
     setByokBusy(true);
     try {
@@ -243,17 +220,6 @@ export default function LandingPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={unlockByok} disabled={byokBusy}>
-              Unlock
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setByokUnlocked(false)}
-              disabled={byokBusy}
-            >
-              Lock
-            </Button>
             <Button type="button" variant="outline" onClick={clearByok} disabled={byokBusy}>
               Delete
             </Button>
