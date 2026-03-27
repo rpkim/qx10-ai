@@ -15,15 +15,12 @@ import { useI18n } from '@/components/i18n-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RootNode } from '@/components/nodes/root-node';
 
-type MobileTab = 'explore' | 'dashboard';
-
 interface Props {
   showDashboard: boolean;
-  onShowDashboardChange: (show: boolean) => void;
   isMobile: boolean;
 }
 
-export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isMobile }: Props) {
+export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
   const { t } = useI18n();
   const {
     state,
@@ -42,7 +39,6 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
   const [collapsedExecutedByTemplate, setCollapsedExecutedByTemplate] = useState<
     Record<string, boolean>
   >({});
-  const [activeTab, setActiveTab] = useState<MobileTab>('explore');
 
   const queryNodes = useMemo(
     () => state.nodes.filter((n): n is QueryNodeData => n.type === 'query'),
@@ -71,7 +67,7 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
     }
     return map;
   }, [state.nodes]);
-  const orderedQueryNodes = useMemo(() => {
+  const queryHierarchy = useMemo(() => {
     const queryById = new Map(queryNodes.map((q) => [q.id, q]));
     const templateIdSet = new Set(templateNodes.map((t) => t.id));
     const answerOwnerById = new Map<string, string>();
@@ -124,8 +120,21 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
       for (const child of childrenMap.get(q.id) ?? []) walk(child);
     };
     for (const r of roots) walk(r);
-    return out;
+    return { ordered: out, parentById: parentQueryByQuery };
   }, [queryNodes, state.nodes, templateNodes]);
+  const orderedQueryNodes = queryHierarchy.ordered;
+  const visibleOrderedQueryNodes = useMemo(
+    () =>
+      orderedQueryNodes.filter((q) => {
+        let parentId = queryHierarchy.parentById.get(q.id) ?? null;
+        while (parentId) {
+          if (collapsedByQuery[parentId]) return false;
+          parentId = queryHierarchy.parentById.get(parentId) ?? null;
+        }
+        return true;
+      }),
+    [orderedQueryNodes, queryHierarchy.parentById, collapsedByQuery]
+  );
 
   const dataByAnswer = useMemo(() => {
     const map = new Map<string, DataNodeData>();
@@ -139,8 +148,6 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
     () => state.nodes.filter((n) => state.dashboardNodeIds.includes(n.id)),
     [state.nodes, state.dashboardNodeIds]
   );
-
-  const effectiveTab: MobileTab = showDashboard ? 'dashboard' : activeTab;
 
   const modelLabel = (q: QueryNodeData): string => {
     const id = q.modelChoice ?? aiCatalog?.defaultChoice ?? '';
@@ -160,29 +167,7 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
           isMobile ? 'max-w-xl' : 'max-w-5xl',
         ].join(' ')}
       >
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-card p-1">
-          {(['explore', 'dashboard'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => {
-                setActiveTab(tab);
-                if (tab !== 'dashboard') onShowDashboardChange(false);
-                if (tab === 'dashboard') onShowDashboardChange(true);
-              }}
-              className={[
-                'rounded-xl px-2 py-2 text-xs font-medium transition-colors',
-                effectiveTab === tab
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:bg-secondary',
-              ].join(' ')}
-            >
-              {tab === 'explore' ? 'Explore' : t('toolbar.dashboard')}
-            </button>
-          ))}
-        </div>
-
-        {effectiveTab === 'explore' && (
+        {!showDashboard && (
           <div className="flex flex-col gap-2">
             {rootNode && (
               <div className="mb-1 flex justify-center">
@@ -303,7 +288,7 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
                 No query yet. Add one from a suggestion and run it.
               </div>
             ) : (
-              orderedQueryNodes.map((q) => {
+              visibleOrderedQueryNodes.map((q) => {
                 const a = answerByQuery.get(q.id);
                 const d = a ? dataByAnswer.get(a.id) : null;
                 const isRunning = q.status === 'running';
@@ -435,7 +420,7 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
                                 WebkitUserSelect: 'text',
                               }}
                             >
-                              {a.content || '...'}
+                              {renderSimpleMarkdown(a.content || '...')}
                             </div>
                             {a.suggestedQueries.length > 0 && (
                               <div className="mt-2 flex flex-col gap-1.5">
@@ -505,7 +490,40 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
                                 {state.dashboardNodeIds.includes(d.id) ? 'Unpin' : 'Pin'}
                               </button>
                             </div>
-                            <p className="text-xs text-foreground/80">{dataSummary(d)}</p>
+                            {d.dataType === 'table' && d.tableRows && d.tableColumns ? (
+                              <div className="overflow-x-auto rounded-lg border border-border bg-card/70">
+                                <table className="w-full min-w-[360px] text-xs">
+                                  <thead>
+                                    <tr>
+                                      {d.tableColumns.map((col) => (
+                                        <th
+                                          key={col}
+                                          className="border-b border-border px-2 py-1.5 text-left font-semibold text-muted-foreground"
+                                        >
+                                          {col}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {d.tableRows.slice(0, 8).map((row, idx) => (
+                                      <tr key={idx}>
+                                        {d.tableColumns.map((col) => (
+                                          <td
+                                            key={col}
+                                            className="border-b border-border px-2 py-1.5 text-foreground/85"
+                                          >
+                                            {String(row[col] ?? '')}
+                                          </td>
+                                        ))}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-foreground/80">{dataSummary(d)}</p>
+                            )}
                           </div>
                         )}
                       </>
@@ -517,7 +535,7 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
           </div>
         )}
 
-        {effectiveTab === 'dashboard' && (
+        {showDashboard && (
           <div className="flex flex-col gap-2">
             {pinned.length === 0 ? (
               <div className="rounded-2xl border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
@@ -571,4 +589,110 @@ function dataSummary(d: DataNodeData): string {
     return `${d.chartData.length} points`;
   }
   return d.title;
+}
+
+function renderSimpleMarkdown(content: string): JSX.Element {
+  const blocks = content.split('\n\n').filter((b) => b.trim().length > 0);
+  return (
+    <div className="space-y-2">
+      {blocks.map((block, idx) => {
+        const trimmed = block.trim();
+        const lines = trimmed.split('\n').filter(Boolean);
+        const isList = lines.length > 0 && lines.every((line) => /^\s*[-*]\s+/.test(line));
+        const isMarkdownTable =
+          lines.length >= 2 &&
+          /^\s*\|?(.+\|)+.+\|?\s*$/.test(lines[0]) &&
+          /^\s*\|?[\s:-]+(\|[\s:-]+)+\|?\s*$/.test(lines[1]);
+
+        if (isMarkdownTable) {
+          const toCells = (line: string) =>
+            line
+              .trim()
+              .replace(/^\|/, '')
+              .replace(/\|$/, '')
+              .split('|')
+              .map((cell) => cell.trim());
+          const headers = toCells(lines[0]);
+          const rows = lines.slice(2).map(toCells);
+          return (
+            <div key={idx} className="overflow-x-auto rounded-lg border border-border bg-card/70">
+              <table className="w-full min-w-[360px] text-xs">
+                <thead>
+                  <tr>
+                    {headers.map((h, hIdx) => (
+                      <th key={hIdx} className="border-b border-border px-2 py-1.5 text-left font-semibold text-muted-foreground">
+                        {formatBoldInline(h)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, rowIdx) => (
+                    <tr key={rowIdx}>
+                      {headers.map((_, colIdx) => (
+                        <td key={colIdx} className="border-b border-border px-2 py-1.5 text-foreground/85">
+                          {formatBoldInline(row[colIdx] ?? '')}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        if (isList) {
+          return (
+            <ul key={idx} className="ml-4 list-disc space-y-1">
+              {lines.map((line, lineIdx) => (
+                <li key={lineIdx}>{formatBoldInline(line.replace(/^\s*[-*]\s+/, ''))}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        if (/^###\s+/.test(trimmed)) {
+          return (
+            <h4 key={idx} className="text-sm font-semibold text-foreground">
+              {formatBoldInline(trimmed.replace(/^###\s+/, ''))}
+            </h4>
+          );
+        }
+        if (/^##\s+/.test(trimmed)) {
+          return (
+            <h3 key={idx} className="text-sm font-semibold text-foreground">
+              {formatBoldInline(trimmed.replace(/^##\s+/, ''))}
+            </h3>
+          );
+        }
+        if (/^#\s+/.test(trimmed)) {
+          return (
+            <h2 key={idx} className="text-base font-semibold text-foreground">
+              {formatBoldInline(trimmed.replace(/^#\s+/, ''))}
+            </h2>
+          );
+        }
+
+        return (
+          <p key={idx} className="text-[13px] leading-relaxed text-foreground/90">
+            {formatBoldInline(trimmed)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatBoldInline(text: string): (string | JSX.Element)[] {
+  const parts = text.split(/\*\*(.*?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className="font-semibold text-foreground">
+        {part}
+      </strong>
+    ) : (
+      part
+    )
+  );
 }

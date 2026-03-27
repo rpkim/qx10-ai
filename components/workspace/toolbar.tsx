@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -10,9 +10,6 @@ import {
   FolderOpen,
   LayoutGrid,
   LayoutTemplate,
-  KeyRound,
-  Lock,
-  LockOpen,
   Pencil,
   Trash2,
   Upload,
@@ -92,10 +89,6 @@ export function Toolbar({
     state,
     dispatch,
     addQueryTemplateNode,
-    hasBrowserGeminiKey,
-    isBrowserGeminiUnlocked,
-    saveBrowserGeminiKey,
-    clearBrowserGeminiKey,
   } = useWorkspace();
   const { keyword, goal, viewport, dashboardNodeIds } = state;
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -112,11 +105,11 @@ export function Toolbar({
     seed: QuestionTemplate | null;
   }>({ open: false, templateId: null, seed: null });
   const [deleteTplId, setDeleteTplId] = useState<string | null>(null);
-  const [byokOpen, setByokOpen] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [passphraseInput, setPassphraseInput] = useState('');
-  const [byokBusy, setByokBusy] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryBusy, setSummaryBusy] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   useEffect(() => {
     const apply = () => setIsMobile(window.innerWidth < 768);
@@ -258,37 +251,58 @@ export function Toolbar({
   const zoomPct = Math.round(viewport.zoom * 100);
 
   const recent = listRecentWorkspaces(10);
+  const queryNodes = useMemo(() => state.nodes.filter((n) => n.type === 'query'), [state.nodes]);
+  const answerNodes = useMemo(() => state.nodes.filter((n) => n.type === 'answer'), [state.nodes]);
+  const qaPairs = useMemo(() => {
+    const queryById = new Map(
+      state.nodes
+        .filter((n) => n.type === 'query')
+        .map((n) => [n.id, n.question] as const)
+    );
+    return state.nodes
+      .filter((n): n is Extract<WorkspaceNode, { type: 'answer' }> => n.type === 'answer')
+      .map((a) => {
+        const q = queryById.get(a.queryId);
+        return q && a.content.trim()
+          ? { question: q, answer: a.content.trim() }
+          : null;
+      })
+      .filter((x): x is { question: string; answer: string } => !!x)
+      .slice(-40);
+  }, [state.nodes]);
+  const canUseSummary = queryNodes.length >= 10 && answerNodes.length >= 10;
 
-  const saveByok = async () => {
-    if (!apiKeyInput.trim() || !passphraseInput.trim()) {
-      toast.error('API key and passphrase are required.');
-      return;
-    }
-    setByokBusy(true);
+  const generateSummary = async () => {
+    if (!canUseSummary || summaryBusy) return;
+    setSummaryBusy(true);
+    setSummaryError(null);
     try {
-      await saveBrowserGeminiKey(apiKeyInput, passphraseInput);
-      setApiKeyInput('');
-      setPassphraseInput('');
-      toast.success('Gemini key encrypted and stored in this browser.');
+      const res = await fetch('/api/workspace/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword,
+          goal,
+          pairs: qaPairs,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || `Summary request failed (${res.status})`);
+      }
+      const data = (await res.json()) as { summary?: string };
+      setSummaryText((data.summary ?? '').trim() || 'No summary generated.');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to save key');
+      setSummaryError(e instanceof Error ? e.message : 'Failed to generate summary');
     } finally {
-      setByokBusy(false);
+      setSummaryBusy(false);
     }
   };
 
-  const clearByok = async () => {
-    setByokBusy(true);
-    try {
-      await clearBrowserGeminiKey();
-      setApiKeyInput('');
-      setPassphraseInput('');
-      toast.success('Stored Gemini key deleted.');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to delete key');
-    } finally {
-      setByokBusy(false);
-    }
+  const openSummary = async () => {
+    setSummaryOpen(true);
+    if (summaryText) return;
+    await generateSummary();
   };
 
   return (
@@ -341,48 +355,41 @@ export function Toolbar({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={byokOpen} onOpenChange={setByokOpen}>
-        <DialogContent className="border-border sm:max-w-md">
+      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
+        <DialogContent className="border-border sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Gemini BYOK (Browser Only)</DialogTitle>
+            <DialogTitle>Workspace Summary</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-3 py-2">
-            <div className="text-xs text-muted-foreground">
-              All workspace data stays local in your browser. Gemini key is encrypted in IndexedDB (Web Crypto).
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">Gemini API Key</span>
-              <Input
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="AIza..."
-                type="password"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">Passphrase</span>
-              <Input
-                value={passphraseInput}
-                onChange={(e) => setPassphraseInput(e.target.value)}
-                placeholder="Enter passphrase"
-                type="password"
-              />
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Stored: {hasBrowserGeminiKey ? 'Yes' : 'No'} / Unlocked: {isBrowserGeminiUnlocked ? 'Yes' : 'No'}
-            </div>
+          <div className="max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-card/50 p-4">
+            {summaryBusy && <div className="text-sm text-muted-foreground">Generating summary...</div>}
+            {!summaryBusy && summaryError && (
+              <div className="text-sm text-destructive">{summaryError}</div>
+            )}
+            {!summaryBusy && !summaryError && (
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                {summaryText || 'Summary is empty.'}
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={clearByok} disabled={byokBusy}>
-              Delete
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setSummaryText('');
+                setSummaryError(null);
+                void generateSummary();
+              }}
+              disabled={summaryBusy}
+            >
+              Regenerate
             </Button>
-            <Button type="button" onClick={saveByok} disabled={byokBusy}>
-              Save
+            <Button type="button" onClick={() => setSummaryOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {isMobile && (
         <div className="pointer-events-auto flex items-center justify-between rounded-2xl border border-border bg-card/95 px-3 py-2 backdrop-blur-sm">
           <div className="flex items-center gap-2">
@@ -400,14 +407,16 @@ export function Toolbar({
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setByokOpen(true)}
-              className="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              title="Gemini API Key (Browser Only)"
-            >
-              <KeyRound className="size-4" />
-            </button>
+            {canUseSummary && (
+              <button
+                type="button"
+                onClick={() => void openSummary()}
+                className="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                title="Summary"
+              >
+                <FileText className="size-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={onToggleDashboard}
@@ -683,6 +692,17 @@ export function Toolbar({
 
         <LanguageSwitcher />
         <ThemeToggle />
+        {canUseSummary && (
+          <button
+            type="button"
+            onClick={() => void openSummary()}
+            className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
+            title="Workspace Summary"
+          >
+            <FileText className="size-4" />
+            Summary
+          </button>
+        )}
         {!isMobile && (
           <div className="flex items-center rounded-xl border border-border bg-card/90 p-1 backdrop-blur-sm">
             <button
@@ -711,19 +731,6 @@ export function Toolbar({
             </button>
           </div>
         )}
-        <button
-          onClick={() => setByokOpen(true)}
-          className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
-          title="Gemini API Key (Browser Only)"
-        >
-          <KeyRound className="size-4" />
-          {isBrowserGeminiUnlocked ? (
-            <LockOpen className="size-3.5 text-emerald-500" />
-          ) : (
-            <Lock className="size-3.5" />
-          )}
-          BYOK
-        </button>
         {/* Dashboard toggle */}
         <button
           onClick={onToggleDashboard}
