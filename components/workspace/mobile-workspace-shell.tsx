@@ -618,6 +618,14 @@ function renderSimpleMarkdown(content: string): JSX.Element {
         const trimmed = block.trim();
         const lines = trimmed.split('\n').filter(Boolean);
         const isList = lines.length > 0 && lines.every((line) => /^\s*[-*]\s+/.test(line));
+        const isOrderedList = lines.length > 0 && lines.every((line) => /^\s*\d+\.\s+/.test(line));
+        const inlineOrderedItems =
+          !isOrderedList && /^\d+\.\s+/.test(trimmed)
+            ? trimmed
+                .split(/(?=\s*\d+\.\s+)/)
+                .map((x) => x.trim())
+                .filter((x) => /^\d+\.\s+/.test(x))
+            : [];
         const isMarkdownTable =
           lines.length >= 2 &&
           /^\s*\|?(.+\|)+.+\|?\s*$/.test(lines[0]) &&
@@ -668,6 +676,19 @@ function renderSimpleMarkdown(content: string): JSX.Element {
                 <li key={lineIdx}>{formatBoldInline(line.replace(/^\s*[-*]\s+/, ''))}</li>
               ))}
             </ul>
+          );
+        }
+
+        if (isOrderedList || inlineOrderedItems.length > 1) {
+          const items = isOrderedList
+            ? lines.map((line) => line.replace(/^\s*\d+\.\s+/, ''))
+            : inlineOrderedItems.map((line) => line.replace(/^\s*\d+\.\s+/, ''));
+          return (
+            <ol key={idx} className="ml-4 list-decimal space-y-1">
+              {items.map((item, itemIdx) => (
+                <li key={itemIdx}>{formatBoldInline(item)}</li>
+              ))}
+            </ol>
           );
         }
 
