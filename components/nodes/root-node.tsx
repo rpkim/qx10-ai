@@ -94,14 +94,10 @@ export function RootNode({ node }: Props) {
 
       <div className="flex flex-col items-center gap-2">
         <div
-          className="flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium"
+          className="rounded-full px-3 py-1 text-xs font-medium"
           style={{ background: 'rgba(0,196,154,0.15)', color: '#00C49A' }}
         >
-          <span
-            className="inline-block h-1.5 w-1.5 rounded-full"
-            style={{ background: '#00C49A' }}
-          />
-          {node.goal.toUpperCase()}
+          ROOT
         </div>
 
         <h2
