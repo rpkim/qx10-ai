@@ -8,7 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { useI18n } from '@/components/i18n-provider';
 import { workspaceUrl } from '@/lib/workspace-url';
-import { GOAL_DESC_KEYS, GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
+import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
 import { KeyRound, Lock, LockOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -27,8 +27,6 @@ import {
 import { readWorkspaceLaunch } from '@/lib/workspace-launch';
 import { removeWorkspaceFromLocalStorage } from '@/lib/workspace-snapshot';
 import { removeDashboardGrid } from '@/lib/dashboard-layout-storage';
-
-const GOAL_IDS: GoalType[] = ['learn', 'research', 'build', 'analyze', 'strategize'];
 
 const EXAMPLE_KEYWORDS = [
   'Quant Trading',
@@ -81,16 +79,6 @@ export default function LandingPage() {
     if (!launch) return;
     router.replace(workspaceUrl({ keyword: launch.keyword, goal: launch.goal }));
   }, [router]);
-
-  const featureBlocks = [
-    { icon: '⟆' as const, labelKey: 'landing.feature.canvas' as const, subKey: 'landing.feature.canvasSub' as const },
-    { icon: '⊕' as const, labelKey: 'landing.feature.tree' as const, subKey: 'landing.feature.treeSub' as const },
-    {
-      icon: '⊞' as const,
-      labelKey: 'landing.feature.dashboard' as const,
-      subKey: 'landing.feature.dashboardSub' as const,
-    },
-  ];
 
   const dateFmt = new Intl.DateTimeFormat(locale === 'zh' ? 'zh-Hans' : locale, {
     month: 'short',
@@ -177,7 +165,7 @@ export default function LandingPage() {
   };
 
   return (
-    <main className="relative flex h-screen w-screen flex-col items-center justify-center overflow-hidden bg-background">
+    <main className="relative flex h-screen w-screen flex-col items-center justify-start overflow-hidden bg-background">
       <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2">
         <button
           onClick={() => setByokOpen(true)}
@@ -271,7 +259,9 @@ export default function LandingPage() {
       <div
         className={[
           'relative z-10 flex w-full flex-col px-6',
-          isMobile ? 'h-full max-w-md justify-start gap-6 overflow-y-auto pb-8 pt-20' : 'max-w-2xl items-center gap-10',
+          isMobile
+            ? 'h-full max-w-md justify-start gap-6 overflow-y-auto pb-8 pt-20'
+            : 'max-w-2xl items-center gap-8 overflow-y-auto pb-10 pt-28',
         ].join(' ')}
       >
         {/* Logo */}
@@ -289,31 +279,6 @@ export default function LandingPage() {
             {t('landing.subLead')}
             <span className="text-foreground/70">{t('landing.subAccent')}</span>
           </p>
-        </div>
-
-        {/* Exploration mode — shapes AI answers & opening questions */}
-        <div className={isMobile ? 'flex w-full flex-col gap-2 rounded-2xl border border-border bg-card/80 p-3' : 'flex w-full flex-col gap-2'}>
-          <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            {t('landing.explorePrompt')}
-          </span>
-          <div className={isMobile ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5'}>
-            {GOAL_IDS.map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setGoal(id)}
-                className={[
-                  'flex flex-col items-center gap-0.5 rounded-xl border px-2 py-2.5 text-center text-sm transition-all duration-200',
-                  goal === id
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
-                ].join(' ')}
-              >
-                <span className="font-semibold leading-tight">{t(GOAL_LABEL_KEYS[id])}</span>
-                <span className="text-[10px] leading-snug opacity-70">{t(GOAL_DESC_KEYS[id])}</span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Keyword input */}
@@ -389,24 +354,6 @@ export default function LandingPage() {
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Feature hints */}
-        <div className={isMobile ? 'grid w-full grid-cols-1 gap-2' : 'flex w-full gap-3'}>
-          {featureBlocks.map((f) => (
-            <div
-              key={f.labelKey}
-              className="flex flex-1 flex-col gap-1 rounded-xl border border-border bg-card px-4 py-3"
-            >
-              <span className="font-mono text-lg text-primary">{f.icon}</span>
-              <span className="text-xs font-semibold text-foreground">{t(f.labelKey)}</span>
-              <span className="text-xs text-muted-foreground">{t(f.subKey)}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="w-full rounded-xl border border-border bg-card/70 px-4 py-3 text-xs text-muted-foreground">
-          All workspace data is stored locally in your browser (LocalStorage/IndexedDB).
         </div>
 
         {/* Recent workspaces */}

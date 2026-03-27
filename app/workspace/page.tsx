@@ -9,6 +9,7 @@ import { Canvas } from '@/components/workspace/canvas';
 import { Toolbar } from '@/components/workspace/toolbar';
 import { MiniMap } from '@/components/workspace/minimap';
 import { DashboardPanel } from '@/components/workspace/dashboard-panel';
+import { MobileWorkspaceShell } from '@/components/workspace/mobile-workspace-shell';
 import { registerWorkspaceVisit } from '@/lib/workspace-index';
 import { useI18n } from '@/components/i18n-provider';
 import { loadWorkspaceFromLocalStorage } from '@/lib/workspace-snapshot';
@@ -55,6 +56,7 @@ function WorkspaceInner() {
   const { initWorkspace, state, dispatch } = useWorkspace();
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardExpanded, setDashboardExpanded] = useState(false);
+  const [desktopViewMode, setDesktopViewMode] = useState<'canvas' | 'cards'>('canvas');
   const [ready, setReady] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const initialView = searchParams.get('view');
@@ -65,6 +67,19 @@ function WorkspaceInner() {
     window.addEventListener('resize', apply);
     return () => window.removeEventListener('resize', apply);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem('qx10.desktop.viewMode');
+    if (saved === 'cards' || saved === 'canvas') {
+      setDesktopViewMode(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem('qx10.desktop.viewMode', desktopViewMode);
+  }, [desktopViewMode]);
 
   useEffect(() => {
     const launch = readWorkspaceLaunch(searchParams);
@@ -151,6 +166,8 @@ function WorkspaceInner() {
   }
 
   const canvasObscured = showDashboard && dashboardExpanded;
+  const mobileMode = isMobile;
+  const useCardMode = mobileMode || desktopViewMode === 'cards';
 
   return (
     <div id="workspace-export-all-target" className="relative h-screen w-screen overflow-hidden bg-background">
@@ -168,24 +185,37 @@ function WorkspaceInner() {
           });
         }}
         showDashboard={showDashboard}
+        desktopViewMode={desktopViewMode}
+        onDesktopViewModeChange={setDesktopViewMode}
       />
 
-      <div
-        id="workspace-tree-export-target"
-        className="absolute inset-0"
-        style={{
-          right: showDashboard && !dashboardExpanded && !isMobile ? '480px' : 0,
-          opacity: canvasObscured ? 0 : 1,
-          pointerEvents: canvasObscured ? 'none' : 'auto',
-          transition: 'right 0.3s ease, opacity 0.25s ease',
-        }}
-      >
-        <Canvas />
-      </div>
+      {useCardMode ? (
+        <MobileWorkspaceShell
+          showDashboard={showDashboard}
+          onShowDashboardChange={(show) => {
+            setShowDashboard(show);
+            if (!show) setDashboardExpanded(false);
+          }}
+          isMobile={mobileMode}
+        />
+      ) : (
+        <div
+          id="workspace-tree-export-target"
+          className="absolute inset-0"
+          style={{
+            right: showDashboard && !dashboardExpanded && !isMobile ? '480px' : 0,
+            opacity: canvasObscured ? 0 : 1,
+            pointerEvents: canvasObscured ? 'none' : 'auto',
+            transition: 'right 0.3s ease, opacity 0.25s ease',
+          }}
+        >
+          <Canvas />
+        </div>
+      )}
 
-      {!canvasObscured && !isMobile && <MiniMap />}
+      {!canvasObscured && !isMobile && !useCardMode && <MiniMap />}
 
-      {showDashboard && (
+      {!mobileMode && !useCardMode && showDashboard && (
         <DashboardPanel
           onClose={() => {
             setShowDashboard(false);

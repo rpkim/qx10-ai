@@ -75,9 +75,16 @@ const NEW_WORKSPACE_GOALS: GoalType[] = ['learn', 'research', 'build', 'analyze'
 interface ToolbarProps {
   onToggleDashboard: () => void;
   showDashboard: boolean;
+  desktopViewMode: 'canvas' | 'cards';
+  onDesktopViewModeChange: (mode: 'canvas' | 'cards') => void;
 }
 
-export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
+export function Toolbar({
+  onToggleDashboard,
+  showDashboard,
+  desktopViewMode,
+  onDesktopViewModeChange,
+}: ToolbarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n();
@@ -111,6 +118,14 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [passphraseInput, setPassphraseInput] = useState('');
   const [byokBusy, setByokBusy] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const apply = () => setIsMobile(window.innerWidth < 768);
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, []);
 
   const refreshTplList = () => setTplList(loadQuestionTemplates());
 
@@ -393,8 +408,52 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
         </DialogContent>
       </Dialog>
 
+      {isMobile && (
+        <div className="pointer-events-auto flex items-center justify-between rounded-2xl border border-border bg-card/95 px-3 py-2 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              title="Home"
+            >
+              <FolderOpen className="size-4" />
+            </button>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-foreground">{keyword}</div>
+              <div className="text-xs text-muted-foreground">{t(GOAL_LABEL_KEYS[goal])}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setByokOpen(true)}
+              className="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              title="Gemini API Key (Browser Only)"
+            >
+              <KeyRound className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onToggleDashboard}
+              className={[
+                'flex size-8 items-center justify-center rounded-lg border transition-colors',
+                showDashboard
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:bg-secondary hover:text-foreground',
+              ].join(' ')}
+              title={t('toolbar.dashboard')}
+            >
+              <LayoutGrid className="size-4" />
+            </button>
+            <LanguageSwitcher />
+            <ThemeToggle />
+          </div>
+        </div>
+      )}
+
       {/* Left: Logo + keyword + node search */}
-      <div className="pointer-events-auto flex w-full max-w-[min(100%,520px)] min-w-0 flex-col gap-2 rounded-2xl border border-border bg-card/90 px-3 py-2 backdrop-blur-sm sm:px-4 sm:py-2.5">
+      <div className={["pointer-events-auto flex w-full max-w-[min(100%,520px)] min-w-0 flex-col gap-2 rounded-2xl border border-border bg-card/90 px-3 py-2 backdrop-blur-sm sm:px-4 sm:py-2.5", isMobile ? "hidden sm:flex" : ""].join(' ')}>
         <div className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:gap-3">
           <svg width="22" height="22" viewBox="0 0 36 36" fill="none">
             <rect x="2" y="6" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" />
@@ -461,7 +520,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
       </div>
 
       {/* Right: Theme + save/load + dashboard + zoom */}
-      <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2">
+      <div className={["pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2", isMobile ? "hidden sm:flex" : ""].join(' ')}>
         <input
           ref={fileInputRef}
           type="file"
@@ -635,6 +694,34 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
 
         <LanguageSwitcher />
         <ThemeToggle />
+        {!isMobile && (
+          <div className="flex items-center rounded-xl border border-border bg-card/90 p-1 backdrop-blur-sm">
+            <button
+              type="button"
+              onClick={() => onDesktopViewModeChange('canvas')}
+              className={[
+                'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                desktopViewMode === 'canvas'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              Canvas
+            </button>
+            <button
+              type="button"
+              onClick={() => onDesktopViewModeChange('cards')}
+              className={[
+                'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                desktopViewMode === 'cards'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              Cards
+            </button>
+          </div>
+        )}
         <button
           onClick={() => setByokOpen(true)}
           className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
