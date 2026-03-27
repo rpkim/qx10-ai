@@ -292,7 +292,7 @@ export default function LandingPage() {
           </span>
           <div
             className={[
-              'flex items-center gap-3 rounded-2xl border px-5 py-4 transition-all duration-200',
+              'flex min-w-0 items-center gap-3 rounded-2xl border px-5 py-4 transition-all duration-200',
               focused
                 ? 'border-primary shadow-[0_0_0_3px_rgba(0,196,154,0.12)]'
                 : 'border-border bg-card',
@@ -319,7 +319,7 @@ export default function LandingPage() {
               onBlur={() => setFocused(false)}
               onKeyDown={handleKeyDown}
               placeholder={t('landing.keywordPlaceholder')}
-              className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground/50 outline-none"
+              className="min-w-0 flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground/50 outline-none"
             />
             <button
               onClick={handleStart}
