@@ -50,10 +50,18 @@ export default function LandingPage() {
   const [byokBusy, setByokBusy] = useState(false);
   const [hasByok, setHasByok] = useState(false);
   const [byokUnlocked, setByokUnlocked] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [startAnimPhase, setStartAnimPhase] = useState(false);
 
   const handleStart = () => {
-    if (!keyword.trim()) return;
-    router.push(workspaceUrl({ keyword: keyword.trim(), goal }));
+    if (!keyword.trim() || starting) return;
+    setStarting(true);
+    setStartAnimPhase(false);
+    window.requestAnimationFrame(() => setStartAnimPhase(true));
+    const target = workspaceUrl({ keyword: keyword.trim(), goal });
+    window.setTimeout(() => {
+      router.push(target);
+    }, 520);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -166,6 +174,26 @@ export default function LandingPage() {
 
   return (
     <main className="relative flex h-screen w-screen flex-col items-center justify-start overflow-hidden bg-background">
+      {starting && (
+        <div className="pointer-events-none fixed inset-0 z-50">
+          <div
+            className={[
+              'absolute flex items-center gap-2 transition-all duration-500 ease-in-out',
+              startAnimPhase
+                ? 'left-5 top-5 translate-x-0 translate-y-0 scale-75 opacity-100'
+                : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 scale-110 opacity-95',
+            ].join(' ')}
+          >
+            <QX10Logo />
+            <span
+              className="text-3xl font-bold tracking-tight text-foreground"
+              style={{ fontFamily: 'var(--font-space-grotesk)' }}
+            >
+              Qx<span style={{ color: '#00C49A' }}>10</span>.lol
+            </span>
+          </div>
+        </div>
+      )}
       <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2">
         <button
           onClick={() => setByokOpen(true)}
@@ -258,10 +286,11 @@ export default function LandingPage() {
 
       <div
         className={[
-          'relative z-10 flex w-full flex-col px-6',
+          'relative z-10 flex w-full flex-col px-6 transition-all duration-300 ease-out',
           isMobile
             ? 'h-full max-w-md justify-start gap-6 overflow-y-auto pb-8 pt-20'
             : 'max-w-2xl items-center gap-8 overflow-y-auto pb-10 pt-28',
+          starting ? 'translate-y-2 opacity-0 blur-[1px]' : 'translate-y-0 opacity-100',
         ].join(' ')}
       >
         {/* Logo */}
@@ -323,15 +352,15 @@ export default function LandingPage() {
             />
             <button
               onClick={handleStart}
-              disabled={!keyword.trim()}
+              disabled={!keyword.trim() || starting}
               className={[
                 'flex items-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold transition-all duration-200',
-                keyword.trim()
+                keyword.trim() && !starting
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-[0_0_12px_rgba(0,196,154,0.4)]'
                   : 'cursor-not-allowed bg-muted text-muted-foreground',
               ].join(' ')}
             >
-              {t('landing.start')}
+              {starting ? 'Starting…' : t('landing.start')}
               <svg
                 width="14"
                 height="14"
