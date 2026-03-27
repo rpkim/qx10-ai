@@ -35,6 +35,9 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
   } = useWorkspace();
   const [customInputByAnswer, setCustomInputByAnswer] = useState<Record<string, string>>({});
   const [collapsedByQuery, setCollapsedByQuery] = useState<Record<string, boolean>>({});
+  const [collapsedExecutedByTemplate, setCollapsedExecutedByTemplate] = useState<
+    Record<string, boolean>
+  >({});
   const [activeTab, setActiveTab] = useState<MobileTab>('explore');
 
   const queryNodes = useMemo(
@@ -172,6 +175,52 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
                 <div className="flex flex-col gap-2">
                   {templateNodes.map((tpl) => {
                     const slots = slotNodes.filter((s) => s.templateNodeId === tpl.id);
+                    const pendingSlots = slots.filter((s) => !s.linkedQueryId);
+                    const executedSlots = slots.filter((s) => !!s.linkedQueryId);
+                    const executedCollapsed = collapsedExecutedByTemplate[tpl.id] ?? true;
+                    const renderSlot = (slot: TemplateSlotNodeData) => (
+                      <div key={slot.id} className="rounded-lg border border-border bg-card p-2">
+                        {Object.keys(slot.values).length > 0 ? (
+                          <div className="mb-1.5 grid grid-cols-1 gap-1.5">
+                            {Object.entries(slot.values).map(([key, value]) => (
+                              <input
+                                key={key}
+                                value={value}
+                                onChange={(e) =>
+                                  dispatch({
+                                    type: 'UPDATE_NODE',
+                                    id: slot.id,
+                                    updates: {
+                                      values: { ...slot.values, [key]: e.target.value },
+                                    } as Partial<WorkspaceNode>,
+                                  })
+                                }
+                                placeholder={key}
+                                className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none"
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mb-1.5 text-[11px] text-muted-foreground">No variables</div>
+                        )}
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => runTemplateSlot(slot.id)}
+                            className="rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground"
+                          >
+                            Run
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteTemplateSlotNode(slot.id)}
+                            className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
                     return (
                       <div key={tpl.id} className="rounded-xl border border-border bg-secondary/30 p-2.5">
                         <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -185,51 +234,42 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
                           </button>
                         </div>
                         <div className="mb-2 text-xs text-muted-foreground">{tpl.pattern}</div>
-                        {slots.length > 0 && (
+                        {pendingSlots.length > 0 && (
                           <div className="flex flex-col gap-1.5">
-                            {slots.map((slot) => (
-                              <div key={slot.id} className="rounded-lg border border-border bg-card p-2">
-                                {Object.keys(slot.values).length > 0 ? (
-                                  <div className="mb-1.5 grid grid-cols-1 gap-1.5">
-                                    {Object.entries(slot.values).map(([key, value]) => (
-                                      <input
-                                        key={key}
-                                        value={value}
-                                        onChange={(e) =>
-                                          dispatch({
-                                            type: 'UPDATE_NODE',
-                                            id: slot.id,
-                                            updates: {
-                                              values: { ...slot.values, [key]: e.target.value },
-                                            } as Partial<WorkspaceNode>,
-                                          })
-                                        }
-                                        placeholder={key}
-                                        className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none"
-                                      />
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="mb-1.5 text-[11px] text-muted-foreground">No variables</div>
-                                )}
-                                <div className="flex gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => runTemplateSlot(slot.id)}
-                                    className="rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground"
-                                  >
-                                    Run
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteTemplateSlotNode(slot.id)}
-                                    className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground"
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
+                            {pendingSlots.map(renderSlot)}
+                          </div>
+                        )}
+                        {executedSlots.length > 0 && (
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCollapsedExecutedByTemplate((prev) => ({
+                                  ...prev,
+                                  [tpl.id]: !prev[tpl.id],
+                                }))
+                              }
+                              className="mb-1.5 flex w-full items-center justify-between rounded-lg border border-border bg-card px-2 py-1.5 text-left text-[11px] text-muted-foreground"
+                            >
+                              <span>Executed slots ({executedSlots.length})</span>
+                              <svg
+                                width="11"
+                                height="11"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                                style={{
+                                  transform: executedCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                                  transition: 'transform 0.15s ease',
+                                }}
+                              >
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </button>
+                            {!executedCollapsed && (
+                              <div className="flex flex-col gap-1.5">{executedSlots.map(renderSlot)}</div>
+                            )}
                           </div>
                         )}
                       </div>

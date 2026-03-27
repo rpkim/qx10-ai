@@ -272,7 +272,7 @@ export default function LandingPage() {
               className="text-4xl font-bold tracking-tight text-foreground"
               style={{ fontFamily: 'var(--font-space-grotesk)' }}
             >
-              qx<span style={{ color: '#00C49A' }}>10</span>.lol
+              Qx<span style={{ color: '#00C49A' }}>10</span>.lol
             </span>
             <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
               Question x10
