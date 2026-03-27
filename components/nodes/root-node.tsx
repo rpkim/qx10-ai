@@ -12,7 +12,7 @@ interface Props {
 
 export function RootNode({ node }: Props) {
   const { t } = useI18n();
-  const { addCustomQuery } = useWorkspace();
+  const { addCustomQuery, generateBrowserSeedQueries, isBrowserGeminiUnlocked } = useWorkspace();
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
   const [seedSuggestions, setSeedSuggestions] = useState<string[]>([]);
@@ -30,17 +30,39 @@ export function RootNode({ node }: Props) {
         const qs = Array.isArray(data.questions)
           ? data.questions.map((q) => String(q).trim()).filter(Boolean)
           : [];
-        setSeedSuggestions(qs.length > 0 ? qs.slice(0, 6) : getSuggestedQueries(node.keyword).slice(0, 6));
+        const fallback = getSuggestedQueries(node.keyword).slice(0, 6);
+        const looksFallback =
+          qs.length === 0 ||
+          qs.slice(0, Math.min(qs.length, 3)).every((q, i) => q === (fallback[i] ?? ''));
+        if (!looksFallback) {
+          setSeedSuggestions(qs.slice(0, 6));
+          return;
+        }
+        if (!isBrowserGeminiUnlocked) {
+          setSeedSuggestions(fallback);
+          return;
+        }
+        void generateBrowserSeedQueries(node.keyword, node.goal).then((browserQs) => {
+          if (cancelled) return;
+          setSeedSuggestions(browserQs.length >= 3 ? browserQs : fallback);
+        });
       })
       .catch(() => {
-        if (!cancelled) {
-          setSeedSuggestions(getSuggestedQueries(node.keyword).slice(0, 6));
+        if (cancelled) return;
+        const fallback = getSuggestedQueries(node.keyword).slice(0, 6);
+        if (!isBrowserGeminiUnlocked) {
+          setSeedSuggestions(fallback);
+          return;
         }
+        void generateBrowserSeedQueries(node.keyword, node.goal).then((browserQs) => {
+          if (cancelled) return;
+          setSeedSuggestions(browserQs.length >= 3 ? browserQs : fallback);
+        });
       });
     return () => {
       cancelled = true;
     };
-  }, [node.keyword, node.goal]);
+  }, [node.keyword, node.goal, generateBrowserSeedQueries, isBrowserGeminiUnlocked]);
 
   const handleSubmitCustom = (e: React.FormEvent) => {
     e.preventDefault();

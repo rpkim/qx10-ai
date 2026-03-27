@@ -405,6 +405,12 @@ function dataNodeFromApiPayload(
 
 const MAX_FOLLOWUP_QUERY_NODES = 8;
 const DEFAULT_BROWSER_GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-2.5-flash'];
+const BROWSER_SEED_SYSTEM = `You help design a knowledge-discovery canvas. Output JSON only.
+Shape: {"questions": string[]}
+Rules:
+- Exactly 5 strings in "questions".
+- Each is one short, specific first-step question.
+- No duplicates; cover different angles.`;
 
 /** Slot values for a query spawned from a template row (for {{var}} in follow-ups). */
 function slotValuesForTemplateQuery(
@@ -781,6 +787,7 @@ interface WorkspaceContextValue {
   unlockBrowserGeminiKey: (passphrase: string) => Promise<void>;
   lockBrowserGeminiKey: () => void;
   clearBrowserGeminiKey: () => Promise<void>;
+  generateBrowserSeedQueries: (keyword: string, goal: GoalType) => Promise<string[]>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -899,6 +906,34 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const defaultChoice = aiCatalog.defaultChoice || options[0]?.id || '';
     return { defaultChoice, options };
   }, [aiCatalog, hasBrowserGeminiKey]);
+
+  const generateBrowserSeedQueries = useCallback(
+    async (keyword: string, goal: GoalType): Promise<string[]> => {
+      if (!browserGeminiKey) return [];
+      try {
+        const geminiOption = effectiveAiCatalog?.options.find((o) => o.provider === 'gemini');
+        const modelName = geminiOption?.model || 'gemini-2.0-flash';
+        const genAI = new GoogleGenerativeAI(browserGeminiKey);
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { responseMimeType: 'application/json' },
+        });
+        const user = `Topic / keyword: "${keyword}"\nExploration mode: ${goal}`;
+        const r = await model.generateContent(`${BROWSER_SEED_SYSTEM}\n\n${user}`);
+        const raw = r.response.text();
+        if (!raw?.trim()) return [];
+        const parsed = JSON.parse(raw) as { questions?: unknown };
+        if (!Array.isArray(parsed.questions)) return [];
+        return parsed.questions
+          .map((x) => (typeof x === 'string' ? x.trim() : ''))
+          .filter(Boolean)
+          .slice(0, 6);
+      } catch {
+        return [];
+      }
+    },
+    [browserGeminiKey, effectiveAiCatalog]
+  );
 
   const initWorkspace = useCallback(
     (keyword: string, goal: GoalType) => {
@@ -1474,6 +1509,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         unlockBrowserGeminiKey,
         lockBrowserGeminiKey,
         clearBrowserGeminiKey,
+        generateBrowserSeedQueries,
       }}
     >
       {children}
