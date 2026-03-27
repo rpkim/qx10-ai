@@ -16,9 +16,13 @@ export function RootNode({ node }: Props) {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
   const [seedSuggestions, setSeedSuggestions] = useState<string[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
+  const [suggestionStatus, setSuggestionStatus] = useState<'ai' | 'fallback' | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoadingSuggestions(true);
+    setSuggestionStatus(null);
     fetch('/api/workspace/seed-queries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -36,15 +40,26 @@ export function RootNode({ node }: Props) {
           qs.slice(0, Math.min(qs.length, 3)).every((q, i) => q === (fallback[i] ?? ''));
         if (!looksFallback) {
           setSeedSuggestions(qs.slice(0, 6));
+          setSuggestionStatus('ai');
+          setIsLoadingSuggestions(false);
           return;
         }
         if (!isBrowserGeminiUnlocked) {
           setSeedSuggestions(fallback);
+          setSuggestionStatus('fallback');
+          setIsLoadingSuggestions(false);
           return;
         }
         void generateBrowserSeedQueries(node.keyword, node.goal).then((browserQs) => {
           if (cancelled) return;
-          setSeedSuggestions(browserQs.length >= 3 ? browserQs : fallback);
+          if (browserQs.length >= 3) {
+            setSeedSuggestions(browserQs);
+            setSuggestionStatus('ai');
+          } else {
+            setSeedSuggestions(fallback);
+            setSuggestionStatus('fallback');
+          }
+          setIsLoadingSuggestions(false);
         });
       })
       .catch(() => {
@@ -52,11 +67,20 @@ export function RootNode({ node }: Props) {
         const fallback = getSuggestedQueries(node.keyword).slice(0, 6);
         if (!isBrowserGeminiUnlocked) {
           setSeedSuggestions(fallback);
+          setSuggestionStatus('fallback');
+          setIsLoadingSuggestions(false);
           return;
         }
         void generateBrowserSeedQueries(node.keyword, node.goal).then((browserQs) => {
           if (cancelled) return;
-          setSeedSuggestions(browserQs.length >= 3 ? browserQs : fallback);
+          if (browserQs.length >= 3) {
+            setSeedSuggestions(browserQs);
+            setSuggestionStatus('ai');
+          } else {
+            setSeedSuggestions(fallback);
+            setSuggestionStatus('fallback');
+          }
+          setIsLoadingSuggestions(false);
         });
       });
     return () => {
@@ -107,8 +131,19 @@ export function RootNode({ node }: Props) {
           {node.keyword}
         </h2>
 
-        {seedSuggestions.length > 0 && (
+        {(isLoadingSuggestions || seedSuggestions.length > 0) && (
           <div className="mt-1 flex w-full flex-col gap-1.5 rounded-xl border border-border bg-card/70 p-2">
+            {isLoadingSuggestions && (
+              <div className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5 text-xs text-muted-foreground">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/35 border-t-primary" />
+                <span>AI가 추천 질문을 생성 중...</span>
+              </div>
+            )}
+            {!isLoadingSuggestions && suggestionStatus === 'fallback' && (
+              <div className="rounded-lg border border-border px-2 py-1 text-[11px] text-muted-foreground">
+                추천 생성이 지연되어 기본 질문을 표시 중입니다.
+              </div>
+            )}
             {seedSuggestions.map((q) => (
               <button
                 key={q}

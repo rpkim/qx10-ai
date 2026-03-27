@@ -47,6 +47,7 @@ export default function LandingPage() {
   const [byokUnlocked, setByokUnlocked] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startAnimPhase, setStartAnimPhase] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const handleStart = () => {
     if (!keyword.trim() || starting) return;
@@ -75,6 +76,10 @@ export default function LandingPage() {
     apply();
     window.addEventListener('resize', apply);
     return () => window.removeEventListener('resize', apply);
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -380,7 +385,11 @@ export default function LandingPage() {
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
                           {t(GOAL_LABEL_KEYS[entry.goal])}
                         </span>
-                        <span>{t('landing.lastUpdated', { date: dateFmt.format(new Date(entry.updatedAt)) })}</span>
+                        <span suppressHydrationWarning>
+                          {mounted
+                            ? t('landing.lastUpdated', { date: dateFmt.format(new Date(entry.updatedAt)) })
+                            : ''}
+                        </span>
                       </div>
                     </button>
                     <div className="ml-2 flex shrink-0 items-center gap-1.5">
