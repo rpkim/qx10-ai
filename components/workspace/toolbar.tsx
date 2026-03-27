@@ -95,8 +95,6 @@ export function Toolbar({
     hasBrowserGeminiKey,
     isBrowserGeminiUnlocked,
     saveBrowserGeminiKey,
-    unlockBrowserGeminiKey,
-    lockBrowserGeminiKey,
     clearBrowserGeminiKey,
   } = useWorkspace();
   const { keyword, goal, viewport, dashboardNodeIds } = state;
@@ -279,23 +277,6 @@ export function Toolbar({
     }
   };
 
-  const unlockByok = async () => {
-    if (!passphraseInput.trim()) {
-      toast.error('Passphrase is required.');
-      return;
-    }
-    setByokBusy(true);
-    try {
-      await unlockBrowserGeminiKey(passphraseInput);
-      setPassphraseInput('');
-      toast.success('Gemini key unlocked in memory.');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to unlock key');
-    } finally {
-      setByokBusy(false);
-    }
-  };
-
   const clearByok = async () => {
     setByokBusy(true);
     try {
@@ -392,12 +373,6 @@ export function Toolbar({
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={unlockByok} disabled={byokBusy}>
-              Unlock
-            </Button>
-            <Button type="button" variant="outline" onClick={lockBrowserGeminiKey} disabled={byokBusy}>
-              Lock
-            </Button>
             <Button type="button" variant="outline" onClick={clearByok} disabled={byokBusy}>
               Delete
             </Button>
