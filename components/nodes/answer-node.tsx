@@ -121,6 +121,7 @@ export function AnswerNode({ node }: Props) {
       <div
         className="max-h-52 overflow-y-auto pr-1 select-text"
         data-node-scroll="true"
+        data-node-interactive="true"
         style={{
           scrollbarWidth: 'thin',
           touchAction: 'pan-y',
@@ -130,7 +131,6 @@ export function AnswerNode({ node }: Props) {
         }}
         onMouseDown={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
-        onWheel={(e) => e.stopPropagation()}
       >
         {formattedText}
         {isStreaming && (

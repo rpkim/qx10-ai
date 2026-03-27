@@ -320,7 +320,7 @@ export function Canvas() {
     <div
       id="workspace-canvas"
       ref={canvasRef}
-      className="absolute inset-0 overflow-hidden select-none"
+      className="absolute inset-0 overflow-hidden"
       style={{ cursor: cursorStyle, background: 'var(--background)' }}
       onMouseDown={handleMouseDown}
       onTouchStart={(e) => {
@@ -448,6 +448,10 @@ function NodeRenderer({
   isCollapsed: boolean;
 }) {
   const handleMouseDown = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button,input,textarea,select,a,[contenteditable="true"],[data-node-interactive="true"]')) {
+      return;
+    }
     if (e.button === 0) {
       onDragStart(node.id, node.position, e);
     }
@@ -458,7 +462,7 @@ function NodeRenderer({
     left: node.position.x,
     top: node.position.y,
     width: node.width ?? (node.type === 'data' ? 320 : 280),
-    userSelect: 'none',
+    userSelect: 'auto',
   };
 
   const wrapperClass = [
@@ -475,6 +479,10 @@ function NodeRenderer({
       onMouseDown={handleMouseDown}
       onTouchStart={(e) => {
         if (e.touches.length !== 1) return;
+        const target = e.target as HTMLElement;
+        if (target.closest('button,input,textarea,select,a,[contenteditable="true"],[data-node-interactive="true"]')) {
+          return;
+        }
         const touch = e.touches[0];
         onTouchDragStart(node.id, node.position, touch);
         e.preventDefault();
