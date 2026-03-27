@@ -9,6 +9,16 @@ import { LanguageSwitcher } from '@/components/language-switcher';
 import { useI18n } from '@/components/i18n-provider';
 import { workspaceUrl } from '@/lib/workspace-url';
 import { GOAL_DESC_KEYS, GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
+import { KeyRound, Lock, LockOpen } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+  clearGeminiKeyEncrypted,
+  hasEncryptedGeminiKey,
+  loadGeminiKeyEncrypted,
+  saveGeminiKeyEncrypted,
+} from '@/lib/byok-gemini';
 import {
   listRecentWorkspaces,
   removeWorkspaceVisit,
@@ -35,6 +45,13 @@ export default function LandingPage() {
   const [goal, setGoal] = useState<GoalType>('learn');
   const [focused, setFocused] = useState(false);
   const [recent, setRecent] = useState<WorkspaceIndexEntry[]>([]);
+  const [isMobile, setIsMobile] = useState(false);
+  const [byokOpen, setByokOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [passphraseInput, setPassphraseInput] = useState('');
+  const [byokBusy, setByokBusy] = useState(false);
+  const [hasByok, setHasByok] = useState(false);
+  const [byokUnlocked, setByokUnlocked] = useState(false);
 
   const handleStart = () => {
     if (!keyword.trim()) return;
@@ -47,6 +64,16 @@ export default function LandingPage() {
 
   useEffect(() => {
     setRecent(listRecentWorkspaces(6));
+    hasEncryptedGeminiKey()
+      .then((v) => setHasByok(v))
+      .catch(() => setHasByok(false));
+  }, []);
+
+  useEffect(() => {
+    const apply = () => setIsMobile(window.innerWidth < 768);
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
   }, []);
 
   useEffect(() => {
@@ -95,12 +122,131 @@ export default function LandingPage() {
     toast.success(t('landing.deleteWorkspaceDone'));
   };
 
+  const saveByok = async () => {
+    if (!apiKeyInput.trim() || !passphraseInput.trim()) {
+      toast.error('API key and passphrase are required.');
+      return;
+    }
+    setByokBusy(true);
+    try {
+      await saveGeminiKeyEncrypted(apiKeyInput, passphraseInput);
+      setHasByok(true);
+      setByokUnlocked(true);
+      setApiKeyInput('');
+      setPassphraseInput('');
+      toast.success('Gemini key encrypted and stored in this browser.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save key');
+    } finally {
+      setByokBusy(false);
+    }
+  };
+
+  const unlockByok = async () => {
+    if (!passphraseInput.trim()) {
+      toast.error('Passphrase is required.');
+      return;
+    }
+    setByokBusy(true);
+    try {
+      await loadGeminiKeyEncrypted(passphraseInput);
+      setByokUnlocked(true);
+      setPassphraseInput('');
+      toast.success('Gemini key verified and unlock-ready.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to unlock key');
+    } finally {
+      setByokBusy(false);
+    }
+  };
+
+  const clearByok = async () => {
+    setByokBusy(true);
+    try {
+      await clearGeminiKeyEncrypted();
+      setHasByok(false);
+      setByokUnlocked(false);
+      setApiKeyInput('');
+      setPassphraseInput('');
+      toast.success('Stored Gemini key deleted.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete key');
+    } finally {
+      setByokBusy(false);
+    }
+  };
+
   return (
     <main className="relative flex h-screen w-screen flex-col items-center justify-center overflow-hidden bg-background">
       <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2">
+        <button
+          onClick={() => setByokOpen(true)}
+          className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
+          title="Gemini API Key (Browser Only)"
+        >
+          <KeyRound className="size-4" />
+          {byokUnlocked ? (
+            <LockOpen className="size-3.5 text-emerald-500" />
+          ) : (
+            <Lock className="size-3.5" />
+          )}
+          BYOK
+        </button>
         <LanguageSwitcher />
         <ThemeToggle />
       </div>
+      <Dialog open={byokOpen} onOpenChange={setByokOpen}>
+        <DialogContent className="border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gemini BYOK (Browser Only)</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div className="text-xs text-muted-foreground">
+              All data stays local in your browser. Gemini key is encrypted in IndexedDB (Web Crypto).
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Gemini API Key</span>
+              <Input
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="AIza..."
+                type="password"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Passphrase</span>
+              <Input
+                value={passphraseInput}
+                onChange={(e) => setPassphraseInput(e.target.value)}
+                placeholder="Enter passphrase"
+                type="password"
+              />
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Stored: {hasByok ? 'Yes' : 'No'} / Unlocked: {byokUnlocked ? 'Yes' : 'No'}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={unlockByok} disabled={byokBusy}>
+              Unlock
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setByokUnlocked(false)}
+              disabled={byokBusy}
+            >
+              Lock
+            </Button>
+            <Button type="button" variant="outline" onClick={clearByok} disabled={byokBusy}>
+              Delete
+            </Button>
+            <Button type="button" onClick={saveByok} disabled={byokBusy}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* Grid background */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.035]"
@@ -122,9 +268,14 @@ export default function LandingPage() {
         }}
       />
 
-      <div className="relative z-10 flex w-full max-w-2xl flex-col items-center gap-10 px-6">
+      <div
+        className={[
+          'relative z-10 flex w-full flex-col px-6',
+          isMobile ? 'h-full max-w-md justify-start gap-6 overflow-y-auto pb-8 pt-20' : 'max-w-2xl items-center gap-10',
+        ].join(' ')}
+      >
         {/* Logo */}
-        <div className="flex flex-col items-center gap-3">
+        <div className={isMobile ? 'flex flex-col gap-2' : 'flex flex-col items-center gap-3'}>
           <div className="flex items-center gap-2">
             <QX10Logo />
             <span
@@ -134,18 +285,18 @@ export default function LandingPage() {
               qx<span style={{ color: '#00C49A' }}>10</span>.lol
             </span>
           </div>
-          <p className="text-center text-base leading-relaxed text-muted-foreground">
+          <p className={[isMobile ? 'text-left' : 'text-center', 'text-base leading-relaxed text-muted-foreground'].join(' ')}>
             {t('landing.subLead')}
             <span className="text-foreground/70">{t('landing.subAccent')}</span>
           </p>
         </div>
 
         {/* Exploration mode — shapes AI answers & opening questions */}
-        <div className="flex w-full flex-col gap-2">
+        <div className={isMobile ? 'flex w-full flex-col gap-2 rounded-2xl border border-border bg-card/80 p-3' : 'flex w-full flex-col gap-2'}>
           <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             {t('landing.explorePrompt')}
           </span>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <div className={isMobile ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5'}>
             {GOAL_IDS.map((id) => (
               <button
                 key={id}
@@ -166,7 +317,7 @@ export default function LandingPage() {
         </div>
 
         {/* Keyword input */}
-        <div className="flex w-full flex-col gap-3">
+        <div className={isMobile ? 'flex w-full flex-col gap-3 rounded-2xl border border-border bg-card/80 p-3' : 'flex w-full flex-col gap-3'}>
           <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             {t('landing.keywordPrompt')}
           </span>
@@ -241,7 +392,7 @@ export default function LandingPage() {
         </div>
 
         {/* Feature hints */}
-        <div className="flex w-full gap-3">
+        <div className={isMobile ? 'grid w-full grid-cols-1 gap-2' : 'flex w-full gap-3'}>
           {featureBlocks.map((f) => (
             <div
               key={f.labelKey}
@@ -252,6 +403,10 @@ export default function LandingPage() {
               <span className="text-xs text-muted-foreground">{t(f.subKey)}</span>
             </div>
           ))}
+        </div>
+
+        <div className="w-full rounded-xl border border-border bg-card/70 px-4 py-3 text-xs text-muted-foreground">
+          All workspace data is stored locally in your browser (LocalStorage/IndexedDB).
         </div>
 
         {/* Recent workspaces */}

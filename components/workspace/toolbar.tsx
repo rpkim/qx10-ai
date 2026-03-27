@@ -10,6 +10,9 @@ import {
   FolderOpen,
   LayoutGrid,
   LayoutTemplate,
+  KeyRound,
+  Lock,
+  LockOpen,
   Pencil,
   Trash2,
   Upload,
@@ -78,7 +81,17 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n();
-  const { state, dispatch, addQueryTemplateNode } = useWorkspace();
+  const {
+    state,
+    dispatch,
+    addQueryTemplateNode,
+    hasBrowserGeminiKey,
+    isBrowserGeminiUnlocked,
+    saveBrowserGeminiKey,
+    unlockBrowserGeminiKey,
+    lockBrowserGeminiKey,
+    clearBrowserGeminiKey,
+  } = useWorkspace();
   const { keyword, goal, viewport, dashboardNodeIds } = state;
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const pendingSnapshotRef = useRef<WorkspaceState | null>(null);
@@ -94,6 +107,10 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
     seed: QuestionTemplate | null;
   }>({ open: false, templateId: null, seed: null });
   const [deleteTplId, setDeleteTplId] = useState<string | null>(null);
+  const [byokOpen, setByokOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [passphraseInput, setPassphraseInput] = useState('');
+  const [byokBusy, setByokBusy] = useState(false);
 
   const refreshTplList = () => setTplList(loadQuestionTemplates());
 
@@ -229,6 +246,55 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
 
   const recent = listRecentWorkspaces(10);
 
+  const saveByok = async () => {
+    if (!apiKeyInput.trim() || !passphraseInput.trim()) {
+      toast.error('API key and passphrase are required.');
+      return;
+    }
+    setByokBusy(true);
+    try {
+      await saveBrowserGeminiKey(apiKeyInput, passphraseInput);
+      setApiKeyInput('');
+      setPassphraseInput('');
+      toast.success('Gemini key encrypted and stored in this browser.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save key');
+    } finally {
+      setByokBusy(false);
+    }
+  };
+
+  const unlockByok = async () => {
+    if (!passphraseInput.trim()) {
+      toast.error('Passphrase is required.');
+      return;
+    }
+    setByokBusy(true);
+    try {
+      await unlockBrowserGeminiKey(passphraseInput);
+      setPassphraseInput('');
+      toast.success('Gemini key unlocked in memory.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to unlock key');
+    } finally {
+      setByokBusy(false);
+    }
+  };
+
+  const clearByok = async () => {
+    setByokBusy(true);
+    try {
+      await clearBrowserGeminiKey();
+      setApiKeyInput('');
+      setPassphraseInput('');
+      toast.success('Stored Gemini key deleted.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete key');
+    } finally {
+      setByokBusy(false);
+    }
+  };
+
   return (
     <header className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex flex-col items-stretch justify-between gap-2 p-2 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
       <Dialog open={newWorkspaceOpen} onOpenChange={setNewWorkspaceOpen}>
@@ -275,6 +341,53 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
             </Button>
             <Button type="button" onClick={confirmNewWorkspace}>
               {t('toolbar.openWorkspace')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={byokOpen} onOpenChange={setByokOpen}>
+        <DialogContent className="border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gemini BYOK (Browser Only)</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div className="text-xs text-muted-foreground">
+              All workspace data stays local in your browser. Gemini key is encrypted in IndexedDB (Web Crypto).
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Gemini API Key</span>
+              <Input
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="AIza..."
+                type="password"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Passphrase</span>
+              <Input
+                value={passphraseInput}
+                onChange={(e) => setPassphraseInput(e.target.value)}
+                placeholder="Enter passphrase"
+                type="password"
+              />
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Stored: {hasBrowserGeminiKey ? 'Yes' : 'No'} / Unlocked: {isBrowserGeminiUnlocked ? 'Yes' : 'No'}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={unlockByok} disabled={byokBusy}>
+              Unlock
+            </Button>
+            <Button type="button" variant="outline" onClick={lockBrowserGeminiKey} disabled={byokBusy}>
+              Lock
+            </Button>
+            <Button type="button" variant="outline" onClick={clearByok} disabled={byokBusy}>
+              Delete
+            </Button>
+            <Button type="button" onClick={saveByok} disabled={byokBusy}>
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -522,6 +635,19 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
 
         <LanguageSwitcher />
         <ThemeToggle />
+        <button
+          onClick={() => setByokOpen(true)}
+          className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
+          title="Gemini API Key (Browser Only)"
+        >
+          <KeyRound className="size-4" />
+          {isBrowserGeminiUnlocked ? (
+            <LockOpen className="size-3.5 text-emerald-500" />
+          ) : (
+            <Lock className="size-3.5" />
+          )}
+          BYOK
+        </button>
         {/* Dashboard toggle */}
         <button
           onClick={onToggleDashboard}
@@ -572,7 +698,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
               <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /><line x1="8" y1="11" x2="14" y2="11" />
             </svg>
           </button>
-          <span className="min-w-[3rem] text-center text-xs font-mono text-muted-foreground">
+          <span className="min-w-12 text-center text-xs font-mono text-muted-foreground">
             {zoomPct}%
           </span>
           <button
