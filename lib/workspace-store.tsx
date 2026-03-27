@@ -768,7 +768,7 @@ interface WorkspaceContextValue {
     modelChoice?: string,
     toolChoice?: QueryToolChoice,
     autoRun?: boolean
-  ) => void;
+  ) => string;
   addQueryTemplateNode: (args: {
     displayName: string;
     pattern: string;
@@ -1434,7 +1434,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       modelChoice?: string,
       toolChoice?: QueryToolChoice,
       autoRun = false
-    ) => {
+    ): string => {
       const parent = nodesRef.current.find((n) => n.id === parentId);
       let dy = 160;
       if (parent?.type === 'answer') {
@@ -1476,6 +1476,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         };
         window.setTimeout(() => tryRun(0), 0);
       }
+      return customQId;
     },
     [runQuery]
   );
