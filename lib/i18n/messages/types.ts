@@ -198,6 +198,7 @@ export type MessageKey =
   | 'introduce.cta'
   | 'introduce.viewCanvas'
   | 'introduce.viewCards'
+  | 'introduce.demoWorkspaceHint'
   | 'introduce.demoLoadError'
   | 'introduce.home'
   | 'goals.learn'

@@ -182,6 +182,9 @@ function IntroduceChrome({ initialState }: { initialState: WorkspaceState }) {
       </section>
 
       <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 px-4 pb-12 sm:px-8">
+        <p className="mx-auto max-w-2xl text-pretty text-center text-sm leading-relaxed text-slate-600 dark:text-muted-foreground sm:text-[15px]">
+          {t('introduce.demoWorkspaceHint')}
+        </p>
         <div className="flex justify-center">
           <div className="inline-flex items-center rounded-xl border border-slate-200/90 bg-card/90 p-1 shadow-sm dark:border-border">
             <button
