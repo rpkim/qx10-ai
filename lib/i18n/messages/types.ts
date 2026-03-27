@@ -165,6 +165,8 @@ export type MessageKey =
   | 'templates.slotFillRequired'
   | 'templates.slotNodeBadge'
   | 'templates.slotOrphaned'
+  | 'nodes.seedGenerating'
+  | 'nodes.seedFallbackNotice'
   | 'nodes.generating'
   | 'nodes.answer'
   | 'nodes.pinAction'

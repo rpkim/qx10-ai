@@ -788,16 +788,44 @@ interface WorkspaceContextValue {
   lockBrowserGeminiKey: () => void;
   clearBrowserGeminiKey: () => Promise<void>;
   generateBrowserSeedQueries: (keyword: string, goal: GoalType) => Promise<string[]>;
+  isDemoMode: boolean;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
-export function WorkspaceProvider({ children }: { children: ReactNode }) {
+interface DemoResponse {
+  content: string;
+  extractedKeywords?: string[];
+  suggestedQueries?: string[];
+  dataNode?: Record<string, unknown> | null;
+}
+
+function normalizeDemoKey(input: string): string {
+  return input.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+export function WorkspaceProvider({
+  children,
+  demoResponses,
+}: {
+  children: ReactNode;
+  demoResponses?: Record<string, DemoResponse>;
+}) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [aiCatalog, setAiCatalog] = React.useState<AiModelCatalog | null>(null);
   const [browserGeminiKey, setBrowserGeminiKey] = React.useState<string | null>(null);
   const [hasBrowserGeminiKey, setHasBrowserGeminiKey] = React.useState(false);
   const autosaveTimerRef = React.useRef<number | null>(null);
+  const demoResponsesRef = React.useRef<Record<string, DemoResponse>>({});
+
+  React.useEffect(() => {
+    const next = demoResponses ?? {};
+    const normalized: Record<string, DemoResponse> = {};
+    for (const [k, v] of Object.entries(next)) {
+      normalized[normalizeDemoKey(k)] = v;
+    }
+    demoResponsesRef.current = normalized;
+  }, [demoResponses]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1036,6 +1064,66 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }, 28);
       }, 400);
     };
+
+    const runDemoFlow = (demo: DemoResponse) => {
+      setTimeout(() => {
+        dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'complete' } });
+
+        const answerNode: AnswerNodeData = {
+          id: answerId,
+          type: 'answer',
+          queryId,
+          parentId: queryId,
+          position: answerPos,
+          status: 'streaming',
+          content: demo.content,
+          streamedChars: 0,
+          extractedKeywords: demo.extractedKeywords ?? [],
+          suggestedQueries: demo.suggestedQueries ?? [],
+          width: 320,
+          height: CANVAS_ANSWER_LAYOUT_HEIGHT,
+        };
+        dispatch({ type: 'ADD_NODE', node: answerNode });
+        dispatch({
+          type: 'ADD_EDGE',
+          edge: { id: `e-${queryId}-${answerId}`, sourceId: queryId, targetId: answerId },
+        });
+
+        const totalChars = demo.content.length;
+        const chunkSize = 18;
+        let streamed = 0;
+        const interval = setInterval(() => {
+          streamed = Math.min(streamed + chunkSize, totalChars);
+          dispatch({
+            type: 'UPDATE_NODE',
+            id: answerId,
+            updates: { streamedChars: streamed },
+          });
+          if (streamed >= totalChars) {
+            clearInterval(interval);
+            dispatch({ type: 'UPDATE_NODE', id: answerId, updates: { status: 'complete' } });
+            attachAnswerChildren(dispatch, {
+              answerId,
+              answerPos,
+              dataId,
+              dataPayload: demo.dataNode ?? null,
+            });
+          }
+        }, 22);
+      }, 280);
+    };
+
+    const normalizedQuestion = normalizeDemoKey(queryNode.question);
+    const demo = demoResponsesRef.current[normalizedQuestion];
+    const hasDemoMode = Object.keys(demoResponsesRef.current).length > 0;
+    if (demo) {
+      runDemoFlow(demo);
+      return;
+    }
+    if (hasDemoMode) {
+      runMockFlow(getMockResponse(queryNode.question));
+      return;
+    }
 
     const runLiveAi = async () => {
       const modelId =
@@ -1489,6 +1577,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'DELETE_NODE', id: nodeId });
   }, []);
 
+  const isDemoMode = Object.keys(demoResponsesRef.current).length > 0;
+
   return (
     <WorkspaceContext.Provider
       value={{
@@ -1511,6 +1601,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         lockBrowserGeminiKey,
         clearBrowserGeminiKey,
         generateBrowserSeedQueries,
+        isDemoMode,
       }}
     >
       {children}

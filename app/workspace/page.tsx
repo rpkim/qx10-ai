@@ -55,7 +55,7 @@ function WorkspaceInner() {
   const { initWorkspace, state, dispatch } = useWorkspace();
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardExpanded, setDashboardExpanded] = useState(false);
-  const [desktopViewMode, setDesktopViewMode] = useState<'canvas' | 'cards'>('canvas');
+  const [desktopViewMode, setDesktopViewMode] = useState<'canvas' | 'cards'>('cards');
   const [ready, setReady] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const initialView = searchParams.get('view');

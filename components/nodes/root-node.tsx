@@ -46,7 +46,7 @@ interface Props {
 
 export function RootNode({ node }: Props) {
   const { t } = useI18n();
-  const { addCustomQuery, generateBrowserSeedQueries, isBrowserGeminiUnlocked } = useWorkspace();
+  const { addCustomQuery, generateBrowserSeedQueries, isBrowserGeminiUnlocked, isDemoMode } = useWorkspace();
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
   const [seedSuggestions, setSeedSuggestions] = useState<string[]>([]);
@@ -209,36 +209,50 @@ export function RootNode({ node }: Props) {
             {isLoadingSuggestions && (
               <div className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5 text-xs text-muted-foreground">
                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/35 border-t-primary" />
-                <span>AI가 추천 질문을 생성 중...</span>
+                <span>{t('nodes.seedGenerating')}</span>
               </div>
             )}
             {!isLoadingSuggestions && suggestionStatus === 'fallback' && (
               <div className="rounded-lg border border-border px-2 py-1 text-[11px] text-muted-foreground">
-                추천 생성이 지연되어 기본 질문을 표시 중입니다.
+                {t('nodes.seedFallbackNotice')}
               </div>
             )}
-            {seedSuggestions.map((q) => (
+            {seedSuggestions.map((q, idx) => {
+              const clickable = !isDemoMode || idx === 0;
+              return (
               <button
                 key={q}
                 type="button"
-                onClick={() => addCustomQuery(q, node.id, node.position, undefined, 'auto', true)}
-                className="rounded-lg border border-border px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                onClick={() => {
+                  if (!clickable) return;
+                  addCustomQuery(q, node.id, node.position, undefined, 'auto', true);
+                }}
+                disabled={!clickable}
+                className={[
+                  'rounded-lg border px-2 py-1.5 text-left text-xs transition-colors',
+                  clickable
+                    ? 'border-primary/50 text-foreground shadow-[0_0_12px_rgba(0,196,154,0.25)] hover:bg-secondary'
+                    : 'border-border text-muted-foreground opacity-45',
+                ].join(' ')}
                 title="Run suggested query"
               >
                 + {q}
               </button>
-            ))}
+            );
+            })}
           </div>
         )}
 
-        <button
-          onClick={() => setShowCustomInput((v) => !v)}
-          className="rounded-xl px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-        >
-          {t('nodes.addCustom')}
-        </button>
+        {!isDemoMode && (
+          <button
+            onClick={() => setShowCustomInput((v) => !v)}
+            className="rounded-xl px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            {t('nodes.addCustom')}
+          </button>
+        )}
 
-        {showCustomInput && (
+        {!isDemoMode && showCustomInput && (
           <form onSubmit={handleSubmitCustom} className="mt-0.5 flex w-full gap-2">
             <input
               autoFocus

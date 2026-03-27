@@ -171,6 +171,8 @@ export const zh: Messages = {
   'templates.slotFillRequired': '请填写所有变量。',
   'templates.slotNodeBadge': '模板槽位',
   'templates.slotOrphaned': '缺少模板 — 请删除此槽位。',
+  'nodes.seedGenerating': 'AI 正在生成推荐问题...',
+  'nodes.seedFallbackNotice': '推荐生成较慢，正在显示默认问题。',
   'nodes.generating': '生成中…',
   'nodes.answer': '回答',
   'nodes.pinAction': '固定',

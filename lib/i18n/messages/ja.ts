@@ -174,6 +174,8 @@ export const ja: Messages = {
   'templates.slotFillRequired': 'すべての変数を入力してください。',
   'templates.slotNodeBadge': 'テンプレートスロット',
   'templates.slotOrphaned': 'テンプレートがありません — このスロットを削除してください。',
+  'nodes.seedGenerating': 'AI が候補質問を生成中...',
+  'nodes.seedFallbackNotice': '生成が遅延しているため、既定の質問を表示しています。',
   'nodes.generating': '生成中…',
   'nodes.answer': '回答',
   'nodes.pinAction': 'ピン',
