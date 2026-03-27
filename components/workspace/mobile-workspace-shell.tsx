@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   AnswerNodeData,
   DataNodeData,
@@ -10,7 +10,12 @@ import type {
   TemplateSlotNodeData,
   WorkspaceNode,
 } from '@/lib/types';
-import { useWorkspace } from '@/lib/workspace-store';
+import { FOCUS_QUERY_NODE_EVENT, useWorkspace } from '@/lib/workspace-store';
+import {
+  findQueryIdByParentAndQuestion,
+  listChildQueriesOrdered,
+  useIntroduceReveal,
+} from '@/lib/introduce-reveal-context';
 import { useI18n } from '@/components/i18n-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RootNode } from '@/components/nodes/root-node';
@@ -18,9 +23,11 @@ import { RootNode } from '@/components/nodes/root-node';
 interface Props {
   showDashboard: boolean;
   isMobile: boolean;
+  /** When true, omit top offset meant for the workspace toolbar (embedded landing / intro layouts). */
+  embedded?: boolean;
 }
 
-export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
+export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false }: Props) {
   const { t } = useI18n();
   const {
     state,
@@ -136,6 +143,14 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
     [orderedQueryNodes, queryHierarchy.parentById, collapsedByQuery]
   );
 
+  const introduceReveal = useIntroduceReveal();
+  const cardQueryRows = useMemo(() => {
+    if (!introduceReveal) return visibleOrderedQueryNodes;
+    return visibleOrderedQueryNodes.filter((q) =>
+      introduceReveal.isQueryCardVisible(q.id, queryHierarchy.parentById)
+    );
+  }, [introduceReveal, visibleOrderedQueryNodes, queryHierarchy.parentById]);
+
   const dataByAnswer = useMemo(() => {
     const map = new Map<string, DataNodeData>();
     for (const n of state.nodes) {
@@ -153,25 +168,38 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
     const id = q.modelChoice ?? aiCatalog?.defaultChoice ?? '';
     return aiCatalog?.options.find((o) => o.id === id)?.label ?? (id || 'Default');
   };
-  const scrollToQueryCard = (queryId: string) => {
+  const scrollToQueryCard = useCallback((queryId: string, delayMs = 40) => {
     const selector = `[data-mobile-query-card-id="${queryId}"]`;
     const tryScroll = (attempt = 0) => {
       const el = document.querySelector(selector) as HTMLElement | null;
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         return;
       }
       if (attempt >= 10) return;
       window.setTimeout(() => tryScroll(attempt + 1), 80);
     };
-    window.setTimeout(() => tryScroll(0), 40);
-  };
+    window.setTimeout(() => tryScroll(0), delayMs);
+  }, []);
+
+  useEffect(() => {
+    const onFocusQuery = (e: Event) => {
+      const id = (e as CustomEvent<{ queryId?: string }>).detail?.queryId;
+      if (id) scrollToQueryCard(id);
+    };
+    window.addEventListener(FOCUS_QUERY_NODE_EVENT, onFocusQuery as EventListener);
+    return () => window.removeEventListener(FOCUS_QUERY_NODE_EVENT, onFocusQuery as EventListener);
+  }, [scrollToQueryCard]);
 
   return (
     <div
       className={[
         'absolute inset-0 overflow-y-auto bg-background',
-        isMobile ? 'top-16 pb-24' : 'top-20 pb-6',
+        embedded
+          ? 'top-0 pb-8 pt-1'
+          : isMobile
+            ? 'top-16 pb-24'
+            : 'top-20 pb-6',
       ].join(' ')}
     >
       <div
@@ -186,6 +214,11 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
               <div className="mb-1 flex justify-center">
                 <RootNode node={rootNode} />
               </div>
+            )}
+            {introduceReveal && orderedQueryNodes.length > 0 && cardQueryRows.length === 0 && (
+              <p className="px-1 text-center text-xs text-muted-foreground">
+                Tap a suggestion on ROOT to reveal a question card.
+              </p>
             )}
             {templateNodes.length > 0 && (
               <div className="mb-1 rounded-2xl border border-border bg-card p-3">
@@ -301,8 +334,9 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
                 No query yet. Add one from a suggestion and run it.
               </div>
             ) : (
-              visibleOrderedQueryNodes.map((q) => {
+              cardQueryRows.map((q) => {
                 const a = answerByQuery.get(q.id);
+                const answerFollowUpChildren = a ? listChildQueriesOrdered(state.nodes, a.id) : [];
                 const d = a ? dataByAnswer.get(a.id) : null;
                 const isRunning = q.status === 'running';
                 const canRun = !isRunning;
@@ -437,30 +471,64 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
                                 WebkitUserSelect: 'text',
                               }}
                             >
-                              {renderSimpleMarkdown(a.content || '...')}
+                              {a.status === 'streaming' && !(a.content || '').trim() ? (
+                                <div className="flex items-center gap-2 py-6 text-muted-foreground">
+                                  <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-primary/40 border-t-primary" />
+                                  <span className="text-xs font-medium">Running…</span>
+                                </div>
+                              ) : (
+                                renderSimpleMarkdown(a.content || '...')
+                              )}
                             </div>
-                            {a.suggestedQueries.length > 0 && (
+                            {a.suggestedQueries.length > 0 && a.status === 'complete' && (
                               <div className="mt-2 flex flex-col gap-1.5">
-                                {a.suggestedQueries.slice(0, 2).map((sq) => (
-                                  <button
-                                    key={sq}
-                                    type="button"
-                                    onClick={() => {
-                                      const newId = addCustomQuery(
-                                        sq,
-                                        a.id,
-                                        a.position,
-                                        q.modelChoice ?? aiCatalog?.defaultChoice,
-                                        q.toolChoice ?? 'auto',
-                                        true
-                                      );
-                                      scrollToQueryCard(newId);
-                                    }}
-                                    className="rounded-lg border border-border px-2 py-1 text-left text-[12px] text-muted-foreground"
-                                  >
-                                    + {sq}
-                                  </button>
-                                ))}
+                                {a.suggestedQueries.slice(0, 2).map((sq, sqIdx) => {
+                                  const introFollowGlow =
+                                    introduceReveal?.spotlightAnswerId === a.id && sqIdx === 0;
+                                  const followUpByIndex = answerFollowUpChildren[sqIdx];
+                                  return (
+                                    <button
+                                      key={`${a.id}-followup-${sqIdx}`}
+                                      type="button"
+                                      onClick={() => {
+                                        if (introduceReveal) {
+                                          if (followUpByIndex) {
+                                            introduceReveal.revealAndRunQuery(followUpByIndex.id);
+                                            scrollToQueryCard(followUpByIndex.id, 160);
+                                            return;
+                                          }
+                                          const existing = findQueryIdByParentAndQuestion(
+                                            state.nodes,
+                                            a.id,
+                                            sq
+                                          );
+                                          if (existing) {
+                                            introduceReveal.revealAndRunQuery(existing);
+                                            scrollToQueryCard(existing, 160);
+                                            return;
+                                          }
+                                        }
+                                        const newId = addCustomQuery(
+                                          sq,
+                                          a.id,
+                                          a.position,
+                                          q.modelChoice ?? aiCatalog?.defaultChoice,
+                                          q.toolChoice ?? 'auto',
+                                          true
+                                        );
+                                        scrollToQueryCard(newId, 160);
+                                      }}
+                                      className={[
+                                        'rounded-lg border px-2 py-1 text-left text-[12px] transition-colors',
+                                        introFollowGlow
+                                          ? 'border-primary/60 bg-primary/10 text-foreground shadow-sm'
+                                          : 'border-border text-muted-foreground',
+                                      ].join(' ')}
+                                    >
+                                      + {sq}
+                                    </button>
+                                  );
+                                })}
                                 <div className="flex gap-1.5">
                                   <input
                                     value={customInputByAnswer[a.id] ?? ''}
@@ -475,6 +543,19 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
                                     onClick={() => {
                                       const text = (customInputByAnswer[a.id] ?? '').trim();
                                       if (!text) return;
+                                      if (introduceReveal) {
+                                        const existing = findQueryIdByParentAndQuestion(
+                                          state.nodes,
+                                          a.id,
+                                          text
+                                        );
+                                        if (existing) {
+                                          introduceReveal.revealAndRunQuery(existing);
+                                          scrollToQueryCard(existing, 160);
+                                          setCustomInputByAnswer((prev) => ({ ...prev, [a.id]: '' }));
+                                          return;
+                                        }
+                                      }
                                       const newId = addCustomQuery(
                                         text,
                                         a.id,
@@ -482,7 +563,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
                                         q.modelChoice ?? aiCatalog?.defaultChoice,
                                         q.toolChoice ?? 'auto'
                                       );
-                                      scrollToQueryCard(newId);
+                                      scrollToQueryCard(newId, 160);
                                       setCustomInputByAnswer((prev) => ({ ...prev, [a.id]: '' }));
                                     }}
                                     className="rounded-lg border border-border px-2.5 py-1.5 text-[12px] text-foreground"
@@ -495,7 +576,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
                           </div>
                         )}
 
-                        {d && (
+                        {d && a?.status === 'complete' && (
                           <div className="mt-2 rounded-xl border border-border bg-amber-500/5 p-2.5">
                             <div className="mb-1 flex items-center justify-between">
                               <span className="rounded-full bg-amber-400/20 px-2 py-0.5 text-[11px] font-semibold text-amber-600">

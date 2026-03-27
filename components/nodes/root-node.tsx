@@ -1,8 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { RootNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
+import {
+  findQueryIdByParentAndQuestion,
+  listChildQueriesOrdered,
+  useIntroduceReveal,
+} from '@/lib/introduce-reveal-context';
 import { useI18n } from '@/components/i18n-provider';
 import { getSuggestedQueries } from '@/lib/mock-data';
 
@@ -46,15 +51,37 @@ interface Props {
 
 export function RootNode({ node }: Props) {
   const { t } = useI18n();
-  const { addCustomQuery, generateBrowserSeedQueries, isBrowserGeminiUnlocked, isDemoMode } = useWorkspace();
+  const { addCustomQuery, generateBrowserSeedQueries, isBrowserGeminiUnlocked, isDemoMode, state } =
+    useWorkspace();
+  const introduceReveal = useIntroduceReveal();
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
   const [seedSuggestions, setSeedSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
   const [suggestionStatus, setSuggestionStatus] = useState<'ai' | 'fallback' | null>(null);
 
+  const sortedRootChildQueries = useMemo(
+    () => listChildQueriesOrdered(state.nodes, node.id),
+    [state.nodes, node.id]
+  );
+
   useEffect(() => {
     const cacheKey = `${node.keyword}::${node.goal}`;
+
+    if (introduceReveal) {
+      const fromGraphQs = sortedRootChildQueries.map((q) => q.question.trim()).filter(Boolean);
+      if (fromGraphQs.length > 0) {
+        setSeedSuggestions(fromGraphQs);
+        setSuggestionStatus('ai');
+        setIsLoadingSuggestions(false);
+        return;
+      }
+      setSeedSuggestions([]);
+      setSuggestionStatus('fallback');
+      setIsLoadingSuggestions(false);
+      return;
+    }
+
     const stored = readSeedSuggestionsFromStorage(cacheKey);
     if (stored) {
       seedSuggestionCache.set(cacheKey, stored);
@@ -159,12 +186,29 @@ export function RootNode({ node }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [node.keyword, node.goal, generateBrowserSeedQueries, isBrowserGeminiUnlocked]);
+  }, [
+    node.keyword,
+    node.goal,
+    node.id,
+    introduceReveal,
+    sortedRootChildQueries,
+    generateBrowserSeedQueries,
+    isBrowserGeminiUnlocked,
+  ]);
 
   const handleSubmitCustom = (e: React.FormEvent) => {
     e.preventDefault();
     const q = customQ.trim();
     if (!q) return;
+    if (introduceReveal) {
+      const existing = findQueryIdByParentAndQuestion(state.nodes, node.id, q);
+      if (existing) {
+        introduceReveal.revealAndRunQuery(existing);
+        setCustomQ('');
+        setShowCustomInput(false);
+        return;
+      }
+    }
     addCustomQuery(q, node.id, node.position, undefined, 'auto', true);
     setCustomQ('');
     setShowCustomInput(false);
@@ -218,20 +262,42 @@ export function RootNode({ node }: Props) {
               </div>
             )}
             {seedSuggestions.map((q, idx) => {
-              const clickable = !isDemoMode || idx === 0;
+              const restrictToSecondSeed = isDemoMode || Boolean(introduceReveal);
+              const clickable = !restrictToSecondSeed || idx === 1;
+              const introSecondSeedCue =
+                !!introduceReveal &&
+                introduceReveal.revealedQueryIds.size === 0 &&
+                idx === 1;
               return (
               <button
-                key={q}
+                key={`${node.id}-seed-${idx}`}
                 type="button"
                 onClick={() => {
                   if (!clickable) return;
+                  if (introduceReveal) {
+                    const target = sortedRootChildQueries[idx];
+                    if (target) {
+                      introduceReveal.revealAndRunQuery(target.id);
+                      return;
+                    }
+                    const existing = findQueryIdByParentAndQuestion(state.nodes, node.id, q);
+                    if (existing) {
+                      introduceReveal.revealAndRunQuery(existing);
+                      return;
+                    }
+                  }
                   addCustomQuery(q, node.id, node.position, undefined, 'auto', true);
                 }}
                 disabled={!clickable}
                 className={[
                   'rounded-lg border px-2 py-1.5 text-left text-xs transition-colors',
                   clickable
-                    ? 'border-primary/50 text-foreground shadow-[0_0_12px_rgba(0,196,154,0.25)] hover:bg-secondary'
+                    ? [
+                        'border-primary/50 text-foreground shadow-[0_0_12px_rgba(0,196,154,0.25)] hover:bg-secondary',
+                        introSecondSeedCue
+                          ? 'border-primary/70 bg-primary/10 shadow-[0_0_16px_rgba(0,196,154,0.35)]'
+                          : '',
+                      ].join(' ')
                     : 'border-border text-muted-foreground opacity-45',
                 ].join(' ')}
                 title="Run suggested query"

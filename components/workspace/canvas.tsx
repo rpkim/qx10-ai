@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
-import { useWorkspace } from '@/lib/workspace-store';
+import { FOCUS_QUERY_NODE_EVENT, useWorkspace } from '@/lib/workspace-store';
+import { focusQueryNodeOnCanvas } from '@/lib/workspace-focus-query-node';
 import { useI18n } from '@/components/i18n-provider';
 import { QuestionTemplatePlaceDialog } from '@/components/question-template-place-dialog';
 import { ConnectionLines } from './connection-lines';
@@ -18,12 +19,14 @@ import {
   getRootNodeIds,
   getVisibleNodeIds,
 } from '@/lib/canvas-visibility';
+import { useIntroduceReveal } from '@/lib/introduce-reveal-context';
 
 export function Canvas() {
   const { t } = useI18n();
   const { state, dispatch, addQueryTemplateNode } = useWorkspace();
   const { nodes, edges, viewport, selectedNodeIds, collapsedNodeIds } = state;
   const { x: panX, y: panY, zoom } = viewport;
+  const introduceReveal = useIntroduceReveal();
 
   const childrenMap = useMemo(() => buildOutgoingChildrenMap(edges), [edges]);
   const collapsedSet = useMemo(() => new Set(collapsedNodeIds), [collapsedNodeIds]);
@@ -31,10 +34,12 @@ export function Canvas() {
     const roots = getRootNodeIds(nodes, edges);
     return getVisibleNodeIds(roots, childrenMap, collapsedSet);
   }, [nodes, edges, childrenMap, collapsedSet]);
-  const visibleNodes = useMemo(
-    () => nodes.filter((n) => visibleIds.has(n.id)),
-    [nodes, visibleIds]
-  );
+  const visibleNodes = useMemo(() => {
+    const collapsed = nodes.filter((n) => visibleIds.has(n.id));
+    if (!introduceReveal) return collapsed;
+    return collapsed.filter((n) => introduceReveal.isCanvasNodeVisible(n, nodes));
+  }, [nodes, visibleIds, introduceReveal]);
+  const lineVisibleIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const isPanning = useRef(false);
@@ -58,6 +63,18 @@ export function Canvas() {
   useEffect(() => {
     selectedRef.current = selectedNodeIds;
   }, [selectedNodeIds]);
+
+  useEffect(() => {
+    const onFocusQuery = (e: Event) => {
+      const id = (e as CustomEvent<{ queryId?: string }>).detail?.queryId;
+      if (!id) return;
+      const node = nodes.find((n) => n.id === id);
+      if (!node) return;
+      focusQueryNodeOnCanvas(node, viewport.zoom, dispatch);
+    };
+    window.addEventListener(FOCUS_QUERY_NODE_EVENT, onFocusQuery as EventListener);
+    return () => window.removeEventListener(FOCUS_QUERY_NODE_EVENT, onFocusQuery as EventListener);
+  }, [nodes, viewport.zoom, dispatch]);
 
   useEffect(() => {
     if (!canvasCtx) return;
@@ -365,7 +382,7 @@ export function Canvas() {
         }}
       >
         {/* SVG connection layer */}
-        <ConnectionLines visibleNodeIds={visibleIds} />
+        <ConnectionLines visibleNodeIds={lineVisibleIds} />
 
         {/* Node layer */}
         {visibleNodes.map((node) => (

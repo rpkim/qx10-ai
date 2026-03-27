@@ -5,12 +5,10 @@ import { Search } from 'lucide-react';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
 import { searchWorkspaceNodeIds } from '@/lib/workspace-node-search';
-import { getNodeWorldCenter } from '@/lib/workspace-node-bounds';
+import { focusQueryNodeOnCanvas } from '@/lib/workspace-focus-query-node';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-
-const CANVAS_ID = 'workspace-canvas';
 
 export function WorkspaceNodeSearchBar() {
   const { t } = useI18n();
@@ -27,23 +25,7 @@ export function WorkspaceNodeSearchBar() {
         toast.error(t('toolbar.nodeSearchNoResults'));
         return;
       }
-      dispatch({ type: 'EXPAND_TO_SHOW_NODE', nodeId });
-      dispatch({ type: 'SET_SELECTED_NODES', ids: [nodeId] });
-
-      const canvasEl = typeof document !== 'undefined' ? document.getElementById(CANVAS_ID) : null;
-      const rect = canvasEl?.getBoundingClientRect();
-      const w = rect?.width ?? (typeof window !== 'undefined' ? window.innerWidth : 800);
-      const h = rect?.height ?? (typeof window !== 'undefined' ? window.innerHeight : 600);
-      const { cx, cy } = getNodeWorldCenter(node);
-      const z = viewport.zoom;
-      dispatch({
-        type: 'SET_VIEWPORT',
-        viewport: {
-          x: w / 2 - cx * z,
-          y: h / 2 - cy * z,
-          zoom: z,
-        },
-      });
+      focusQueryNodeOnCanvas(node, viewport.zoom, dispatch);
     },
     [dispatch, nodes, viewport.zoom, t]
   );
