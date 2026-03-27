@@ -1,9 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { ThemeProvider, useTheme } from 'next-themes';
 import { Toaster } from 'sonner';
 import { I18nProvider } from '@/components/i18n-provider';
+import { ThemeProvider, useTheme } from '@/components/theme-provider';
 
 function ThemedToaster() {
   const { resolvedTheme } = useTheme();
@@ -19,7 +19,7 @@ function ThemedToaster() {
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <I18nProvider>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <ThemeProvider>
         {children}
         <ThemedToaster />
       </ThemeProvider>

@@ -178,9 +178,8 @@ export const en: Messages = {
   'nodes.answer': 'Answer',
   'nodes.pinAction': 'Pin',
   'nodes.pinnedAction': 'Pinned',
-  'landing.subLead': 'Ask endlessly. Discover deeply. ',
-  'landing.subAccent':
-    'Build living knowledge trees by exploring infinite possibilities.',
+  'landing.subLead': 'Ask endlessly. Discover deeply.',
+  'landing.subAccent': '',
   'landing.explorePrompt': 'How do you want to explore?',
   'landing.keywordPrompt': 'Start with a keyword or topic',
   'landing.keywordPlaceholder': 'e.g. Quant Trading, Climate Policy, LLMs…',

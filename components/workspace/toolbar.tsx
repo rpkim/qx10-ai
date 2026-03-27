@@ -10,6 +10,9 @@ import {
   FolderOpen,
   LayoutGrid,
   LayoutTemplate,
+  KeyRound,
+  Lock,
+  LockOpen,
   Pencil,
   Trash2,
   Upload,
@@ -72,13 +75,30 @@ const NEW_WORKSPACE_GOALS: GoalType[] = ['learn', 'research', 'build', 'analyze'
 interface ToolbarProps {
   onToggleDashboard: () => void;
   showDashboard: boolean;
+  desktopViewMode: 'canvas' | 'cards';
+  onDesktopViewModeChange: (mode: 'canvas' | 'cards') => void;
 }
 
-export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
+export function Toolbar({
+  onToggleDashboard,
+  showDashboard,
+  desktopViewMode,
+  onDesktopViewModeChange,
+}: ToolbarProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useI18n();
-  const { state, dispatch, addQueryTemplateNode } = useWorkspace();
+  const {
+    state,
+    dispatch,
+    addQueryTemplateNode,
+    hasBrowserGeminiKey,
+    isBrowserGeminiUnlocked,
+    saveBrowserGeminiKey,
+    unlockBrowserGeminiKey,
+    lockBrowserGeminiKey,
+    clearBrowserGeminiKey,
+  } = useWorkspace();
   const { keyword, goal, viewport, dashboardNodeIds } = state;
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const pendingSnapshotRef = useRef<WorkspaceState | null>(null);
@@ -94,6 +114,18 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
     seed: QuestionTemplate | null;
   }>({ open: false, templateId: null, seed: null });
   const [deleteTplId, setDeleteTplId] = useState<string | null>(null);
+  const [byokOpen, setByokOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [passphraseInput, setPassphraseInput] = useState('');
+  const [byokBusy, setByokBusy] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const apply = () => setIsMobile(window.innerWidth < 768);
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, []);
 
   const refreshTplList = () => setTplList(loadQuestionTemplates());
 
@@ -229,6 +261,55 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
 
   const recent = listRecentWorkspaces(10);
 
+  const saveByok = async () => {
+    if (!apiKeyInput.trim() || !passphraseInput.trim()) {
+      toast.error('API key and passphrase are required.');
+      return;
+    }
+    setByokBusy(true);
+    try {
+      await saveBrowserGeminiKey(apiKeyInput, passphraseInput);
+      setApiKeyInput('');
+      setPassphraseInput('');
+      toast.success('Gemini key encrypted and stored in this browser.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save key');
+    } finally {
+      setByokBusy(false);
+    }
+  };
+
+  const unlockByok = async () => {
+    if (!passphraseInput.trim()) {
+      toast.error('Passphrase is required.');
+      return;
+    }
+    setByokBusy(true);
+    try {
+      await unlockBrowserGeminiKey(passphraseInput);
+      setPassphraseInput('');
+      toast.success('Gemini key unlocked in memory.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to unlock key');
+    } finally {
+      setByokBusy(false);
+    }
+  };
+
+  const clearByok = async () => {
+    setByokBusy(true);
+    try {
+      await clearBrowserGeminiKey();
+      setApiKeyInput('');
+      setPassphraseInput('');
+      toast.success('Stored Gemini key deleted.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete key');
+    } finally {
+      setByokBusy(false);
+    }
+  };
+
   return (
     <header className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex flex-col items-stretch justify-between gap-2 p-2 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
       <Dialog open={newWorkspaceOpen} onOpenChange={setNewWorkspaceOpen}>
@@ -279,9 +360,100 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={byokOpen} onOpenChange={setByokOpen}>
+        <DialogContent className="border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gemini BYOK (Browser Only)</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div className="text-xs text-muted-foreground">
+              All workspace data stays local in your browser. Gemini key is encrypted in IndexedDB (Web Crypto).
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Gemini API Key</span>
+              <Input
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="AIza..."
+                type="password"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Passphrase</span>
+              <Input
+                value={passphraseInput}
+                onChange={(e) => setPassphraseInput(e.target.value)}
+                placeholder="Enter passphrase"
+                type="password"
+              />
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Stored: {hasBrowserGeminiKey ? 'Yes' : 'No'} / Unlocked: {isBrowserGeminiUnlocked ? 'Yes' : 'No'}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={unlockByok} disabled={byokBusy}>
+              Unlock
+            </Button>
+            <Button type="button" variant="outline" onClick={lockBrowserGeminiKey} disabled={byokBusy}>
+              Lock
+            </Button>
+            <Button type="button" variant="outline" onClick={clearByok} disabled={byokBusy}>
+              Delete
+            </Button>
+            <Button type="button" onClick={saveByok} disabled={byokBusy}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {isMobile && (
+        <div className="pointer-events-auto flex items-center justify-between rounded-2xl border border-border bg-card/95 px-3 py-2 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              title="Home"
+            >
+              <FolderOpen className="size-4" />
+            </button>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-foreground">{keyword}</div>
+              <div className="text-xs text-muted-foreground">{t(GOAL_LABEL_KEYS[goal])}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setByokOpen(true)}
+              className="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              title="Gemini API Key (Browser Only)"
+            >
+              <KeyRound className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onToggleDashboard}
+              className={[
+                'flex size-8 items-center justify-center rounded-lg border transition-colors',
+                showDashboard
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:bg-secondary hover:text-foreground',
+              ].join(' ')}
+              title={t('toolbar.dashboard')}
+            >
+              <LayoutGrid className="size-4" />
+            </button>
+            <LanguageSwitcher />
+            <ThemeToggle />
+          </div>
+        </div>
+      )}
 
       {/* Left: Logo + keyword + node search */}
-      <div className="pointer-events-auto flex w-full max-w-[min(100%,520px)] min-w-0 flex-col gap-2 rounded-2xl border border-border bg-card/90 px-3 py-2 backdrop-blur-sm sm:px-4 sm:py-2.5">
+      <div className={["pointer-events-auto flex w-full max-w-[min(100%,520px)] min-w-0 flex-col gap-2 rounded-2xl border border-border bg-card/90 px-3 py-2 backdrop-blur-sm sm:px-4 sm:py-2.5", isMobile ? "hidden sm:flex" : ""].join(' ')}>
         <div className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:gap-3">
           <svg width="22" height="22" viewBox="0 0 36 36" fill="none">
             <rect x="2" y="6" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" />
@@ -348,7 +520,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
       </div>
 
       {/* Right: Theme + save/load + dashboard + zoom */}
-      <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2">
+      <div className={["pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2", isMobile ? "hidden sm:flex" : ""].join(' ')}>
         <input
           ref={fileInputRef}
           type="file"
@@ -522,6 +694,47 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
 
         <LanguageSwitcher />
         <ThemeToggle />
+        {!isMobile && (
+          <div className="flex items-center rounded-xl border border-border bg-card/90 p-1 backdrop-blur-sm">
+            <button
+              type="button"
+              onClick={() => onDesktopViewModeChange('canvas')}
+              className={[
+                'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                desktopViewMode === 'canvas'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              Canvas
+            </button>
+            <button
+              type="button"
+              onClick={() => onDesktopViewModeChange('cards')}
+              className={[
+                'rounded-lg px-2.5 py-1 text-xs font-medium transition-colors',
+                desktopViewMode === 'cards'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              Cards
+            </button>
+          </div>
+        )}
+        <button
+          onClick={() => setByokOpen(true)}
+          className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
+          title="Gemini API Key (Browser Only)"
+        >
+          <KeyRound className="size-4" />
+          {isBrowserGeminiUnlocked ? (
+            <LockOpen className="size-3.5 text-emerald-500" />
+          ) : (
+            <Lock className="size-3.5" />
+          )}
+          BYOK
+        </button>
         {/* Dashboard toggle */}
         <button
           onClick={onToggleDashboard}
@@ -572,7 +785,7 @@ export function Toolbar({ onToggleDashboard, showDashboard }: ToolbarProps) {
               <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /><line x1="8" y1="11" x2="14" y2="11" />
             </svg>
           </button>
-          <span className="min-w-[3rem] text-center text-xs font-mono text-muted-foreground">
+          <span className="min-w-12 text-center text-xs font-mono text-muted-foreground">
             {zoomPct}%
           </span>
           <button

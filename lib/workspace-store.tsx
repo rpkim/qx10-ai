@@ -1,6 +1,7 @@
 'use client';
 
-import React, {
+import * as React from 'react';
+import {
   createContext,
   useContext,
   useReducer,
@@ -36,6 +37,14 @@ import {
   normalizeTemplateSlotGraph,
 } from './workspace-snapshot';
 import { findIncomingAncestorIds } from '@/lib/workspace-node-search';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { buildAnswerSystemPrompt } from '@/lib/ai/prompts';
+import {
+  clearGeminiKeyEncrypted,
+  hasEncryptedGeminiKey,
+  loadGeminiKeyEncrypted,
+  saveGeminiKeyEncrypted,
+} from '@/lib/byok-gemini';
 
 /* ─────────────────────────────────────────────
    Canvas layout (tree-aware — avoids Answer / Query overlap)
@@ -395,6 +404,7 @@ function dataNodeFromApiPayload(
 }
 
 const MAX_FOLLOWUP_QUERY_NODES = 8;
+const DEFAULT_BROWSER_GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-2.5-flash'];
 
 /** Slot values for a query spawned from a template row (for {{var}} in follow-ups). */
 function slotValuesForTemplateQuery(
@@ -811,6 +821,12 @@ interface WorkspaceContextValue {
   runTemplateSlot: (slotNodeId: string) => void;
   toggleDashboardPin: (nodeId: string) => void;
   deleteNode: (nodeId: string) => void;
+  hasBrowserGeminiKey: boolean;
+  isBrowserGeminiUnlocked: boolean;
+  saveBrowserGeminiKey: (apiKey: string, passphrase: string) => Promise<void>;
+  unlockBrowserGeminiKey: (passphrase: string) => Promise<void>;
+  lockBrowserGeminiKey: () => void;
+  clearBrowserGeminiKey: () => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -818,6 +834,8 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [aiCatalog, setAiCatalog] = React.useState<AiModelCatalog | null>(null);
+  const [browserGeminiKey, setBrowserGeminiKey] = React.useState<string | null>(null);
+  const [hasBrowserGeminiKey, setHasBrowserGeminiKey] = React.useState(false);
   const autosaveTimerRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -838,6 +856,42 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    hasEncryptedGeminiKey()
+      .then((yes) => {
+        if (!cancelled) setHasBrowserGeminiKey(yes);
+      })
+      .catch(() => {
+        if (!cancelled) setHasBrowserGeminiKey(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const saveBrowserGeminiKey = useCallback(async (apiKey: string, passphrase: string) => {
+    await saveGeminiKeyEncrypted(apiKey, passphrase);
+    setBrowserGeminiKey(apiKey.trim());
+    setHasBrowserGeminiKey(true);
+  }, []);
+
+  const unlockBrowserGeminiKey = useCallback(async (passphrase: string) => {
+    const key = await loadGeminiKeyEncrypted(passphrase);
+    setBrowserGeminiKey(key);
+    setHasBrowserGeminiKey(true);
+  }, []);
+
+  const lockBrowserGeminiKey = useCallback(() => {
+    setBrowserGeminiKey(null);
+  }, []);
+
+  const clearBrowserGeminiKey = useCallback(async () => {
+    await clearGeminiKeyEncrypted();
+    setBrowserGeminiKey(null);
+    setHasBrowserGeminiKey(false);
   }, []);
 
   // Stable ref to always-current nodes, avoiding stale closure in runQuery
@@ -872,6 +926,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
     };
   }, [state]);
+
+  const effectiveAiCatalog = React.useMemo<AiModelCatalog | null>(() => {
+    if (!aiCatalog) return null;
+    if (!hasBrowserGeminiKey) return aiCatalog;
+    const options = [...aiCatalog.options];
+    for (const model of DEFAULT_BROWSER_GEMINI_MODELS) {
+      const id = `gemini:${model}`;
+      if (!options.some((o) => o.id === id)) {
+        options.push({
+          id,
+          provider: 'gemini',
+          model,
+          label: `Gemini · ${model} (BYOK)`,
+        });
+      }
+    }
+    const defaultChoice = aiCatalog.defaultChoice || options[0]?.id || '';
+    return { defaultChoice, options };
+  }, [aiCatalog, hasBrowserGeminiKey]);
 
   const initWorkspace = useCallback(
     (keyword: string, goal: GoalType) => {
@@ -984,74 +1057,39 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     };
 
     const runLiveAi = async () => {
-      let res: Response;
-      try {
-        res = await fetch('/api/workspace/query', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: queryNode.question,
-            keyword: keywordRef.current,
-            goal: goalRef.current,
-            modelChoice: queryNode.modelChoice ?? null,
-            toolChoice: queryNode.toolChoice ?? 'auto',
-          }),
-        });
-      } catch {
-        toast.error(tr('ai.networkError'));
-        dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-        return;
-      }
+      const modelId =
+        queryNode.modelChoice ??
+        effectiveAiCatalog?.defaultChoice ??
+        effectiveAiCatalog?.options[0]?.id ??
+        '';
+      const selected = effectiveAiCatalog?.options.find((o) => o.id === modelId) ?? null;
+      const shouldUseBrowserGemini =
+        selected?.provider === 'gemini' && !!browserGeminiKey && queryNode.toolChoice !== 'market';
 
-      if (res.status === 503) {
-        const errBody = (await res.json().catch(() => ({}))) as {
-          code?: string;
-          error?: string;
+      let answerNodeCreated = false;
+      const ensureAnswerNode = () => {
+        if (answerNodeCreated) return;
+        const emptyAnswer: AnswerNodeData = {
+          id: answerId,
+          type: 'answer',
+          queryId,
+          parentId: queryId,
+          position: answerPos,
+          status: 'streaming',
+          content: '',
+          streamedChars: 0,
+          extractedKeywords: [],
+          suggestedQueries: [],
+          width: 320,
+          height: CANVAS_ANSWER_LAYOUT_HEIGHT,
         };
-        if (errBody.code === 'NO_API_KEY' || errBody.code === 'NO_AI_CONFIGURED') {
-          toast.info(tr('ai.demoMode'), {
-            duration: 6000,
-          });
-          runMockFlow(getMockResponse(queryNode.question));
-          return;
-        }
-        toast.error(errBody.error || tr('ai.serviceUnavailable'));
-        dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-        return;
-      }
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        toast.error(tr('ai.requestFailed', { status: res.status }));
-        dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-        return;
-      }
-
-      if (!res.body) {
-        toast.error(tr('ai.emptyResponse'));
-        dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-        return;
-      }
-
-      const emptyAnswer: AnswerNodeData = {
-        id: answerId,
-        type: 'answer',
-        queryId,
-        parentId: queryId,
-        position: answerPos,
-        status: 'streaming',
-        content: '',
-        streamedChars: 0,
-        extractedKeywords: [],
-        suggestedQueries: [],
-        width: 320,
-        height: CANVAS_ANSWER_LAYOUT_HEIGHT,
+        dispatch({ type: 'ADD_NODE', node: emptyAnswer });
+        dispatch({
+          type: 'ADD_EDGE',
+          edge: { id: `e-${queryId}-${answerId}`, sourceId: queryId, targetId: answerId },
+        });
+        answerNodeCreated = true;
       };
-      dispatch({ type: 'ADD_NODE', node: emptyAnswer });
-      dispatch({
-        type: 'ADD_EDGE',
-        edge: { id: `e-${queryId}-${answerId}`, sourceId: queryId, targetId: answerId },
-      });
 
       let content = '';
       let metaPayload: Record<string, unknown> | null = null;
@@ -1059,82 +1097,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       let doneReceived = false;
       let streamFailed = false;
 
-      await consumeWorkspaceQueryStream(res, {
-        onToken: (text) => {
-          content += text;
-          dispatch({
-            type: 'UPDATE_NODE',
-            id: answerId,
-            updates: {
-              content,
-              streamedChars: content.length,
-            },
-          });
-        },
-        onMetadata: (m) => {
-          suggested = m.suggestedQueries;
-          dispatch({
-            type: 'UPDATE_NODE',
-            id: answerId,
-            updates: {
-              extractedKeywords: m.extractedKeywords,
-              suggestedQueries: m.suggestedQueries,
-            },
-          });
-          metaPayload = m.dataNode as Record<string, unknown> | null;
-        },
-        onDone: () => {
-          doneReceived = true;
-          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'complete' } });
-          dispatch({
-            type: 'UPDATE_NODE',
-            id: answerId,
-            updates: {
-              status: 'complete',
-              streamedChars: content.length,
-            },
-          });
-          attachAnswerChildren(dispatch, {
-            queryId,
-            answerId,
-            answerPos,
-            suggestedQueries: mergeTemplateFollowUpsIntoSuggested(
-              nodesRef.current,
-              queryId,
-              suggested.length ? suggested : ['What should I explore next?']
-            ),
-            dataId,
-            dataPayload: metaPayload,
-            parentModelChoice: queryNode.modelChoice,
-            parentToolChoice: queryNode.toolChoice,
-          });
-        },
-        onError: (msg) => {
-          streamFailed = true;
-          toast.error(msg);
-          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-          const fallback =
-            content.trim().length > 0
-              ? `${content.trim()}\n\n—\n${msg}`
-              : `Something went wrong: ${msg}`;
-          dispatch({
-            type: 'UPDATE_NODE',
-            id: answerId,
-            updates: {
-              status: 'complete',
-              content: fallback,
-              streamedChars: fallback.length,
-            },
-          });
-        },
-      });
-
-      if (!doneReceived && !streamFailed && content.length > 0) {
+      const finalizeSuccess = () => {
         dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'complete' } });
         dispatch({
           type: 'UPDATE_NODE',
           id: answerId,
-          updates: { status: 'complete', streamedChars: content.length },
+          updates: {
+            status: 'complete',
+            streamedChars: content.length,
+          },
         });
         attachAnswerChildren(dispatch, {
           queryId,
@@ -1150,11 +1121,168 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           parentModelChoice: queryNode.modelChoice,
           parentToolChoice: queryNode.toolChoice,
         });
+      };
+
+      if (shouldUseBrowserGemini) {
+        try {
+          ensureAnswerNode();
+          const genAI = new GoogleGenerativeAI(browserGeminiKey);
+          const model = genAI.getGenerativeModel({
+            model: selected?.model || modelId.replace(/^gemini:/, ''),
+            systemInstruction: buildAnswerSystemPrompt(goalRef.current),
+          });
+          const userText = `Workspace root keyword/topic: "${keywordRef.current}"\nExploration goal: ${goalRef.current}\n\nUser query:\n${queryNode.question}`;
+          const streamResult = await model.generateContentStream(userText);
+          for await (const chunk of streamResult.stream) {
+            let text = '';
+            try {
+              text = chunk.text();
+            } catch {
+              text = '';
+            }
+            if (text) {
+              content += text;
+              dispatch({
+                type: 'UPDATE_NODE',
+                id: answerId,
+                updates: {
+                  content,
+                  streamedChars: content.length,
+                },
+              });
+            }
+          }
+          suggested = ['What should I explore next?', 'Can you compare alternatives?'];
+          doneReceived = true;
+          finalizeSuccess();
+        } catch (e) {
+          streamFailed = true;
+          const msg = e instanceof Error ? e.message : 'Gemini request failed';
+          toast.error(msg);
+          dispatch({
+            type: 'UPDATE_NODE',
+            id: queryId,
+            updates: { status: 'suggested' },
+          });
+          const fallback =
+            content.trim().length > 0
+              ? `${content.trim()}\n\n—\n${msg}`
+              : `Something went wrong: ${msg}`;
+          dispatch({
+            type: 'UPDATE_NODE',
+            id: answerId,
+            updates: {
+              status: 'complete',
+              content: fallback,
+              streamedChars: fallback.length,
+            },
+          });
+        }
+      } else {
+        let res: Response;
+        try {
+          res = await fetch('/api/workspace/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              question: queryNode.question,
+              keyword: keywordRef.current,
+              goal: goalRef.current,
+              modelChoice: queryNode.modelChoice ?? null,
+              toolChoice: queryNode.toolChoice ?? 'auto',
+            }),
+          });
+        } catch {
+          toast.error(tr('ai.networkError'));
+          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+          return;
+        }
+
+        if (res.status === 503) {
+          const errBody = (await res.json().catch(() => ({}))) as {
+            code?: string;
+            error?: string;
+          };
+          if (errBody.code === 'NO_API_KEY' || errBody.code === 'NO_AI_CONFIGURED') {
+            toast.info(tr('ai.demoMode'), {
+              duration: 6000,
+            });
+            runMockFlow(getMockResponse(queryNode.question));
+            return;
+          }
+          toast.error(errBody.error || tr('ai.serviceUnavailable'));
+          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+          return;
+        }
+
+        if (!res.ok) {
+          toast.error(tr('ai.requestFailed', { status: res.status }));
+          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+          return;
+        }
+        if (!res.body) {
+          toast.error(tr('ai.emptyResponse'));
+          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+          return;
+        }
+        ensureAnswerNode();
+
+        await consumeWorkspaceQueryStream(res, {
+          onToken: (text) => {
+            content += text;
+            dispatch({
+              type: 'UPDATE_NODE',
+              id: answerId,
+              updates: {
+                content,
+                streamedChars: content.length,
+              },
+            });
+          },
+          onMetadata: (m) => {
+            suggested = m.suggestedQueries;
+            dispatch({
+              type: 'UPDATE_NODE',
+              id: answerId,
+              updates: {
+                extractedKeywords: m.extractedKeywords,
+                suggestedQueries: m.suggestedQueries,
+              },
+            });
+            metaPayload = m.dataNode as Record<string, unknown> | null;
+          },
+          onDone: () => {
+            doneReceived = true;
+            finalizeSuccess();
+          },
+          onError: (msg) => {
+            streamFailed = true;
+            toast.error(msg);
+            dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+            const fallback =
+              content.trim().length > 0
+                ? `${content.trim()}\n\n—\n${msg}`
+                : `Something went wrong: ${msg}`;
+            dispatch({
+              type: 'UPDATE_NODE',
+              id: answerId,
+              updates: {
+                status: 'complete',
+                content: fallback,
+                streamedChars: fallback.length,
+              },
+            });
+          },
+        });
+      }
+
+      if (!doneReceived && !streamFailed && content.length > 0) {
+        finalizeSuccess();
       }
     };
 
     void runLiveAi();
-  }, []);
+  }, [browserGeminiKey, effectiveAiCatalog]);
 
   const addQueryTemplateNode = useCallback(
     ({
@@ -1371,7 +1499,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       value={{
         state,
         dispatch,
-        aiCatalog,
+        aiCatalog: effectiveAiCatalog,
         initWorkspace,
         runQuery,
         addCustomQuery,
@@ -1381,6 +1509,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         runTemplateSlot,
         toggleDashboardPin,
         deleteNode,
+        hasBrowserGeminiKey,
+        isBrowserGeminiUnlocked: !!browserGeminiKey,
+        saveBrowserGeminiKey,
+        unlockBrowserGeminiKey,
+        lockBrowserGeminiKey,
+        clearBrowserGeminiKey,
       }}
     >
       {children}
