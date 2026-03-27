@@ -147,10 +147,6 @@ function WorkspaceInner() {
       {useCardMode ? (
         <MobileWorkspaceShell
           showDashboard={showDashboard}
-          onShowDashboardChange={(show) => {
-            setShowDashboard(show);
-            if (!show) setDashboardExpanded(false);
-          }}
           isMobile={mobileMode}
         />
       ) : (
