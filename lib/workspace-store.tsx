@@ -1438,9 +1438,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       dispatch({ type: 'AUTO_LAYOUT' });
 
-      window.setTimeout(() => {
-        runQuery(queryId);
-      }, 0);
+      // Wait until the new query node is reflected in nodesRef.
+      const tryRun = (attempt = 0) => {
+        const exists = nodesRef.current.some((n) => n.id === queryId && n.type === 'query');
+        if (exists) {
+          runQuery(queryId);
+          return;
+        }
+        if (attempt >= 8) return;
+        window.setTimeout(() => tryRun(attempt + 1), 25);
+      };
+      window.setTimeout(() => tryRun(0), 0);
     },
     [runQuery]
   );

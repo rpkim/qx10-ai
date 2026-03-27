@@ -18,10 +18,9 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata: Metadata = {
-  title: 'qx10.lol — Infinite Knowledge Discovery',
+  title: 'Qx10.lol — Question x10 Discovery',
   description: 'Explore any topic through infinite questioning. Build living knowledge trees that evolve into real-time dashboards.',
   generator: 'v0.app',
-  themeColor: '#080C12',
 }
 
 export const viewport = {

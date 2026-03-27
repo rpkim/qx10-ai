@@ -274,6 +274,9 @@ export default function LandingPage() {
             >
               qx<span style={{ color: '#00C49A' }}>10</span>.lol
             </span>
+            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+              Question x10
+            </span>
           </div>
           <p className={[isMobile ? 'text-left' : 'text-center', 'text-base leading-relaxed text-muted-foreground'].join(' ')}>
             {t('landing.subLead')}
