@@ -67,7 +67,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
     }
     return map;
   }, [state.nodes]);
-  const orderedQueryNodes = useMemo(() => {
+  const queryHierarchy = useMemo(() => {
     const queryById = new Map(queryNodes.map((q) => [q.id, q]));
     const templateIdSet = new Set(templateNodes.map((t) => t.id));
     const answerOwnerById = new Map<string, string>();
@@ -120,8 +120,21 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
       for (const child of childrenMap.get(q.id) ?? []) walk(child);
     };
     for (const r of roots) walk(r);
-    return out;
+    return { ordered: out, parentById: parentQueryByQuery };
   }, [queryNodes, state.nodes, templateNodes]);
+  const orderedQueryNodes = queryHierarchy.ordered;
+  const visibleOrderedQueryNodes = useMemo(
+    () =>
+      orderedQueryNodes.filter((q) => {
+        let parentId = queryHierarchy.parentById.get(q.id) ?? null;
+        while (parentId) {
+          if (collapsedByQuery[parentId]) return false;
+          parentId = queryHierarchy.parentById.get(parentId) ?? null;
+        }
+        return true;
+      }),
+    [orderedQueryNodes, queryHierarchy.parentById, collapsedByQuery]
+  );
 
   const dataByAnswer = useMemo(() => {
     const map = new Map<string, DataNodeData>();
@@ -275,7 +288,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
                 No query yet. Add one from a suggestion and run it.
               </div>
             ) : (
-              orderedQueryNodes.map((q) => {
+              visibleOrderedQueryNodes.map((q) => {
                 const a = answerByQuery.get(q.id);
                 const d = a ? dataByAnswer.get(a.id) : null;
                 const isRunning = q.status === 'running';
