@@ -108,14 +108,12 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
     }
 
     const createdAt = (id: string) => Number(id.match(/(\d{10,})/)?.[1] ?? 0);
-    const sortByCreated = (a: QueryNodeData, b: QueryNodeData) => createdAt(a.id) - createdAt(b.id);
+    const sortByCreated = (a: QueryNodeData, b: QueryNodeData) => createdAt(b.id) - createdAt(a.id);
     roots.sort((a, b) => {
       const aFromTemplate = !!a.parentId && templateIdSet.has(a.parentId);
       const bFromTemplate = !!b.parentId && templateIdSet.has(b.parentId);
       if (aFromTemplate !== bFromTemplate) return aFromTemplate ? -1 : 1;
-      if (aFromTemplate && bFromTemplate) {
-        return createdAt(b.id) - createdAt(a.id);
-      }
+      if (aFromTemplate && bFromTemplate) return sortByCreated(a, b);
       return sortByCreated(a, b);
     });
     for (const arr of childrenMap.values()) arr.sort(sortByCreated);
