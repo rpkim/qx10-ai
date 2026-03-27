@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { WorkspaceProvider, useWorkspace } from '@/lib/workspace-store';
 import type { GoalType } from '@/lib/types';
@@ -13,6 +13,7 @@ import { registerWorkspaceVisit } from '@/lib/workspace-index';
 import { useI18n } from '@/components/i18n-provider';
 import { loadWorkspaceFromLocalStorage } from '@/lib/workspace-snapshot';
 import { readWorkspaceLaunch } from '@/lib/workspace-launch';
+import { focusQueryNodeOnCanvas } from '@/lib/workspace-focus-query-node';
 
 function WorkspacePageFallback() {
   const { t } = useI18n();
@@ -59,6 +60,7 @@ function WorkspaceInner() {
   const [ready, setReady] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const initialView = searchParams.get('view');
+  const prevDesktopViewRef = useRef<'canvas' | 'cards' | null>(null);
 
   useEffect(() => {
     const apply = () => setIsMobile(window.innerWidth < 768);
@@ -105,6 +107,32 @@ function WorkspaceInner() {
     if (!ready || !state.keyword) return;
     registerWorkspaceVisit(state.keyword, state.goal);
   }, [ready, state.keyword, state.goal]);
+
+  /**
+   * Canvas가 처음 보이거나(Cards→Canvas, 또는 저장된 설정이 Canvas인 첫 로드)
+   * 캔버스 DOM이 아직 없을 때 측정이 0이 되는 경우가 있어, focusQueryNodeOnCanvas 안에서 재시도한다.
+   */
+  useEffect(() => {
+    if (!ready || !state.keyword || isMobile) {
+      prevDesktopViewRef.current = desktopViewMode;
+      return;
+    }
+    const prev = prevDesktopViewRef.current;
+    const root = state.nodes.find((n) => n.type === 'root');
+    if (!root) {
+      prevDesktopViewRef.current = desktopViewMode;
+      return;
+    }
+
+    const shouldFocusRoot =
+      desktopViewMode === 'canvas' && (prev === 'cards' || prev === null);
+
+    if (shouldFocusRoot) {
+      const z = state.viewport.zoom;
+      focusQueryNodeOnCanvas(root, z, dispatch);
+    }
+    prevDesktopViewRef.current = desktopViewMode;
+  }, [ready, state.keyword, isMobile, desktopViewMode, state.nodes, state.viewport.zoom, dispatch]);
 
   if (!ready || !state.keyword) {
     return (

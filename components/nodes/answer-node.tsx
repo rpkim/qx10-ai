@@ -1,8 +1,13 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { AnswerNodeData, QueryNodeData } from '@/lib/types';
-import { useWorkspace } from '@/lib/workspace-store';
+import type { AnswerNodeData } from '@/lib/types';
+import { FOCUS_QUERY_NODE_EVENT, useWorkspace } from '@/lib/workspace-store';
+import {
+  findQueryIdByParentAndQuestion,
+  listChildQueriesOrdered,
+  useIntroduceReveal,
+} from '@/lib/introduce-reveal-context';
 import { useI18n } from '@/components/i18n-provider';
 
 interface Props {
@@ -11,7 +16,8 @@ interface Props {
 
 export function AnswerNode({ node }: Props) {
   const { t } = useI18n();
-  const { addCustomQuery, toggleDashboardPin, state, aiCatalog, runQuery, isDemoMode } = useWorkspace();
+  const { addCustomQuery, toggleDashboardPin, state, aiCatalog, isDemoMode } = useWorkspace();
+  const introduceReveal = useIntroduceReveal();
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
@@ -52,15 +58,10 @@ export function AnswerNode({ node }: Props) {
     setShowCustomInput(false);
   };
 
-  const followUpChildByText = useMemo(() => {
-    const map = new Map<string, QueryNodeData>();
-    for (const n of state.nodes) {
-      if (n.type !== 'query' || n.parentId !== node.id) continue;
-      const key = normalizeFollowUpQuestion(n.question);
-      if (!map.has(key)) map.set(key, n);
-    }
-    return map;
-  }, [state.nodes, node.id]);
+  const followUpChildrenOrdered = useMemo(
+    () => listChildQueriesOrdered(state.nodes, node.id),
+    [state.nodes, node.id]
+  );
 
   return (
     <div
@@ -193,31 +194,56 @@ export function AnswerNode({ node }: Props) {
           <span className="text-xs text-muted-foreground">Follow-up queries</span>
           <div className="flex flex-col gap-1">
             {node.suggestedQueries.slice(0, 2).map((q, idx) => {
-              const linked = followUpChildByText.get(normalizeFollowUpQuestion(q));
+              const linked = followUpChildrenOrdered[idx];
               const spawning = !linked;
               const running = linked?.status === 'running';
-              const clickable = !isDemoMode || idx === 0;
+              const clickable = Boolean(introduceReveal) || !isDemoMode || idx === 0;
+              const followUpGlow =
+                (isDemoMode && idx === 0 && !introduceReveal) ||
+                (!!introduceReveal &&
+                  introduceReveal.spotlightAnswerId === node.id &&
+                  idx === 0);
 
               const spawnOrRun = () => {
                 if (running || !clickable) return;
                 if (linked) {
-                  runQuery(linked.id);
-                } else {
-                  addCustomQuery(
-                    q,
-                    node.id,
-                    node.position,
-                    inheritedModelChoice,
-                    inheritedToolChoice,
-                    true
-                  );
+                  if (introduceReveal) {
+                    introduceReveal.revealAndRunQuery(linked.id);
+                    return;
+                  }
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(
+                      new CustomEvent(FOCUS_QUERY_NODE_EVENT, { detail: { queryId: linked.id } })
+                    );
+                  }
+                  return;
                 }
+                if (introduceReveal) {
+                  const existing = findQueryIdByParentAndQuestion(state.nodes, node.id, q);
+                  if (existing) {
+                    introduceReveal.revealAndRunQuery(existing);
+                    return;
+                  }
+                }
+                addCustomQuery(
+                  q,
+                  node.id,
+                  node.position,
+                  inheritedModelChoice,
+                  inheritedToolChoice,
+                  true
+                );
               };
 
               return (
                 <div
-                  key={q}
-                  className="flex items-start gap-2 rounded-xl p-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  key={`${node.id}-followup-${idx}`}
+                  className={[
+                    'flex items-start gap-2 rounded-xl p-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
+                    followUpGlow
+                      ? 'border border-primary/35 bg-primary/5 shadow-sm'
+                      : '',
+                  ].join(' ')}
                 >
                   <button
                     type="button"
@@ -317,10 +343,6 @@ export function AnswerNode({ node }: Props) {
 
     </div>
   );
-}
-
-function normalizeFollowUpQuestion(s: string): string {
-  return s.replace(/\s+/g, ' ').trim();
 }
 
 function formatBold(text: string): React.ReactNode[] {

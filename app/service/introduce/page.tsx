@@ -1,253 +1,242 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ChevronRight, CircleHelp } from 'lucide-react';
 import { WorkspaceProvider, useWorkspace } from '@/lib/workspace-store';
-import { Toolbar } from '@/components/workspace/toolbar';
 import { Canvas } from '@/components/workspace/canvas';
 import { MiniMap } from '@/components/workspace/minimap';
-import { DashboardPanel } from '@/components/workspace/dashboard-panel';
 import { MobileWorkspaceShell } from '@/components/workspace/mobile-workspace-shell';
-import type { WorkspaceState } from '@/lib/types';
+import { LanguageSwitcher } from '@/components/language-switcher';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Button } from '@/components/ui/button';
+import { useI18n } from '@/components/i18n-provider';
+import { parseWorkspaceSnapshot } from '@/lib/workspace-snapshot';
+import { buildDemoResponsesFromSnapshot } from '@/lib/introduce-demo-responses';
+import { IntroduceRevealProvider } from '@/lib/introduce-reveal-context';
+import rawSnapshot from '@/lib/demo/service-intro-llm-snapshot.en.json';
+import { applyIntroLocalePatch } from '@/lib/demo/apply-intro-locale-patch';
+import { getIntroLocalePatch } from '@/lib/demo/intro-locale-patches';
+import { syncIntroAnswerSuggestedQueriesWithChildQueries } from '@/lib/demo/sync-intro-answer-suggestions';
+import { focusQueryNodeOnCanvas } from '@/lib/workspace-focus-query-node';
+import type { QueryNodeData, WorkspaceState } from '@/lib/types';
 
-const DEMO_SNAPSHOT: WorkspaceState = {
-  keyword: 'Large Language Models',
-  goal: 'learn',
-  nodes: [
-    {
-      id: 'root',
-      type: 'root',
-      keyword: 'Large Language Models',
-      goal: 'learn',
-      position: { x: 820, y: 60 },
-      status: 'complete',
-      width: 260,
-      height: 80,
-    },
-    {
-      id: 'q-demo-1',
-      type: 'query',
-      question:
-        'What exactly defines a Large Language Model and how is it different from other AI models?',
-      parentId: 'root',
-      position: { x: 620, y: 300 },
-      status: 'suggested',
-      width: 280,
-      height: 100,
-      isCustom: true,
-      toolChoice: 'auto',
-    },
-    {
-      id: 'q-demo-2',
-      type: 'query',
-      question:
-        'What are the most common real-world applications where LLMs are currently used?',
-      parentId: 'root',
-      position: { x: 980, y: 300 },
-      status: 'suggested',
-      width: 280,
-      height: 100,
-      isCustom: true,
-      toolChoice: 'auto',
-    },
-    {
-      id: 'q-demo-3',
-      type: 'query',
-      question:
-        'What types of data are LLMs trained on, and why is that important for performance?',
-      parentId: 'root',
-      position: { x: 1340, y: 300 },
-      status: 'suggested',
-      width: 280,
-      height: 100,
-      isCustom: true,
-      toolChoice: 'auto',
-    },
-  ],
-  edges: [
-    { id: 'e-root-q-demo-1', sourceId: 'root', targetId: 'q-demo-1' },
-    { id: 'e-root-q-demo-2', sourceId: 'root', targetId: 'q-demo-2' },
-    { id: 'e-root-q-demo-3', sourceId: 'root', targetId: 'q-demo-3' },
-  ],
-  viewport: { x: -320, y: 40, zoom: 0.72 },
-  selectedNodeIds: [],
-  dashboardNodeIds: [],
-  collapsedNodeIds: [],
-};
+const ROOT_SEED_PREFIX = 'qx10.root.seed.v1:';
 
-const DEMO_RESPONSES = {
-  'What exactly defines a Large Language Model and how is it different from other AI models?': {
-    content:
-      'A **Large Language Model (LLM)** is a transformer-based model trained on massive text/code corpora with very large parameter counts. It differs from narrow AI models by being general-purpose for language tasks, showing broad transfer and emergent capabilities at scale.',
-    extractedKeywords: ['LLM', 'Transformer', 'Scale', 'Emergent capabilities'],
-    suggestedQueries: [
-      'How does the Transformer architecture fundamentally work?',
-      'What specific examples of emergent capabilities have LLMs demonstrated?',
-    ],
-    dataNode: {
-      dataType: 'table',
-      title: 'LLMs vs Other AI Models',
-      tableColumns: ['Aspect', 'LLMs', 'Other AI Models'],
-      tableRows: [
-        {
-          Aspect: 'Scale',
-          LLMs: 'Billions+ params',
-          'Other AI Models': 'Often smaller',
-        },
-        {
-          Aspect: 'Scope',
-          LLMs: 'General language tasks',
-          'Other AI Models': 'Task-specific',
-        },
-        {
-          Aspect: 'Architecture',
-          LLMs: 'Transformer-first',
-          'Other AI Models': 'CNN/RNN/etc.',
-        },
-      ],
-    },
-  },
-  'What are the most common real-world applications where LLMs are currently used?': {
-    content:
-      'Common production uses include **content generation**, **customer support copilots**, **semantic search/summarization**, **coding assistants**, and **analytics copilots**.',
-    extractedKeywords: [
-      'content generation',
-      'customer support',
-      'coding assistants',
-    ],
-    suggestedQueries: [
-      'Which use cases have the clearest ROI?',
-      'What are common failure modes in production?',
-    ],
-    dataNode: {
-      dataType: 'list',
-      title: 'Common LLM Applications',
-      listItems: [
-        'Content generation',
-        'Support agents and chatbots',
-        'Search and summarization',
-        'Code generation and review',
-        'BI and reporting copilots',
-      ],
-    },
-  },
-  'What types of data are LLMs trained on, and why is that important for performance?': {
-    content:
-      'LLMs are trained on web text, books, code, and curated conversational data. **Data quality and diversity** directly affect factuality, robustness, and bias behavior.',
-    extractedKeywords: ['training data', 'factuality', 'bias', 'data quality'],
-    suggestedQueries: [
-      'How does data quality affect hallucination rates?',
-      'What data curation steps are most important?',
-    ],
-    dataNode: {
-      dataType: 'list',
-      title: 'Main Training Data Types',
-      listItems: [
-        'Web text',
-        'Books and reference corpora',
-        'Code repositories',
-        'Dialog/instruction datasets',
-      ],
-    },
-  },
-};
-
-const DEMO_ROOT_QUESTIONS = [
-  'What exactly defines a Large Language Model and how is it different from other AI models?',
-  'What are the most common real-world applications where LLMs are currently used?',
-  'What types of data are LLMs trained on, and why is that important for performance?',
-  'What are the key components of Large Language Models?',
-  'How is QKV attention used inside LLMs?',
-];
+function rootSeedQuestionsFromSnapshot(state: WorkspaceState): string[] {
+  const qs = state.nodes
+    .filter((n): n is QueryNodeData => n.type === 'query' && n.parentId === 'root')
+    .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
+    .map((q) => q.question.trim())
+    .filter(Boolean);
+  return qs.length > 0 ? qs : [state.keyword];
+}
 
 export default function ServiceIntroducePage() {
+  const { t, locale } = useI18n();
+  const { state, demoResponses, parsedOk } = useMemo(() => {
+    const patched = applyIntroLocalePatch(rawSnapshot, getIntroLocalePatch(locale));
+    const parsed = parseWorkspaceSnapshot(patched as unknown);
+    if (!parsed.ok) {
+      return { state: null as WorkspaceState | null, demoResponses: {}, parsedOk: false as const };
+    }
+    const synced = syncIntroAnswerSuggestedQueriesWithChildQueries(parsed.state);
+    return {
+      state: synced,
+      demoResponses: buildDemoResponsesFromSnapshot(synced),
+      parsedOk: true as const,
+    };
+  }, [locale]);
+
+  if (!parsedOk || !state) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-6 text-sm text-muted-foreground">
+        {t('introduce.demoLoadError')}
+      </div>
+    );
+  }
   return (
-    <WorkspaceProvider demoResponses={DEMO_RESPONSES}>
-      <IntroduceWorkspace />
+    <WorkspaceProvider key={locale} demoResponses={demoResponses}>
+      <IntroduceRevealProvider key={locale} baselineSnapshot={state}>
+        <IntroduceChrome initialState={state} />
+      </IntroduceRevealProvider>
     </WorkspaceProvider>
   );
 }
 
-function IntroduceWorkspace() {
-  const { dispatch } = useWorkspace();
+function IntroduceChrome({ initialState }: { initialState: WorkspaceState }) {
+  const { t } = useI18n();
+  const { dispatch, state } = useWorkspace();
+  const router = useRouter();
   const [ready, setReady] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(false);
-  const [dashboardExpanded, setDashboardExpanded] = useState(false);
-  const [desktopViewMode, setDesktopViewMode] = useState<'canvas' | 'cards'>(
-    'cards'
-  );
+  const [desktopViewMode, setDesktopViewMode] = useState<'canvas' | 'cards'>('cards');
+  const useCardMode = desktopViewMode === 'cards';
+  /** Start as `cards` so switching to canvas always counts as a transition (snapshot coords are often off-screen). */
+  const prevDesktopModeRef = useRef<'canvas' | 'cards'>('cards');
 
   useEffect(() => {
     try {
-      const key = `qx10.root.seed.v1:${DEMO_SNAPSHOT.keyword}::${DEMO_SNAPSHOT.goal}`;
+      const key = `${ROOT_SEED_PREFIX}${initialState.keyword}::${initialState.goal}`;
       window.localStorage.setItem(
         key,
-        JSON.stringify({ questions: DEMO_ROOT_QUESTIONS, status: 'ai' })
+        JSON.stringify({ questions: rootSeedQuestionsFromSnapshot(initialState), status: 'ai' })
       );
     } catch {
       // ignore
     }
-    dispatch({ type: 'LOAD_SNAPSHOT', snapshot: DEMO_SNAPSHOT });
+    dispatch({ type: 'LOAD_SNAPSHOT', snapshot: initialState });
     setReady(true);
-  }, [dispatch]);
+  }, [dispatch, initialState]);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (desktopViewMode !== 'canvas') {
+      prevDesktopModeRef.current = desktopViewMode;
+      return;
+    }
+    const prev = prevDesktopModeRef.current;
+    if (prev !== 'canvas') {
+      const root = state.nodes.find((n) => n.type === 'root');
+      if (root) focusQueryNodeOnCanvas(root, state.viewport.zoom, dispatch);
+    }
+    prevDesktopModeRef.current = desktopViewMode;
+  }, [ready, desktopViewMode, state.nodes, state.viewport.zoom, dispatch]);
 
   if (!ready) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
+      <div className="flex min-h-screen items-center justify-center bg-[#F8F9FA] dark:bg-background">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
 
-  const canvasObscured = showDashboard && dashboardExpanded;
-
   return (
-    <div
-      id="workspace-export-all-target"
-      className="relative h-screen w-screen overflow-hidden bg-background"
-    >
-      <Toolbar
-        onToggleDashboard={() => {
-          setShowDashboard((v) => {
-            if (v) setDashboardExpanded(false);
-            else setDashboardExpanded(true);
-            return !v;
-          });
+    <main className="relative flex min-h-screen flex-col bg-[#F8F9FA] text-foreground dark:bg-background">
+      {/* subtle grid + sparkles */}
+      <div
+        className="pointer-events-none fixed inset-0 opacity-[0.06] dark:opacity-[0.04]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, #64748b 1px, transparent 1px), linear-gradient(to bottom, #64748b 1px, transparent 1px)',
+          backgroundSize: '56px 56px',
         }}
-        showDashboard={showDashboard}
-        desktopViewMode={desktopViewMode}
-        onDesktopViewModeChange={setDesktopViewMode}
+      />
+      <div
+        className="pointer-events-none fixed inset-0 opacity-[0.35]"
+        style={{
+          backgroundImage: `radial-gradient(circle at 12% 18%, rgba(0,196,154,0.12) 0, transparent 42%),
+            radial-gradient(circle at 88% 12%, rgba(59,130,246,0.1) 0, transparent 40%)`,
+        }}
       />
 
-      {desktopViewMode === 'cards' ? (
-        <MobileWorkspaceShell showDashboard={showDashboard} isMobile={false} />
-      ) : (
-        <div
-          id="workspace-tree-export-target"
-          className="absolute inset-0"
-          style={{
-            right: showDashboard && !dashboardExpanded ? '480px' : 0,
-            opacity: canvasObscured ? 0 : 1,
-            pointerEvents: canvasObscured ? 'none' : 'auto',
-            transition: 'right 0.3s ease, opacity 0.25s ease',
-          }}
-        >
-          <Canvas />
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-background/85 px-4 py-3 backdrop-blur-md dark:border-border dark:bg-background/90 sm:px-8">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+          <Link
+            href="/"
+            className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-90"
+          >
+            <Qx10Mark />
+            <span
+              className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-foreground"
+              style={{ fontFamily: 'var(--font-space-grotesk)' }}
+            >
+              Qx<span style={{ color: '#00C49A' }}>10</span>
+            </span>
+          </Link>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <Link
+              href="/"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card/90 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              title={t('introduce.home')}
+              aria-label={t('introduce.home')}
+            >
+              <CircleHelp className="size-4" />
+            </Link>
+            <LanguageSwitcher />
+            <ThemeToggle />
+            <Button
+              type="button"
+              className="h-9 gap-1 rounded-xl bg-[#2563EB] px-6 text-sm font-semibold text-white shadow-sm hover:bg-[#1D4ED8]"
+              onClick={() => router.push('/')}
+            >
+              {t('introduce.cta')}
+              <ChevronRight className="size-4" aria-hidden />
+            </Button>
+          </div>
         </div>
-      )}
+      </header>
 
-      {!canvasObscured && desktopViewMode !== 'cards' && <MiniMap />}
+      <section className="relative z-10 px-4 pb-6 pt-10 text-center sm:px-8 sm:pb-8 sm:pt-4">
+        <h1
+          className="mx-auto max-w-4xl text-balance text-3xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-foreground sm:text-4xl md:text-5xl"
+          style={{ fontFamily: 'var(--font-space-grotesk)' }}
+        >
+          {t('introduce.headline1')}
+          <br className="sm:hidden" />
+          <span className="sm:ml-2">{t('introduce.headline2')}</span>
+        </h1>
+        <p className="mx-auto mt-4 max-w-2xl text-pretty text-sm text-slate-600 dark:text-muted-foreground sm:text-base">
+          {t('introduce.subtitle')}
+        </p>
+      </section>
 
-      {desktopViewMode !== 'cards' && showDashboard && (
-        <DashboardPanel
-          onClose={() => {
-            setShowDashboard(false);
-            setDashboardExpanded(false);
-          }}
-          expanded={dashboardExpanded}
-          onExpandedChange={setDashboardExpanded}
-        />
-      )}
-    </div>
+      <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 px-4 pb-12 sm:px-8">
+        <div className="flex justify-center">
+          <div className="inline-flex items-center rounded-xl border border-slate-200/90 bg-card/90 p-1 shadow-sm dark:border-border">
+            <button
+              type="button"
+              onClick={() => setDesktopViewMode('canvas')}
+              className={[
+                'rounded-lg px-4 py-1.5 text-xs font-semibold transition-colors',
+                desktopViewMode === 'canvas'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              {t('introduce.viewCanvas')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDesktopViewMode('cards')}
+              className={[
+                'rounded-lg px-4 py-1.5 text-xs font-semibold transition-colors',
+                desktopViewMode === 'cards'
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              ].join(' ')}
+            >
+              {t('introduce.viewCards')}
+            </button>
+          </div>
+        </div>
+        <div className="mx-auto flex w-full flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-card shadow-[0_24px_60px_-12px_rgba(15,23,42,0.12)] dark:border-border dark:shadow-none">
+          <div className="relative min-h-[min(72vh,680px)] min-w-0 flex-1">
+            {useCardMode ? (
+              <MobileWorkspaceShell showDashboard={false} isMobile={false} embedded />
+            ) : (
+              <div className="absolute inset-0">
+                <Canvas />
+                <MiniMap />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }
 
+function Qx10Mark() {
+  return (
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden>
+      <rect x="2" y="6" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" />
+      <rect x="8" y="12" width="16" height="16" stroke="#00C49A" strokeWidth="1.5" opacity="0.6" />
+      <line x1="2" y1="6" x2="8" y2="12" stroke="#00C49A" strokeWidth="1.5" />
+      <line x1="18" y1="6" x2="24" y2="12" stroke="#00C49A" strokeWidth="1.5" />
+      <line x1="2" y1="22" x2="8" y2="28" stroke="#00C49A" strokeWidth="1.5" />
+      <line x1="18" y1="22" x2="24" y2="28" stroke="#00C49A" strokeWidth="1.5" />
+      <circle cx="18" cy="18" r="2" fill="#00C49A" />
+    </svg>
+  );
+}

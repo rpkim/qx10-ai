@@ -10,6 +10,7 @@ import {
 } from '@/lib/canvas-visibility';
 import { NODE_CANVAS_TOOLBAR_HEIGHT_PX } from '@/lib/canvas-node-chrome';
 import { useI18n } from '@/components/i18n-provider';
+import { useIntroduceReveal } from '@/lib/introduce-reveal-context';
 
 const NODE_COLORS: Record<NodeType, string> = {
   root: '#00C49A',
@@ -24,12 +25,19 @@ export function MiniMap() {
   const { t } = useI18n();
   const { state } = useWorkspace();
   const { nodes, edges, viewport, collapsedNodeIds } = state;
+  const introduceReveal = useIntroduceReveal();
 
   const visibleIds = useMemo(() => {
     const childrenMap = buildOutgoingChildrenMap(edges);
     const roots = getRootNodeIds(nodes, edges);
     return getVisibleNodeIds(roots, childrenMap, new Set(collapsedNodeIds));
   }, [nodes, edges, collapsedNodeIds]);
+
+  const mapNodes = useMemo(() => {
+    const collapsed = nodes.filter((n) => visibleIds.has(n.id));
+    if (!introduceReveal) return collapsed;
+    return collapsed.filter((n) => introduceReveal.isCanvasNodeVisible(n, nodes));
+  }, [nodes, visibleIds, introduceReveal]);
 
   if (nodes.length === 0) return null;
 
@@ -56,7 +64,7 @@ export function MiniMap() {
         </span>
       </div>
       <svg width={W} height={H} className="mx-auto block">
-        {nodes.map((n) => {
+        {mapNodes.map((n) => {
           const x = n.position.x * SCALE;
           const y = n.position.y * SCALE;
           const w = (n.width ?? 280) * SCALE;

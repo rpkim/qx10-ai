@@ -793,7 +793,7 @@ interface WorkspaceContextValue {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
-interface DemoResponse {
+export interface DemoResponse {
   content: string;
   extractedKeywords?: string[];
   suggestedQueries?: string[];
@@ -802,6 +802,33 @@ interface DemoResponse {
 
 function normalizeDemoKey(input: string): string {
   return input.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/** Match suggested / custom questions for duplicate detection under the same parent. */
+function normalizeQueryKeyForDedupe(s: string): string {
+  return s.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function findExistingChildQueryId(
+  parentId: string,
+  question: string,
+  nodes: WorkspaceNode[]
+): string | null {
+  const key = normalizeQueryKeyForDedupe(question);
+  if (!key) return null;
+  for (const n of nodes) {
+    if (n.type !== 'query') continue;
+    if (n.parentId !== parentId) continue;
+    if (normalizeQueryKeyForDedupe(n.question) === key) return n.id;
+  }
+  return null;
+}
+
+export const FOCUS_QUERY_NODE_EVENT = 'qx10:focus-query-node';
+
+function emitFocusQueryNode(queryId: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(FOCUS_QUERY_NODE_EVENT, { detail: { queryId } }));
 }
 
 export function WorkspaceProvider({
@@ -1114,7 +1141,9 @@ export function WorkspaceProvider({
     };
 
     const normalizedQuestion = normalizeDemoKey(queryNode.question);
-    const demo = demoResponsesRef.current[normalizedQuestion];
+    const demoByQueryId = demoResponsesRef.current[normalizeDemoKey(queryId)];
+    const demoByQuestion = demoResponsesRef.current[normalizedQuestion];
+    const demo = demoByQueryId ?? demoByQuestion;
     const hasDemoMode = Object.keys(demoResponsesRef.current).length > 0;
     if (demo) {
       runDemoFlow(demo);
@@ -1523,6 +1552,12 @@ export function WorkspaceProvider({
       toolChoice?: QueryToolChoice,
       autoRun = false
     ): string => {
+      const existingId = findExistingChildQueryId(parentId, question, nodesRef.current);
+      if (existingId) {
+        emitFocusQueryNode(existingId);
+        return existingId;
+      }
+
       const parent = nodesRef.current.find((n) => n.id === parentId);
       let dy = 160;
       if (parent?.type === 'answer') {
