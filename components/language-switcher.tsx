@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Languages } from 'lucide-react';
 import { LOCALES, LOCALE_LABELS, type Locale } from '@/lib/i18n/constants';
 import { useI18n } from '@/components/i18n-provider';
@@ -12,6 +13,15 @@ import {
 
 export function LanguageSwitcher() {
   const { locale, setLocale } = useI18n();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <DropdownMenu>
@@ -25,7 +35,7 @@ export function LanguageSwitcher() {
           <Languages className="size-4" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[10rem]">
+      <DropdownMenuContent align="end" className="min-w-40">
         {LOCALES.map((code) => (
           <DropdownMenuItem
             key={code}

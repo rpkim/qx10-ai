@@ -44,7 +44,7 @@ export function QueryNode({ node }: Props) {
   const effectiveTool = node.toolChoice ?? 'auto';
 
   const handleRun = () => {
-    if (!isRunning && !isComplete) {
+    if (!isRunning) {
       runQuery(node.id);
     }
   };
@@ -128,7 +128,7 @@ export function QueryNode({ node }: Props) {
           <span className="text-xs text-muted-foreground">{t('nodes.demoModelsHint')}</span>
         ) : aiCatalog.options.length === 1 ? (
           <span className="text-xs text-foreground/80">{aiCatalog.options[0].label}</span>
-        ) : isComplete || isRunning ? (
+        ) : isRunning ? (
           <span className="text-xs text-foreground/80">{modelLabel || t('nodes.defaultModel')}</span>
         ) : (
           <Select
@@ -160,7 +160,7 @@ export function QueryNode({ node }: Props) {
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Tool
         </span>
-        {isComplete || isRunning ? (
+        {isRunning ? (
           <span className="text-xs text-foreground/80">
             {effectiveTool === 'market'
               ? 'Stock'
@@ -192,7 +192,7 @@ export function QueryNode({ node }: Props) {
       </div>
 
       {/* Actions */}
-      {!isComplete && !isRunning && (
+      {!isRunning && (
         <div className="flex gap-2">
           <button
             onClick={handleRun}
@@ -214,7 +214,7 @@ export function QueryNode({ node }: Props) {
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="5,3 19,12 5,21" />
             </svg>
-            {t('nodes.run')}
+            {isComplete ? 'Rerun' : t('nodes.run')}
           </button>
           <button
             onClick={() => setShowCustom(!showCustom)}

@@ -11,6 +11,7 @@ import type {
 } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type MobileTab = 'explore' | 'dashboard';
 
@@ -354,12 +355,52 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
                     {!isCollapsed && (
                       <>
                         <div className="mb-2 flex flex-wrap gap-1.5">
-                          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-                            {modelLabel(q)}
-                          </span>
-                          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
-                            Tool: {q.toolChoice ?? 'auto'}
-                          </span>
+                          {aiCatalog && aiCatalog.options.length > 1 ? (
+                            <Select
+                              value={q.modelChoice ?? aiCatalog.defaultChoice ?? aiCatalog.options[0]?.id ?? ''}
+                              onValueChange={(id) =>
+                                dispatch({
+                                  type: 'UPDATE_NODE',
+                                  id: q.id,
+                                  updates: { modelChoice: id } as Partial<WorkspaceNode>,
+                                })
+                              }
+                            >
+                              <SelectTrigger size="sm" className="h-7 min-w-[140px] max-w-[220px] text-[11px]">
+                                <SelectValue placeholder="Model" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {aiCatalog.options.map((opt) => (
+                                  <SelectItem key={opt.id} value={opt.id} className="text-[11px]">
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+                              {modelLabel(q)}
+                            </span>
+                          )}
+                          <Select
+                            value={q.toolChoice ?? 'auto'}
+                            onValueChange={(id) =>
+                              dispatch({
+                                type: 'UPDATE_NODE',
+                                id: q.id,
+                                updates: { toolChoice: id as 'auto' | 'web' | 'market' } as Partial<WorkspaceNode>,
+                              })
+                            }
+                          >
+                            <SelectTrigger size="sm" className="h-7 w-[110px] text-[11px]">
+                              <SelectValue placeholder="Tool" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="auto" className="text-[11px]">Auto</SelectItem>
+                              <SelectItem value="web" className="text-[11px]">Web Search</SelectItem>
+                              <SelectItem value="market" className="text-[11px]">Stock</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         {a && (

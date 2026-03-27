@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { WorkspaceProvider, useWorkspace } from '@/lib/workspace-store';
 import type { GoalType } from '@/lib/types';
-import { getSuggestedQueries } from '@/lib/mock-data';
 import { Canvas } from '@/components/workspace/canvas';
 import { Toolbar } from '@/components/workspace/toolbar';
 import { MiniMap } from '@/components/workspace/minimap';
@@ -106,50 +105,6 @@ function WorkspaceInner() {
     if (!ready || !state.keyword) return;
     registerWorkspaceVisit(state.keyword, state.goal);
   }, [ready, state.keyword, state.goal]);
-
-  useEffect(() => {
-    if (!ready || !state.keyword) return;
-
-    const root = state.nodes.find((n) => n.type === 'root');
-    if (!root) return;
-
-    const hasRootQueries = state.edges.some((e) => {
-      if (e.sourceId !== root.id) return false;
-      const t = state.nodes.find((n) => n.id === e.targetId);
-      return t?.type === 'query';
-    });
-    if (hasRootQueries) return;
-
-    let cancelled = false;
-    fetch('/api/workspace/seed-queries', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keyword: state.keyword, goal: state.goal }),
-    })
-      .then((r) => r.json())
-      .then((data: { questions?: string[] }) => {
-        if (cancelled) return;
-        const qs = Array.isArray(data.questions)
-          ? data.questions.map((q) => String(q).trim()).filter(Boolean)
-          : [];
-        dispatch({
-          type: 'SET_SEED_QUERIES',
-          questions: qs.length > 0 ? qs : getSuggestedQueries(state.keyword),
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          dispatch({
-            type: 'SET_SEED_QUERIES',
-            questions: getSuggestedQueries(state.keyword),
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, state.keyword, state.goal, dispatch]);
 
   if (!ready || !state.keyword) {
     return (

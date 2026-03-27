@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RootNodeData } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
+import { getSuggestedQueries } from '@/lib/mock-data';
 
 interface Props {
   node: RootNodeData;
@@ -11,27 +12,41 @@ interface Props {
 
 export function RootNode({ node }: Props) {
   const { t } = useI18n();
-  const { state, runQuery, addCustomQuery } = useWorkspace();
+  const { addCustomQuery } = useWorkspace();
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
+  const [seedSuggestions, setSeedSuggestions] = useState<string[]>([]);
 
-  const handleAddAllQueries = () => {
-    // All suggested queries are already in the initial workspace, just mark them as run
-    const childQueries = state.nodes.filter(
-      (n) => n.type === 'query' && n.parentId === 'root'
-    );
-    childQueries.forEach((q) => {
-      if (q.status === 'suggested') {
-        runQuery(q.id);
-      }
-    });
-  };
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/workspace/seed-queries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword: node.keyword, goal: node.goal }),
+    })
+      .then((r) => r.json())
+      .then((data: { questions?: string[] }) => {
+        if (cancelled) return;
+        const qs = Array.isArray(data.questions)
+          ? data.questions.map((q) => String(q).trim()).filter(Boolean)
+          : [];
+        setSeedSuggestions(qs.length > 0 ? qs.slice(0, 6) : getSuggestedQueries(node.keyword).slice(0, 6));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSeedSuggestions(getSuggestedQueries(node.keyword).slice(0, 6));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [node.keyword, node.goal]);
 
   const handleSubmitCustom = (e: React.FormEvent) => {
     e.preventDefault();
     const q = customQ.trim();
     if (!q) return;
-    addCustomQuery(q, node.id, node.position);
+    addCustomQuery(q, node.id, node.position, undefined, 'auto', true);
     setCustomQ('');
     setShowCustomInput(false);
   };
@@ -74,13 +89,21 @@ export function RootNode({ node }: Props) {
           {node.keyword}
         </h2>
 
-        <button
-          onClick={handleAddAllQueries}
-          className="mt-1 rounded-xl px-4 py-1.5 text-xs font-medium transition-all hover:shadow-[0_0_8px_rgba(0,196,154,0.3)]"
-          style={{ background: 'rgba(0,196,154,0.15)', color: '#00C49A' }}
-        >
-          Explore all queries
-        </button>
+        {seedSuggestions.length > 0 && (
+          <div className="mt-1 flex w-full flex-col gap-1.5 rounded-xl border border-border bg-card/70 p-2">
+            {seedSuggestions.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => addCustomQuery(q, node.id, node.position, undefined, 'auto', true)}
+                className="rounded-lg border border-border px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                title="Run suggested query"
+              >
+                + {q}
+              </button>
+            ))}
+          </div>
+        )}
 
         <button
           onClick={() => setShowCustomInput((v) => !v)}
