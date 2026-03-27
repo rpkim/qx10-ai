@@ -202,7 +202,14 @@ export function AnswerNode({ node }: Props) {
                 if (linked) {
                   runQuery(linked.id);
                 } else {
-                  addCustomQuery(q, node.id, node.position, inheritedModelChoice, inheritedToolChoice);
+                  addCustomQuery(
+                    q,
+                    node.id,
+                    node.position,
+                    inheritedModelChoice,
+                    inheritedToolChoice,
+                    true
+                  );
                 }
               };
 

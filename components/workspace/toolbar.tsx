@@ -465,7 +465,10 @@ export function Toolbar({
             <circle cx="18" cy="18" r="2" fill="#00C49A" />
           </svg>
           <span className="font-bold text-foreground" style={{ fontFamily: 'var(--font-space-grotesk)' }}>
-            qx<span style={{ color: '#00C49A' }}>10</span>.lol
+            Qx<span style={{ color: '#00C49A' }}>10</span>.lol
+          </span>
+          <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+            Qx10
           </span>
           <div className="mx-1 h-4 w-px bg-border" />
           <span className="text-sm font-medium text-foreground">{keyword}</span>
