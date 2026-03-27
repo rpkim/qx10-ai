@@ -211,6 +211,8 @@ export const es: Messages = {
   'introduce.cta': 'Empezar',
   'introduce.viewCanvas': 'Canvas',
   'introduce.viewCards': 'Tarjetas',
+  'introduce.demoWorkspaceHint':
+    'La demo de abajo usa la palabra clave «Large Language Models». En el servicio completo, puedes escribir la palabra clave que quieras y seguir preguntando para aprender cosas nuevas y entenderlas en profundidad.',
   'introduce.demoLoadError': 'No se pudo cargar la instantánea de demostración.',
   'introduce.home': 'Inicio',
   'goals.learn': 'Aprender',

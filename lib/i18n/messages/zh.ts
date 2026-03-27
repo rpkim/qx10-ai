@@ -205,6 +205,8 @@ export const zh: Messages = {
   'introduce.cta': '开始',
   'introduce.viewCanvas': '画布',
   'introduce.viewCards': '卡片',
+  'introduce.demoWorkspaceHint':
+    '以下展示的是以「Large Language Models」为关键词的演示。在实际服务中，您可以输入任意关键词，通过反复提问来学习新内容并深入理解。',
   'introduce.demoLoadError': '无法加载演示快照。',
   'introduce.home': '首页',
   'goals.learn': '学习',

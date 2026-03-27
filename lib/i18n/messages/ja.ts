@@ -208,6 +208,8 @@ export const ja: Messages = {
   'introduce.cta': 'はじめる',
   'introduce.viewCanvas': 'キャンバス',
   'introduce.viewCards': 'カード',
+  'introduce.demoWorkspaceHint':
+    '以下は「Large Language Models」というキーワードで見せるデモです。本番では、お好きなキーワードを入力し、質問を繰り返しながら新しいことを学び、深く理解できます。',
   'introduce.demoLoadError': 'デモのスナップショットを読み込めませんでした。',
   'introduce.home': 'ホーム',
   'goals.learn': '学ぶ',

@@ -208,6 +208,8 @@ export const en: Messages = {
   'introduce.cta': "Let's Start",
   'introduce.viewCanvas': 'Canvas',
   'introduce.viewCards': 'Cards',
+  'introduce.demoWorkspaceHint':
+    'The demo below uses the keyword “Large Language Models.” In the full product, you can enter any keyword you like and keep asking questions to learn something new and understand it in depth.',
   'introduce.demoLoadError': 'Demo snapshot could not be loaded.',
   'introduce.home': 'Home',
   'goals.learn': 'Learn',

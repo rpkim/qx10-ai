@@ -208,6 +208,8 @@ export const ko: Messages = {
   'introduce.cta': '시작하기',
   'introduce.viewCanvas': '캔버스',
   'introduce.viewCards': '카드',
+  'introduce.demoWorkspaceHint':
+    '아래는 Large Language Models 키워드로 보여주는 데모입니다. 실제 서비스에서는 직접 원하는 키워드를 입력하고 질문을 반복하면서 새로운 것을 배우고 깊게 이해할 수 있습니다.',
   'introduce.demoLoadError': '데모 스냅샷을 불러올 수 없습니다.',
   'introduce.home': '홈',
   'goals.learn': '학습',
