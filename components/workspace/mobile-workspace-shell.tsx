@@ -6,12 +6,14 @@ import type {
   DataNodeData,
   QueryNodeData,
   QueryTemplateNodeData,
+  RootNodeData,
   TemplateSlotNodeData,
   WorkspaceNode,
 } from '@/lib/types';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RootNode } from '@/components/nodes/root-node';
 
 type MobileTab = 'explore' | 'dashboard';
 
@@ -55,6 +57,10 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
   );
   const slotNodes = useMemo(
     () => state.nodes.filter((n): n is TemplateSlotNodeData => n.type === 'template-slot'),
+    [state.nodes]
+  );
+  const rootNode = useMemo(
+    () => state.nodes.find((n): n is RootNodeData => n.type === 'root') ?? null,
     [state.nodes]
   );
 
@@ -180,6 +186,11 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
 
         {effectiveTab === 'explore' && (
           <div className="flex flex-col gap-2">
+            {rootNode && (
+              <div className="mb-1 flex justify-center">
+                <RootNode node={rootNode} />
+              </div>
+            )}
             {templateNodes.length > 0 && (
               <div className="mb-1 rounded-2xl border border-border bg-card p-3">
                 <div className="mb-2 text-xs font-semibold text-muted-foreground">Question Templates</div>
