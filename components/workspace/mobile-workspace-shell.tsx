@@ -428,9 +428,17 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
                                 {state.dashboardNodeIds.includes(a.id) ? 'Unpin' : 'Pin'}
                               </button>
                             </div>
-                            <p className="line-clamp-5 text-[13px] leading-relaxed text-foreground/90">
+                            <div
+                              className="max-h-52 overflow-y-auto pr-1 text-[13px] leading-relaxed text-foreground/90 select-text"
+                              style={{
+                                scrollbarWidth: 'thin',
+                                overscrollBehavior: 'contain',
+                                userSelect: 'text',
+                                WebkitUserSelect: 'text',
+                              }}
+                            >
                               {a.content || '...'}
-                            </p>
+                            </div>
                             {a.suggestedQueries.length > 0 && (
                               <div className="mt-2 flex flex-col gap-1.5">
                                 {a.suggestedQueries.slice(0, 2).map((sq) => (
