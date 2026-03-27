@@ -366,8 +366,8 @@ export function Toolbar({
               <div className="text-sm text-destructive">{summaryError}</div>
             )}
             {!summaryBusy && !summaryError && (
-              <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
-                {summaryText || 'Summary is empty.'}
+              <div className="text-sm leading-relaxed text-foreground/90">
+                {summaryText ? renderSummaryMarkdown(summaryText) : 'Summary is empty.'}
               </div>
             )}
           </div>
@@ -383,6 +383,24 @@ export function Toolbar({
               disabled={summaryBusy}
             >
               Regenerate
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!summaryText.trim()) return;
+                const blob = new Blob([summaryText], { type: 'text/markdown;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const safeKeyword = keyword.trim().replace(/\s+/g, '-').toLowerCase() || 'workspace';
+                a.href = url;
+                a.download = `qx10-summary-${safeKeyword}.md`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              disabled={summaryBusy || !summaryText.trim()}
+            >
+              Download .md
             </Button>
             <Button type="button" onClick={() => setSummaryOpen(false)}>
               Close
@@ -806,5 +824,114 @@ export function Toolbar({
         </div>
       </div>
     </header>
+  );
+}
+
+function renderSummaryMarkdown(content: string): JSX.Element {
+  const blocks = content.split('\n\n').filter((b) => b.trim().length > 0);
+  return (
+    <div className="space-y-2">
+      {blocks.map((block, idx) => {
+        const trimmed = block.trim();
+        const lines = trimmed.split('\n').filter(Boolean);
+        const isList = lines.length > 0 && lines.every((line) => /^\s*[-*]\s+/.test(line));
+        const isMarkdownTable =
+          lines.length >= 2 &&
+          /^\s*\|?(.+\|)+.+\|?\s*$/.test(lines[0]) &&
+          /^\s*\|?[\s:-]+(\|[\s:-]+)+\|?\s*$/.test(lines[1]);
+
+        if (isMarkdownTable) {
+          const toCells = (line: string) =>
+            line
+              .trim()
+              .replace(/^\|/, '')
+              .replace(/\|$/, '')
+              .split('|')
+              .map((cell) => cell.trim());
+          const headers = toCells(lines[0]);
+          const rows = lines.slice(2).map(toCells);
+          return (
+            <div key={idx} className="overflow-x-auto rounded-lg border border-border bg-card/70">
+              <table className="w-full min-w-[480px] text-xs">
+                <thead>
+                  <tr>
+                    {headers.map((h, hIdx) => (
+                      <th
+                        key={hIdx}
+                        className="border-b border-border px-2 py-1.5 text-left font-semibold text-muted-foreground"
+                      >
+                        {formatSummaryBoldInline(h)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, rowIdx) => (
+                    <tr key={rowIdx}>
+                      {headers.map((_, colIdx) => (
+                        <td key={colIdx} className="border-b border-border px-2 py-1.5 text-foreground/85">
+                          {formatSummaryBoldInline(row[colIdx] ?? '')}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        if (isList) {
+          return (
+            <ul key={idx} className="ml-4 list-disc space-y-1">
+              {lines.map((line, lineIdx) => (
+                <li key={lineIdx}>{formatSummaryBoldInline(line.replace(/^\s*[-*]\s+/, ''))}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        if (/^###\s+/.test(trimmed)) {
+          return (
+            <h4 key={idx} className="text-sm font-semibold text-foreground">
+              {formatSummaryBoldInline(trimmed.replace(/^###\s+/, ''))}
+            </h4>
+          );
+        }
+        if (/^##\s+/.test(trimmed)) {
+          return (
+            <h3 key={idx} className="text-base font-semibold text-foreground">
+              {formatSummaryBoldInline(trimmed.replace(/^##\s+/, ''))}
+            </h3>
+          );
+        }
+        if (/^#\s+/.test(trimmed)) {
+          return (
+            <h2 key={idx} className="text-lg font-semibold text-foreground">
+              {formatSummaryBoldInline(trimmed.replace(/^#\s+/, ''))}
+            </h2>
+          );
+        }
+
+        return (
+          <p key={idx} className="text-sm leading-relaxed text-foreground/90">
+            {formatSummaryBoldInline(trimmed)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatSummaryBoldInline(text: string): (string | JSX.Element)[] {
+  const parts = text.split(/\*\*(.*?)\*\*/g);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className="font-semibold text-foreground">
+        {part}
+      </strong>
+    ) : (
+      part
+    )
   );
 }
