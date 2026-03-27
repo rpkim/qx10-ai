@@ -153,6 +153,14 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
     const id = q.modelChoice ?? aiCatalog?.defaultChoice ?? '';
     return aiCatalog?.options.find((o) => o.id === id)?.label ?? (id || 'Default');
   };
+  const scrollToQueryCard = (queryId: string) => {
+    window.setTimeout(() => {
+      const el = document.querySelector(`[data-mobile-query-card-id="${queryId}"]`) as HTMLElement | null;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 90);
+  };
 
   return (
     <div
@@ -295,7 +303,11 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
                 const canRun = !isRunning;
                 const isCollapsed = !!collapsedByQuery[q.id];
                 return (
-                  <div key={q.id} className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+                  <div
+                    key={q.id}
+                    data-mobile-query-card-id={q.id}
+                    className="rounded-2xl border border-border bg-card p-3 shadow-sm"
+                  >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
@@ -428,16 +440,17 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
                                   <button
                                     key={sq}
                                     type="button"
-                                    onClick={() =>
-                                      addCustomQuery(
+                                    onClick={() => {
+                                      const newId = addCustomQuery(
                                         sq,
                                         a.id,
                                         a.position,
                                         q.modelChoice ?? aiCatalog?.defaultChoice,
                                         q.toolChoice ?? 'auto',
                                         true
-                                      )
-                                    }
+                                      );
+                                      scrollToQueryCard(newId);
+                                    }}
                                     className="rounded-lg border border-border px-2 py-1 text-left text-[12px] text-muted-foreground"
                                   >
                                     + {sq}
@@ -457,13 +470,14 @@ export function MobileWorkspaceShell({ showDashboard, isMobile }: Props) {
                                     onClick={() => {
                                       const text = (customInputByAnswer[a.id] ?? '').trim();
                                       if (!text) return;
-                                      addCustomQuery(
+                                      const newId = addCustomQuery(
                                         text,
                                         a.id,
                                         a.position,
                                         q.modelChoice ?? aiCatalog?.defaultChoice,
                                         q.toolChoice ?? 'auto'
                                       );
+                                      scrollToQueryCard(newId);
                                       setCustomInputByAnswer((prev) => ({ ...prev, [a.id]: '' }));
                                     }}
                                     className="rounded-lg border border-border px-2.5 py-1.5 text-[12px] text-foreground"
