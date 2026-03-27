@@ -459,27 +459,13 @@ function mergeTemplateFollowUpsIntoSuggested(
 function attachAnswerChildren(
   dispatch: React.Dispatch<Action>,
   opts: {
-    queryId: string;
     answerId: string;
     answerPos: Position;
-    suggestedQueries: string[];
     dataId: string;
     dataPayload: Record<string, unknown> | null | undefined;
-    /** Copied to branched query nodes so they keep the same model. */
-    parentModelChoice?: string;
-    parentToolChoice?: QueryToolChoice;
   }
 ) {
-  const {
-    queryId,
-    answerId,
-    answerPos,
-    suggestedQueries,
-    dataId,
-    dataPayload,
-    parentModelChoice,
-    parentToolChoice,
-  } = opts;
+  const { answerId, answerPos, dataId, dataPayload } = opts;
 
   const built = dataNodeFromApiPayload(dataPayload, dataId, answerId, answerPos, 320);
   if (built) {
@@ -489,39 +475,6 @@ function attachAnswerChildren(
       edge: { id: `e-${answerId}-${dataId}`, sourceId: answerId, targetId: dataId },
     });
   }
-
-  const followUpY =
-    answerPos.y +
-    NODE_CANVAS_TOOLBAR_HEIGHT_PX +
-    CANVAS_ANSWER_LAYOUT_HEIGHT +
-    LAYOUT_GAP_Y;
-  suggestedQueries.slice(0, 2).forEach((q, i) => {
-    const subQId = `q-sub-${queryId}-${i}-${Date.now()}`;
-    const subQNode: WorkspaceNode = {
-      id: subQId,
-      type: 'query',
-      question: q,
-      parentId: answerId,
-      position: {
-        x: answerPos.x + i * LAYOUT_QUERY_SIBLING_X,
-        y: followUpY,
-      },
-      status: 'suggested',
-      width: 280,
-      height: 100,
-      ...(parentModelChoice ? { modelChoice: parentModelChoice } : {}),
-      ...(parentToolChoice ? { toolChoice: parentToolChoice } : {}),
-    };
-    dispatch({ type: 'ADD_NODE', node: subQNode });
-    dispatch({
-      type: 'ADD_EDGE',
-      edge: {
-        id: `e-${answerId}-${subQId}`,
-        sourceId: answerId,
-        targetId: subQId,
-      },
-    });
-  });
 }
 
 /* ─────────────────────────────────────────────
@@ -807,7 +760,8 @@ interface WorkspaceContextValue {
     parentId: string,
     parentPos: Position,
     modelChoice?: string,
-    toolChoice?: QueryToolChoice
+    toolChoice?: QueryToolChoice,
+    autoRun?: boolean
   ) => void;
   addQueryTemplateNode: (args: {
     displayName: string;
@@ -1038,18 +992,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
               : null;
 
             attachAnswerChildren(dispatch, {
-              queryId,
               answerId,
               answerPos,
-              suggestedQueries: mergeTemplateFollowUpsIntoSuggested(
-                nodesRef.current,
-                queryId,
-                mockData.suggestedQueries
-              ),
               dataId,
               dataPayload,
-              parentModelChoice: queryNode.modelChoice,
-              parentToolChoice: queryNode.toolChoice,
             });
           }
         }, 28);
@@ -1108,18 +1054,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           },
         });
         attachAnswerChildren(dispatch, {
-          queryId,
           answerId,
           answerPos,
-          suggestedQueries: mergeTemplateFollowUpsIntoSuggested(
-            nodesRef.current,
-            queryId,
-            suggested.length ? suggested : ['What should I explore next?']
-          ),
           dataId,
           dataPayload: metaPayload,
-          parentModelChoice: queryNode.modelChoice,
-          parentToolChoice: queryNode.toolChoice,
         });
       };
 
@@ -1459,7 +1397,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       parentId: string,
       parentPos: Position,
       modelChoice?: string,
-      toolChoice?: QueryToolChoice
+      toolChoice?: QueryToolChoice,
+      autoRun = false
     ) => {
       const parent = nodesRef.current.find((n) => n.id === parentId);
       let dy = 160;
@@ -1490,8 +1429,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         type: 'ADD_EDGE',
         edge: { id: `e-${parentId}-${customQId}`, sourceId: parentId, targetId: customQId },
       });
+      if (autoRun) {
+        const tryRun = (attempt = 0) => {
+          const exists = nodesRef.current.some((n) => n.id === customQId && n.type === 'query');
+          if (exists) {
+            runQuery(customQId);
+            return;
+          }
+          if (attempt >= 8) return;
+          window.setTimeout(() => tryRun(attempt + 1), 25);
+        };
+        window.setTimeout(() => tryRun(0), 0);
+      }
     },
-    []
+    [runQuery]
   );
 
   const toggleDashboardPin = useCallback((nodeId: string) => {

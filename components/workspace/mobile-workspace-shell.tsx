@@ -32,6 +32,7 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
     addTemplateSlotNode,
     runTemplateSlot,
     deleteTemplateSlotNode,
+    deleteNode,
   } = useWorkspace();
   const [customInputByAnswer, setCustomInputByAnswer] = useState<Record<string, string>>({});
   const [collapsedByQuery, setCollapsedByQuery] = useState<Record<string, boolean>>({});
@@ -65,6 +66,7 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
   }, [state.nodes]);
   const orderedQueryNodes = useMemo(() => {
     const queryById = new Map(queryNodes.map((q) => [q.id, q]));
+    const templateIdSet = new Set(templateNodes.map((t) => t.id));
     const answerOwnerById = new Map<string, string>();
     for (const n of state.nodes) {
       if (n.type === 'answer') answerOwnerById.set(n.id, n.queryId);
@@ -100,7 +102,15 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
 
     const createdAt = (id: string) => Number(id.match(/(\d{10,})/)?.[1] ?? 0);
     const sortByCreated = (a: QueryNodeData, b: QueryNodeData) => createdAt(a.id) - createdAt(b.id);
-    roots.sort(sortByCreated);
+    roots.sort((a, b) => {
+      const aFromTemplate = !!a.parentId && templateIdSet.has(a.parentId);
+      const bFromTemplate = !!b.parentId && templateIdSet.has(b.parentId);
+      if (aFromTemplate !== bFromTemplate) return aFromTemplate ? -1 : 1;
+      if (aFromTemplate && bFromTemplate) {
+        return createdAt(b.id) - createdAt(a.id);
+      }
+      return sortByCreated(a, b);
+    });
     for (const arr of childrenMap.values()) arr.sort(sortByCreated);
 
     const out: QueryNodeData[] = [];
@@ -110,7 +120,7 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
     };
     for (const r of roots) walk(r);
     return out;
-  }, [queryNodes, state.nodes]);
+  }, [queryNodes, state.nodes, templateNodes]);
 
   const dataByAnswer = useMemo(() => {
     const map = new Map<string, DataNodeData>();
@@ -301,6 +311,14 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
+                          onClick={() => deleteNode(q.id)}
+                          className="rounded-lg border border-border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
+                          title="Delete query"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
                           onClick={() =>
                             setCollapsedByQuery((prev) => ({ ...prev, [q.id]: !prev[q.id] }))
                           }
@@ -373,7 +391,8 @@ export function MobileWorkspaceShell({ showDashboard, onShowDashboardChange, isM
                                         a.id,
                                         a.position,
                                         q.modelChoice ?? aiCatalog?.defaultChoice,
-                                        q.toolChoice ?? 'auto'
+                                        q.toolChoice ?? 'auto',
+                                        true
                                       )
                                     }
                                     className="rounded-lg border border-border px-2 py-1 text-left text-[12px] text-muted-foreground"
