@@ -174,6 +174,8 @@ export const ko: Messages = {
   'templates.slotFillRequired': '모든 변수를 입력하세요.',
   'templates.slotNodeBadge': '템플릿 슬롯',
   'templates.slotOrphaned': '연결된 템플릿이 없습니다. 이 슬롯을 삭제하세요.',
+  'nodes.seedGenerating': 'AI가 추천 질문을 생성 중...',
+  'nodes.seedFallbackNotice': '추천 생성이 지연되어 기본 질문을 표시 중입니다.',
   'nodes.generating': '생성 중…',
   'nodes.answer': '답변',
   'nodes.pinAction': '고정',

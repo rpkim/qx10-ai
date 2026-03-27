@@ -176,6 +176,8 @@ export const es: Messages = {
   'templates.slotFillRequired': 'Rellena todas las variables.',
   'templates.slotNodeBadge': 'Ranura de plantilla',
   'templates.slotOrphaned': 'Falta la plantilla — elimina esta ranura.',
+  'nodes.seedGenerating': 'La IA está generando preguntas sugeridas...',
+  'nodes.seedFallbackNotice': 'La generación se retrasó; mostrando preguntas predeterminadas.',
   'nodes.generating': 'Generando…',
   'nodes.answer': 'Respuesta',
   'nodes.pinAction': 'Fijar',

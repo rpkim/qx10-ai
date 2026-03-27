@@ -174,6 +174,8 @@ export const en: Messages = {
   'templates.slotFillRequired': 'Fill every variable.',
   'templates.slotNodeBadge': 'Template slot',
   'templates.slotOrphaned': 'Template missing — delete this slot.',
+  'nodes.seedGenerating': 'AI is generating suggested questions...',
+  'nodes.seedFallbackNotice': 'Suggestion generation is delayed, showing default questions.',
   'nodes.generating': 'Generating…',
   'nodes.answer': 'Answer',
   'nodes.pinAction': 'Pin',

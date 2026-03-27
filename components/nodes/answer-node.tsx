@@ -11,7 +11,7 @@ interface Props {
 
 export function AnswerNode({ node }: Props) {
   const { t } = useI18n();
-  const { addCustomQuery, toggleDashboardPin, state, aiCatalog, runQuery } = useWorkspace();
+  const { addCustomQuery, toggleDashboardPin, state, aiCatalog, runQuery, isDemoMode } = useWorkspace();
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
@@ -192,13 +192,14 @@ export function AnswerNode({ node }: Props) {
         <div className="flex flex-col gap-1.5 border-t pt-3" style={{ borderColor: 'rgba(163,230,53,0.15)' }}>
           <span className="text-xs text-muted-foreground">Follow-up queries</span>
           <div className="flex flex-col gap-1">
-            {node.suggestedQueries.slice(0, 2).map((q) => {
+            {node.suggestedQueries.slice(0, 2).map((q, idx) => {
               const linked = followUpChildByText.get(normalizeFollowUpQuestion(q));
               const spawning = !linked;
               const running = linked?.status === 'running';
+              const clickable = !isDemoMode || idx === 0;
 
               const spawnOrRun = () => {
-                if (running) return;
+                if (running || !clickable) return;
                 if (linked) {
                   runQuery(linked.id);
                 } else {
@@ -224,8 +225,11 @@ export function AnswerNode({ node }: Props) {
                       e.stopPropagation();
                       spawnOrRun();
                     }}
-                    disabled={running}
-                    className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={running || !clickable}
+                    className={[
+                      'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                      clickable ? 'shadow-[0_0_10px_rgba(0,196,154,0.22)]' : '',
+                    ].join(' ')}
                     style={
                       spawning
                         ? {
@@ -260,21 +264,26 @@ export function AnswerNode({ node }: Props) {
                   <button
                     type="button"
                     onClick={spawnOrRun}
-                    disabled={running}
-                    className="min-w-0 flex-1 text-left leading-relaxed transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={running || !clickable}
+                    className={[
+                      'min-w-0 flex-1 text-left leading-relaxed transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
+                      clickable ? 'text-foreground' : '',
+                    ].join(' ')}
                   >
                     {q}
                   </button>
                 </div>
               );
             })}
-            <button
-              onClick={() => setShowCustomInput((v) => !v)}
-              className="mt-0.5 self-start rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              {t('nodes.addCustom')}
-            </button>
-            {showCustomInput && (
+            {!isDemoMode && (
+              <button
+                onClick={() => setShowCustomInput((v) => !v)}
+                className="mt-0.5 self-start rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                {t('nodes.addCustom')}
+              </button>
+            )}
+            {!isDemoMode && showCustomInput && (
               <div className="mt-1 flex gap-2">
                 <input
                   autoFocus
