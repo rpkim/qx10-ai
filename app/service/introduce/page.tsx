@@ -130,7 +130,7 @@ function IntroduceChrome({ initialState }: { initialState: WorkspaceState }) {
         }}
       />
 
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-background/85 px-4 py-3 backdrop-blur-md dark:border-border dark:bg-background/90 sm:px-8">
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-background/85 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] backdrop-blur-md dark:border-border dark:bg-background/90 sm:px-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Link
             href="/"

@@ -90,6 +90,7 @@ export async function POST(req: Request) {
     '## Open Questions',
     '## Practical Next Actions',
     'When helpful, include short bullet lists and small markdown tables.',
+    'For bullet lists, put each item on its own line starting with `-` or `*` followed by a space (never run multiple `* items` on one line).',
   ].join('\n');
 
   const user = [
