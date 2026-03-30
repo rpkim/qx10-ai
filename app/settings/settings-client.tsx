@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, CloudDownload, CloudUpload, LogOut } from 'lucide-react';
+import { ArrowLeft, CloudDownload, CloudUpload, LogOut, Pencil, Trash2 } from 'lucide-react';
 import { useI18n } from '@/components/i18n-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -203,6 +203,53 @@ export function SettingsClient() {
     }
   };
 
+  const onRenameRemote = async (keyword: string) => {
+    const next = window.prompt(t('settings.googleDrive.renamePrompt'), keyword)?.trim() ?? '';
+    if (!next || next === keyword) return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/integrations/google/drive/rename', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldKeyword: keyword, newKeyword: next }),
+      });
+      if (!res.ok) {
+        toast.error(t('settings.googleDrive.renameFail'));
+        return;
+      }
+      toast.success(t('settings.googleDrive.renameDone'));
+      await refreshStatus();
+    } catch {
+      toast.error(t('settings.googleDrive.renameFail'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onDeleteRemote = async (keyword: string) => {
+    if (!window.confirm(t('settings.googleDrive.deleteConfirm', { keyword }))) return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/integrations/google/drive/delete', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword }),
+      });
+      if (!res.ok) {
+        toast.error(t('settings.googleDrive.deleteFail'));
+        return;
+      }
+      toast.success(t('settings.googleDrive.deleteDone'));
+      await refreshStatus();
+    } catch {
+      toast.error(t('settings.googleDrive.deleteFail'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col gap-8 px-4 py-10">
       <div>
@@ -272,8 +319,28 @@ export function SettingsClient() {
                   </p>
                   <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs">
                     {manifest.workspaces.map((w) => (
-                      <li key={w.driveFileId} className="truncate text-foreground">
-                        {w.keyword}
+                      <li key={w.driveFileId} className="flex items-center justify-between gap-2">
+                        <span className="truncate text-foreground">{w.keyword}</span>
+                        <span className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => void onRenameRemote(w.keyword)}
+                            disabled={busy}
+                            className="rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                            title={t('settings.googleDrive.rename')}
+                          >
+                            <Pencil className="size-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void onDeleteRemote(w.keyword)}
+                            disabled={busy}
+                            className="rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                            title={t('settings.googleDrive.delete')}
+                          >
+                            <Trash2 className="size-3" />
+                          </button>
+                        </span>
                       </li>
                     ))}
                   </ul>
