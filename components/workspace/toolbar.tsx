@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
+  CloudUpload,
   Download,
   FileImage,
   FileText,
@@ -43,6 +44,7 @@ import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
 import {
   downloadWorkspaceJson,
   parseWorkspaceSnapshotString,
+  serializeWorkspaceSnapshot,
 } from '@/lib/workspace-snapshot';
 import {
   exportWorkspaceTreePdf,
@@ -110,6 +112,22 @@ export function Toolbar({
   const [summaryBusy, setSummaryBusy] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [driveConnected, setDriveConnected] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/integrations/google/drive/status', { credentials: 'include' })
+      .then((r) => r.json() as Promise<{ connected?: boolean }>)
+      .then((d) => {
+        if (!cancelled) setDriveConnected(!!d.connected);
+      })
+      .catch(() => {
+        if (!cancelled) setDriveConnected(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const apply = () => setIsMobile(window.innerWidth < 768);
@@ -247,6 +265,24 @@ export function Toolbar({
       .catch(() => toast.error(t('toolbar.exportImageFail')));
   };
 
+  const backupToGoogleDrive = async () => {
+    try {
+      const snapshotJson = serializeWorkspaceSnapshot(state);
+      const res = await fetch('/api/integrations/google/drive/push', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snapshotJson }),
+      });
+      if (!res.ok) {
+        toast.error(t('toolbar.backupToGoogleDriveFail'));
+        return;
+      }
+      toast.success(t('toolbar.backupToGoogleDriveDone'));
+    } catch {
+      toast.error(t('toolbar.backupToGoogleDriveFail'));
+    }
+  };
 
   const zoomPct = Math.round(viewport.zoom * 100);
 
@@ -640,6 +676,20 @@ export function Toolbar({
               <Upload className="mr-2 size-4" />
               {t('toolbar.loadJson')}
             </DropdownMenuItem>
+            {driveConnected && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    window.setTimeout(() => void backupToGoogleDrive(), 0);
+                  }}
+                >
+                  <CloudUpload className="mr-2 size-4" />
+                  {t('toolbar.backupToGoogleDrive')}
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

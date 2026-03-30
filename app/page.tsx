@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { GoalType } from '@/lib/types';
 import { toast } from 'sonner';
@@ -9,7 +10,7 @@ import { LanguageSwitcher } from '@/components/language-switcher';
 import { useI18n } from '@/components/i18n-provider';
 import { workspaceUrl } from '@/lib/workspace-url';
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
-import { KeyRound, Lock, LockOpen } from 'lucide-react';
+import { KeyRound, Lock, LockOpen, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -177,6 +178,13 @@ export default function LandingPage() {
         </div>
       )}
       <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2">
+        <Link
+          href="/settings"
+          className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
+        >
+          <Settings className="size-4" />
+          {t('landing.settings')}
+        </Link>
         <button
           onClick={() => setByokOpen(true)}
           className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
