@@ -684,6 +684,7 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                     node={node}
                     onUnpin={() => toggleDashboardPin(node.id)}
                     compact
+                    disableCompactHeightCap
                   />
                   <button
                     type="button"
@@ -776,18 +777,21 @@ function EmptyState() {
   );
 }
 
-function DashboardWidget({
+export function DashboardWidget({
   node,
   onUnpin,
   compact,
   editMode,
   onHeaderPointerDown,
+  /** When false (e.g. mobile stack), cap widget height so body scrolls inside. */
+  disableCompactHeightCap = false,
 }: {
   node: WorkspaceNode;
   onUnpin: () => void;
   compact: boolean;
   editMode?: boolean;
   onHeaderPointerDown?: (e: React.PointerEvent) => void;
+  disableCompactHeightCap?: boolean;
 }) {
   const { t } = useI18n();
   const { dispatch } = useWorkspace();
@@ -824,7 +828,13 @@ function DashboardWidget({
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl"
+      className={[
+        'flex min-h-0 flex-col overflow-hidden rounded-2xl',
+        compact && !disableCompactHeightCap
+          ? 'max-h-[min(70vh,520px)] min-h-[10rem]'
+          : 'h-full',
+        compact && disableCompactHeightCap ? 'min-h-[10rem]' : '',
+      ].join(' ')}
       style={{ background: 'rgba(255,255,255,0.015)' }}
     >
       <div
@@ -865,7 +875,14 @@ function DashboardWidget({
           >
             {badge.label}
           </span>
-          <span className="truncate text-sm font-medium text-foreground">{title}</span>
+          <span
+            className={[
+              'min-w-0 text-sm font-medium text-foreground',
+              compact ? 'line-clamp-2 break-words' : 'truncate',
+            ].join(' ')}
+          >
+            {title}
+          </span>
         </div>
         <div
           className="flex shrink-0 items-center gap-1"
@@ -943,11 +960,18 @@ function DashboardWidget({
 function AnswerWidget({ node, compact }: { node: AnswerNodeData; compact: boolean }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const limit = compact ? 280 : 2000;
+  /** Compact dashboard cards: allow more text before "show more" (mobile-friendly). */
+  const limit = compact ? 1400 : 2000;
   const preview = node.content.slice(0, limit);
   const isTruncated = node.content.length > limit;
   const rendered = (expanded ? node.content : preview).split('\n\n').map((para, i) => (
-    <p key={i} className="mb-2 last:mb-0 text-xs leading-relaxed text-foreground/80">
+    <p
+      key={i}
+      className={[
+        'mb-2 last:mb-0 leading-relaxed text-foreground/80',
+        compact ? 'text-[13px]' : 'text-xs',
+      ].join(' ')}
+    >
       {formatBold(para)}
     </p>
   ));
@@ -1103,7 +1127,13 @@ function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean })
       {node.dataType === 'list' && node.listItems && (
         <ul className="flex min-w-0 flex-col gap-1.5">
           {node.listItems.map((item, i) => (
-            <li key={i} className="flex min-w-0 items-start gap-2 text-xs text-foreground/80">
+            <li
+              key={i}
+              className={[
+                'flex min-w-0 items-start gap-2 text-foreground/80',
+                compact ? 'text-[13px] leading-snug' : 'text-xs',
+              ].join(' ')}
+            >
               <span
                 className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold"
                 style={{ background: 'rgba(245,158,11,0.2)', color: '#F59E0B' }}

@@ -19,6 +19,7 @@ import {
 import { useI18n } from '@/components/i18n-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RootNode } from '@/components/nodes/root-node';
+import { DashboardWidget } from '@/components/workspace/dashboard-panel';
 
 interface Props {
   showDashboard: boolean;
@@ -198,7 +199,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
         embedded
           ? 'top-0 pb-8 pt-1'
           : isMobile
-            ? 'top-16 pb-24'
+            ? 'top-[calc(env(safe-area-inset-top)+6.75rem)] pb-[max(6rem,env(safe-area-inset-bottom))]'
             : 'top-20 pb-6',
       ].join(' ')}
     >
@@ -636,33 +637,23 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
         )}
 
         {showDashboard && (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3 pb-2">
             {pinned.length === 0 ? (
               <div className="rounded-2xl border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
-                No pinned cards yet.
+                <p className="font-medium text-foreground">{t('dashboard.emptyTitle')}</p>
+                <p className="mt-2 text-xs leading-relaxed">{t('dashboard.emptyDesc')}</p>
               </div>
             ) : (
               pinned.map((n) => (
-                <div key={n.id} className="rounded-2xl border border-border bg-card p-3">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-foreground">
-                      {n.type === 'answer' ? 'Answer Card' : n.type === 'data' ? 'Data Card' : 'Card'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => toggleDashboardPin(n.id)}
-                      className="text-[11px] text-muted-foreground"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  <p className="line-clamp-5 text-xs text-muted-foreground">
-                    {n.type === 'answer'
-                      ? n.content
-                      : n.type === 'data'
-                        ? dataSummary(n)
-                        : 'Pinned node'}
-                  </p>
+                <div
+                  key={n.id}
+                  className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+                >
+                  <DashboardWidget
+                    node={n}
+                    onUnpin={() => toggleDashboardPin(n.id)}
+                    compact
+                  />
                 </div>
               ))
             )}

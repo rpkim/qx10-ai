@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -270,7 +270,8 @@ export function Toolbar({
       .filter((x): x is { question: string; answer: string } => !!x)
       .slice(-40);
   }, [state.nodes]);
-  const canUseSummary = queryNodes.length >= 10 && answerNodes.length >= 10;
+  /** At least a few completed Q&A pairs (API needs non-empty pairs). */
+  const canUseSummary = qaPairs.length >= 3;
 
   const generateSummary = async () => {
     if (!canUseSummary || summaryBusy) return;
@@ -306,7 +307,7 @@ export function Toolbar({
   };
 
   return (
-    <header className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex flex-col items-stretch justify-between gap-2 p-2 sm:flex-row sm:items-start sm:gap-4 sm:p-4">
+    <header className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex flex-col items-stretch justify-between gap-2 p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] sm:flex-row sm:items-start sm:gap-4 sm:p-4 sm:pt-[max(1rem,env(safe-area-inset-top))] sm:pl-[max(1rem,env(safe-area-inset-left))] sm:pr-[max(1rem,env(safe-area-inset-right))]">
       <Dialog open={newWorkspaceOpen} onOpenChange={setNewWorkspaceOpen}>
         <DialogContent className="border-border sm:max-w-md">
           <DialogHeader>
@@ -438,28 +439,28 @@ export function Toolbar({
         </DialogContent>
       </Dialog>
       {isMobile && (
-        <div className="pointer-events-auto flex items-center justify-between rounded-2xl border border-border bg-card/95 px-3 py-2 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
+        <div className="pointer-events-auto w-full max-w-[100vw] rounded-2xl border border-border bg-card/95 px-2 py-2 backdrop-blur-sm">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={() => router.push('/')}
-              className="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               title="Home"
             >
               <FolderOpen className="size-4" />
             </button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-foreground">{keyword}</div>
-              <div className="text-xs text-muted-foreground">{t(GOAL_LABEL_KEYS[goal])}</div>
+              <div className="truncate text-xs text-muted-foreground">{t(GOAL_LABEL_KEYS[goal])}</div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/60 pt-2">
             {canUseSummary && (
               <button
                 type="button"
                 onClick={() => void openSummary()}
-                className="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                title="Summary"
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                title={t('dashboard.summary')}
               >
                 <FileText className="size-4" />
               </button>
@@ -468,7 +469,7 @@ export function Toolbar({
               type="button"
               onClick={onToggleDashboard}
               className={[
-                'flex size-8 items-center justify-center rounded-lg border transition-colors',
+                'flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors',
                 showDashboard
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border text-muted-foreground hover:bg-secondary hover:text-foreground',
@@ -856,6 +857,44 @@ export function Toolbar({
   );
 }
 
+/** LLM often emits `* one * two` on one line; split so list items render with line breaks. */
+function tryRenderInlineAsteriskList(trimmed: string, keyIdx: number): ReactNode | null {
+  if (!/\*\s+\S/.test(trimmed)) return null;
+  const segments = trimmed
+    .split(/\s+(?=\*\s+)/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (segments.length < 2) return null;
+
+  const isBulletItem = (s: string) => /^\*\s+/.test(s);
+
+  if (segments.every(isBulletItem)) {
+    return (
+      <ul key={keyIdx} className="ml-4 list-disc space-y-1">
+        {segments.map((line, lineIdx) => (
+          <li key={lineIdx}>{formatSummaryBoldInline(line.replace(/^\*\s+/, ''))}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  const [first, ...rest] = segments;
+  if (!isBulletItem(first) && rest.length > 0 && rest.every(isBulletItem)) {
+    return (
+      <div key={keyIdx} className="space-y-2">
+        <p className="text-sm leading-relaxed text-foreground/90">{formatSummaryBoldInline(first)}</p>
+        <ul className="ml-4 list-disc space-y-1">
+          {rest.map((line, lineIdx) => (
+            <li key={lineIdx}>{formatSummaryBoldInline(line.replace(/^\*\s+/, ''))}</li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function renderSummaryMarkdown(content: string): JSX.Element {
   const blocks = content.split('\n\n').filter((b) => b.trim().length > 0);
   return (
@@ -941,6 +980,9 @@ function renderSummaryMarkdown(content: string): JSX.Element {
             </h2>
           );
         }
+
+        const inlineList = tryRenderInlineAsteriskList(trimmed, idx);
+        if (inlineList) return inlineList;
 
         return (
           <p key={idx} className="text-sm leading-relaxed text-foreground/90">
