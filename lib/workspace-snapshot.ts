@@ -358,6 +358,25 @@ export function hasWorkspaceInLocalStorage(keyword: string): boolean {
   return localStorage.getItem(storageKey(keyword)) != null;
 }
 
+/** Every keyword that has a saved snapshot under `qx10.workspace.v1:*` (not only the recent index). */
+export function listAllWorkspaceKeywordsInLocalStorage(): string[] {
+  if (typeof window === 'undefined') return [];
+  const prefix = `${STORAGE_PREFIX}:`;
+  const seen = new Set<string>();
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k?.startsWith(prefix)) continue;
+    const encoded = k.slice(prefix.length);
+    try {
+      const keyword = decodeURIComponent(encoded);
+      if (keyword.trim()) seen.add(keyword);
+    } catch {
+      /* malformed key */
+    }
+  }
+  return Array.from(seen);
+}
+
 export function downloadWorkspaceJson(state: WorkspaceState): void {
   if (typeof window === 'undefined') return;
   const safe =
