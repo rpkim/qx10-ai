@@ -89,6 +89,26 @@ async function patchMedia(accessToken: string, fileId: string, body: string): Pr
   if (!res.ok) throw new Error(await res.text());
 }
 
+async function patchFileName(accessToken: string, fileId: string, name: string): Promise<void> {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json; charset=UTF-8',
+    },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+async function deleteFile(accessToken: string, fileId: string): Promise<void> {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok && res.status !== 404) throw new Error(await res.text());
+}
+
 async function ensureManifest(
   accessToken: string,
   files: Array<{ id: string; name: string }>
@@ -157,6 +177,87 @@ export async function loadManifest(accessToken: string): Promise<DriveManifest> 
   const listed = await listAppDataFiles(accessToken);
   const { manifest } = await ensureManifest(accessToken, listed);
   return manifest;
+}
+
+export async function deleteWorkspaceBackupByKeyword(accessToken: string, keyword: string): Promise<boolean> {
+  const trimmed = keyword.trim();
+  if (!trimmed) return false;
+
+  const listed = await listAppDataFiles(accessToken);
+  const { manifestId, manifest } = await ensureManifest(accessToken, listed);
+  const entry = manifest.workspaces.find((w) => w.keyword === trimmed);
+  const fileId = entry?.driveFileId ?? listed.find((f) => f.name === workspaceBackupFileName(trimmed))?.id;
+
+  if (fileId) {
+    await deleteFile(accessToken, fileId);
+  }
+
+  const next = manifest.workspaces.filter((w) => w.keyword !== trimmed);
+  if (next.length !== manifest.workspaces.length) {
+    const nextManifest: DriveManifest = {
+      ...manifest,
+      updatedAt: new Date().toISOString(),
+      workspaces: next,
+    };
+    await patchMedia(accessToken, manifestId, JSON.stringify(nextManifest));
+    return true;
+  }
+  return !!fileId;
+}
+
+export async function renameWorkspaceBackupKeyword(
+  accessToken: string,
+  oldKeyword: string,
+  newKeyword: string
+): Promise<void> {
+  const oldKw = oldKeyword.trim();
+  const newKw = newKeyword.trim();
+  if (!oldKw || !newKw) throw new Error('Both oldKeyword and newKeyword are required');
+  if (oldKw === newKw) return;
+
+  const listed = await listAppDataFiles(accessToken);
+  const { manifestId, manifest } = await ensureManifest(accessToken, listed);
+  const oldEntry = manifest.workspaces.find((w) => w.keyword === oldKw);
+  const oldFileId = oldEntry?.driveFileId ?? listed.find((f) => f.name === workspaceBackupFileName(oldKw))?.id;
+  if (!oldFileId) throw new Error('Workspace not found');
+
+  const oldRaw = await downloadFileMedia(accessToken, oldFileId);
+  const parsed = JSON.parse(oldRaw) as Record<string, unknown>;
+  parsed.keyword = newKw;
+  const updatedRaw = JSON.stringify(parsed);
+  const hash = contentHash(updatedRaw);
+  const now = new Date().toISOString();
+  const newFileName = workspaceBackupFileName(newKw);
+
+  const targetEntry = manifest.workspaces.find((w) => w.keyword === newKw);
+  let targetFileId = targetEntry?.driveFileId;
+
+  if (targetFileId && targetFileId !== oldFileId) {
+    await patchMedia(accessToken, targetFileId, updatedRaw);
+    await deleteFile(accessToken, oldFileId);
+  } else {
+    targetFileId = oldFileId;
+    await patchMedia(accessToken, targetFileId, updatedRaw);
+    await patchFileName(accessToken, targetFileId, newFileName);
+  }
+
+  const goal = typeof parsed.goal === 'string' ? parsed.goal : oldEntry?.goal ?? 'learn';
+  const nextList = manifest.workspaces.filter((w) => w.keyword !== oldKw && w.keyword !== newKw);
+  nextList.push({
+    keyword: newKw,
+    goal,
+    fileName: newFileName,
+    driveFileId: targetFileId,
+    contentHash: hash,
+    updatedAt: now,
+  });
+
+  const nextManifest: DriveManifest = {
+    ...manifest,
+    updatedAt: now,
+    workspaces: nextList,
+  };
+  await patchMedia(accessToken, manifestId, JSON.stringify(nextManifest));
 }
 
 export async function pullWorkspaceByKeyword(
