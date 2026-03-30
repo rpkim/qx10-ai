@@ -43,6 +43,8 @@ import type { GoalType, Position, WorkspaceState, WorkspaceNode } from '@/lib/ty
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
 import {
   downloadWorkspaceJson,
+  listAllWorkspaceKeywordsInLocalStorage,
+  loadWorkspaceFromLocalStorage,
   parseWorkspaceSnapshotString,
   serializeWorkspaceSnapshot,
 } from '@/lib/workspace-snapshot';
@@ -281,6 +283,36 @@ export function Toolbar({
       toast.success(t('toolbar.backupToGoogleDriveDone'));
     } catch {
       toast.error(t('toolbar.backupToGoogleDriveFail'));
+    }
+  };
+
+  const backupAllLocalToGoogleDrive = async () => {
+    try {
+      const keywords = listAllWorkspaceKeywordsInLocalStorage();
+      if (keywords.length === 0) {
+        toast.message(t('toolbar.backupAllToGoogleDriveNone'));
+        return;
+      }
+      let pushed = 0;
+      for (const kw of keywords) {
+        const loaded = loadWorkspaceFromLocalStorage(kw);
+        if (!loaded.ok) continue;
+        const snapshotJson = serializeWorkspaceSnapshot(loaded.state);
+        const res = await fetch('/api/integrations/google/drive/push', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ snapshotJson }),
+        });
+        if (res.ok) pushed += 1;
+      }
+      if (pushed === 0) {
+        toast.error(t('toolbar.backupAllToGoogleDriveFail'));
+      } else {
+        toast.success(t('toolbar.backupAllToGoogleDriveDone', { count: pushed }));
+      }
+    } catch {
+      toast.error(t('toolbar.backupAllToGoogleDriveFail'));
     }
   };
 
@@ -645,7 +677,7 @@ export function Toolbar({
               {t('toolbar.saveLoad')}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-[min(100vw-2rem,16rem)] sm:w-64">
             <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
               {t('toolbar.saveLoadHint')}
             </DropdownMenuLabel>
@@ -687,6 +719,15 @@ export function Toolbar({
                 >
                   <CloudUpload className="mr-2 size-4" />
                   {t('toolbar.backupToGoogleDrive')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    window.setTimeout(() => void backupAllLocalToGoogleDrive(), 0);
+                  }}
+                >
+                  <CloudUpload className="mr-2 size-4" />
+                  {t('toolbar.backupAllToGoogleDrive')}
                 </DropdownMenuItem>
               </>
             )}

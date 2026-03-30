@@ -222,6 +222,8 @@ export type MessageKey =
   | 'settings.googleDrive.connectedAs'
   | 'settings.googleDrive.notConnected'
   | 'settings.googleDrive.pushAll'
+  | 'settings.googleDrive.pushAllHint'
+  | 'settings.googleDrive.pushAllNone'
   | 'settings.googleDrive.pushAllDone'
   | 'settings.googleDrive.pushAllFail'
   | 'settings.googleDrive.restoreLabel'
@@ -229,6 +231,11 @@ export type MessageKey =
   | 'settings.googleDrive.restorePlaceholder'
   | 'settings.googleDrive.restoreDone'
   | 'settings.googleDrive.restoreFail'
+  | 'settings.googleDrive.restoreAll'
+  | 'settings.googleDrive.restoreAllHint'
+  | 'settings.googleDrive.restoreAllNone'
+  | 'settings.googleDrive.restoreAllDone'
+  | 'settings.googleDrive.restoreAllFail'
   | 'settings.googleDrive.genericFail'
   | 'settings.googleDrive.disconnectedToast'
   | 'settings.googleDrive.toastConnected'
@@ -237,6 +244,10 @@ export type MessageKey =
   | 'landing.settings'
   | 'toolbar.backupToGoogleDrive'
   | 'toolbar.backupToGoogleDriveDone'
-  | 'toolbar.backupToGoogleDriveFail';
+  | 'toolbar.backupToGoogleDriveFail'
+  | 'toolbar.backupAllToGoogleDrive'
+  | 'toolbar.backupAllToGoogleDriveDone'
+  | 'toolbar.backupAllToGoogleDriveFail'
+  | 'toolbar.backupAllToGoogleDriveNone';
 
 export type Messages = Record<MessageKey, string>;

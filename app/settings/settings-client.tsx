@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, CloudUpload, LogOut } from 'lucide-react';
+import { ArrowLeft, CloudDownload, CloudUpload, LogOut } from 'lucide-react';
 import { useI18n } from '@/components/i18n-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { listRecentWorkspaces, registerWorkspaceVisit } from '@/lib/workspace-index';
+import { registerWorkspaceVisit } from '@/lib/workspace-index';
 import {
+  listAllWorkspaceKeywordsInLocalStorage,
   loadWorkspaceFromLocalStorage,
   parseWorkspaceSnapshotString,
   saveWorkspaceToLocalStorage,
@@ -90,8 +91,11 @@ export function SettingsClient() {
     if (!status?.connected) return;
     setBusy(true);
     try {
-      const recent = listRecentWorkspaces(50);
-      const keywords = new Set(recent.map((r) => r.keyword));
+      const keywords = listAllWorkspaceKeywordsInLocalStorage();
+      if (keywords.length === 0) {
+        toast.message(t('settings.googleDrive.pushAllNone'));
+        return;
+      }
       let pushed = 0;
       for (const kw of keywords) {
         const loaded = loadWorkspaceFromLocalStorage(kw);
@@ -105,7 +109,11 @@ export function SettingsClient() {
         });
         if (res.ok) pushed += 1;
       }
-      toast.success(t('settings.googleDrive.pushAllDone', { count: pushed }));
+      if (pushed === 0) {
+        toast.error(t('settings.googleDrive.pushAllFail'));
+      } else {
+        toast.success(t('settings.googleDrive.pushAllDone', { count: pushed }));
+      }
       await refreshStatus();
     } catch {
       toast.error(t('settings.googleDrive.pushAllFail'));
@@ -144,6 +152,52 @@ export function SettingsClient() {
       router.push(workspaceUrl({ keyword: parsed.state.keyword, goal: parsed.state.goal }));
     } catch {
       toast.error(t('settings.googleDrive.restoreFail'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRestoreAll = async () => {
+    if (!status?.connected) return;
+    setBusy(true);
+    try {
+      const m = await fetch('/api/integrations/google/drive/manifest', { credentials: 'include' });
+      if (!m.ok) {
+        toast.error(t('settings.googleDrive.restoreAllFail'));
+        return;
+      }
+      const j = (await m.json()) as { manifest?: DriveManifest };
+      const workspaces = j.manifest?.workspaces ?? [];
+      const keywords = Array.from(new Set(workspaces.map((w) => w.keyword.trim()).filter(Boolean)));
+      if (keywords.length === 0) {
+        toast.message(t('settings.googleDrive.restoreAllNone'));
+        return;
+      }
+
+      let restored = 0;
+      for (const kw of keywords) {
+        const res = await fetch(
+          `/api/integrations/google/drive/pull?keyword=${encodeURIComponent(kw)}`,
+          { credentials: 'include' }
+        );
+        if (!res.ok) continue;
+        const data = (await res.json()) as { snapshotJson?: string };
+        const raw = data.snapshotJson ?? '';
+        const parsed = parseWorkspaceSnapshotString(raw);
+        if (!parsed.ok) continue;
+        const save = saveWorkspaceToLocalStorage(parsed.state);
+        if (!save.ok) continue;
+        registerWorkspaceVisit(parsed.state.keyword, parsed.state.goal);
+        restored += 1;
+      }
+
+      if (restored === 0) {
+        toast.error(t('settings.googleDrive.restoreAllFail'));
+      } else {
+        toast.success(t('settings.googleDrive.restoreAllDone', { count: restored }));
+      }
+    } catch {
+      toast.error(t('settings.googleDrive.restoreAllFail'));
     } finally {
       setBusy(false);
     }
@@ -201,10 +255,15 @@ export function SettingsClient() {
                   <LogOut className="mr-1.5 size-3.5" />
                   {t('settings.googleDrive.disconnect')}
                 </Button>
-                <Button type="button" size="sm" onClick={() => void onPushAll()} disabled={busy}>
-                  <CloudUpload className="mr-1.5 size-3.5" />
-                  {t('settings.googleDrive.pushAll')}
-                </Button>
+                <div className="flex w-full min-w-0 flex-col gap-1">
+                  <Button type="button" size="sm" className="w-fit" onClick={() => void onPushAll()} disabled={busy}>
+                    <CloudUpload className="mr-1.5 size-3.5" />
+                    {t('settings.googleDrive.pushAll')}
+                  </Button>
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    {t('settings.googleDrive.pushAllHint')}
+                  </p>
+                </div>
               </div>
               {manifest && manifest.workspaces.length > 0 && (
                 <div className="mt-3 rounded-lg border border-border/60 bg-background/50 p-3">
@@ -234,6 +293,15 @@ export function SettingsClient() {
                   <Button type="button" size="sm" onClick={() => void onRestore()} disabled={busy}>
                     {t('settings.googleDrive.restore')}
                   </Button>
+                </div>
+                <div className="pt-1">
+                  <Button type="button" variant="outline" size="sm" onClick={() => void onRestoreAll()} disabled={busy}>
+                    <CloudDownload className="mr-1.5 size-3.5" />
+                    {t('settings.googleDrive.restoreAll')}
+                  </Button>
+                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                    {t('settings.googleDrive.restoreAllHint')}
+                  </p>
                 </div>
               </div>
             </>
