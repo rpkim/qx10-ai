@@ -14,6 +14,7 @@ export async function POST(req: Request) {
     question?: string;
     keyword?: string;
     goal?: GoalType;
+    contextPairs?: Array<{ question?: string; answer?: string }>;
     /** Catalog id e.g. `openai:gpt-4o-mini` */
     modelChoice?: string | null;
     toolChoice?: QueryToolChoice | null;
@@ -51,6 +52,15 @@ export async function POST(req: Request) {
     body.goal === 'strategize'
       ? body.goal
       : 'learn';
+  const contextPairs = Array.isArray(body.contextPairs)
+    ? body.contextPairs
+        .map((p) => ({
+          question: typeof p?.question === 'string' ? p.question.trim() : '',
+          answer: typeof p?.answer === 'string' ? p.answer.trim() : '',
+        }))
+        .filter((p) => p.question && p.answer)
+        .slice(-10)
+    : [];
 
   const catalog = buildModelCatalog();
   if (catalog.options.length === 0) {
@@ -84,7 +94,7 @@ export async function POST(req: Request) {
 
   const stream = createWorkspaceQueryReadableStream(
     selection,
-    { question, keyword, goal, toolChoice },
+    { question, keyword, goal, toolChoice, contextPairs },
     { openaiKey, geminiKey }
   );
 

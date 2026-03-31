@@ -824,6 +824,29 @@ function findExistingChildQueryId(
   return null;
 }
 
+function buildAncestorContextPairs(nodes: WorkspaceNode[], queryId: string): Array<{ question: string; answer: string }> {
+  const nodeById = new Map(nodes.map((n) => [n.id, n] as const));
+  const lineageQueries: string[] = [];
+  let cursor = nodeById.get(queryId)?.parentId;
+  while (cursor) {
+    const node = nodeById.get(cursor);
+    if (!node) break;
+    if (node.type === 'query') lineageQueries.push(node.id);
+    cursor = node.parentId;
+  }
+  lineageQueries.reverse();
+  return lineageQueries
+    .map((qid) => {
+      const q = nodeById.get(qid);
+      if (!q || q.type !== 'query') return null;
+      const a = nodes.find((n): n is AnswerNodeData => n.type === 'answer' && n.queryId === qid && !!n.content.trim());
+      if (!a) return null;
+      return { question: q.question, answer: a.content.trim() };
+    })
+    .filter((x): x is { question: string; answer: string } => !!x)
+    .slice(-10);
+}
+
 export const FOCUS_QUERY_NODE_EVENT = 'qx10:focus-query-node';
 
 function emitFocusQueryNode(queryId: string) {
@@ -1163,6 +1186,7 @@ export function WorkspaceProvider({
       const selected = effectiveAiCatalog?.options.find((o) => o.id === modelId) ?? null;
       const shouldUseBrowserGemini =
         selected?.provider === 'gemini' && !!browserGeminiKey && queryNode.toolChoice !== 'market';
+      const contextPairs = buildAncestorContextPairs(nodesRef.current, queryId);
 
       let answerNodeCreated = false;
       const ensureAnswerNode = () => {
@@ -1221,7 +1245,17 @@ export function WorkspaceProvider({
             model: selected?.model || modelId.replace(/^gemini:/, ''),
             systemInstruction: buildAnswerSystemPrompt(goalRef.current),
           });
-          const userText = `Workspace root keyword/topic: "${keywordRef.current}"\nExploration goal: ${goalRef.current}\n\nUser query:\n${queryNode.question}`;
+          const contextText =
+            contextPairs.length > 0
+              ? [
+                  'Prior context in this workspace (oldest to latest):',
+                  ...contextPairs.map(
+                    (p, i) => `Context Q${i + 1}: ${p.question}\nContext A${i + 1}: ${p.answer}`
+                  ),
+                  '',
+                ].join('\n')
+              : '';
+          const userText = `Workspace root keyword/topic: "${keywordRef.current}"\nExploration goal: ${goalRef.current}\n\n${contextText}User query:\n${queryNode.question}`;
           const streamResult = await model.generateContentStream(userText);
           for await (const chunk of streamResult.stream) {
             let text = '';
@@ -1278,6 +1312,7 @@ export function WorkspaceProvider({
               question: queryNode.question,
               keyword: keywordRef.current,
               goal: goalRef.current,
+              contextPairs,
               modelChoice: queryNode.modelChoice ?? null,
               toolChoice: queryNode.toolChoice ?? 'auto',
             }),

@@ -13,8 +13,23 @@ export function sseLine(obj: unknown): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
 }
 
-function userPayload(keyword: string, goal: GoalType, question: string) {
-  return `Workspace root keyword/topic: "${keyword}"\nExploration goal: ${goal}\n\nUser query:\n${question}`;
+function userPayload(
+  keyword: string,
+  goal: GoalType,
+  question: string,
+  contextPairs?: Array<{ question: string; answer: string }>
+) {
+  const contextText =
+    contextPairs && contextPairs.length > 0
+      ? [
+          'Prior context in this workspace (oldest to latest):',
+          ...contextPairs.map(
+            (p, i) => `Context Q${i + 1}: ${p.question}\nContext A${i + 1}: ${p.answer}`
+          ),
+          '',
+        ].join('\n')
+      : '';
+  return `Workspace root keyword/topic: "${keyword}"\nExploration goal: ${goal}\n\n${contextText}User query:\n${question}`;
 }
 
 async function extractMetadata(
@@ -85,11 +100,17 @@ async function extractMetadata(
 
 export function createWorkspaceQueryReadableStream(
   selection: CatalogOption,
-  params: { question: string; keyword: string; goal: GoalType; toolChoice?: QueryToolChoice },
+  params: {
+    question: string;
+    keyword: string;
+    goal: GoalType;
+    toolChoice?: QueryToolChoice;
+    contextPairs?: Array<{ question: string; answer: string }>;
+  },
   keys: { openaiKey: string | undefined; geminiKey: string | undefined }
 ): ReadableStream<Uint8Array> {
-  const { question, keyword, goal, toolChoice } = params;
-  const userText = userPayload(keyword, goal, question);
+  const { question, keyword, goal, toolChoice, contextPairs } = params;
+  const userText = userPayload(keyword, goal, question, contextPairs);
   const systemText = buildAnswerSystemPrompt(goal);
 
   return new ReadableStream({
