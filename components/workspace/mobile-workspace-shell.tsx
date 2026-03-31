@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AnswerNodeData,
   DataNodeData,
@@ -20,6 +20,7 @@ import { useI18n } from '@/components/i18n-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RootNode } from '@/components/nodes/root-node';
 import { DashboardWidget } from '@/components/workspace/dashboard-panel';
+import { getClientTtsProvider } from '@/lib/tts/config';
 
 interface Props {
   showDashboard: boolean;
@@ -29,7 +30,7 @@ interface Props {
 }
 
 export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const {
     state,
     dispatch,
@@ -47,6 +48,100 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
   const [collapsedExecutedByTemplate, setCollapsedExecutedByTemplate] = useState<
     Record<string, boolean>
   >({});
+  const [ttsPlayingAnswerId, setTtsPlayingAnswerId] = useState<string | null>(null);
+  const browserUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsProvider = getClientTtsProvider();
+
+  useEffect(() => {
+    return () => {
+      if (browserUtteranceRef.current && typeof window !== 'undefined') {
+        window.speechSynthesis.cancel();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  const stopTts = useCallback(() => {
+    if (ttsProvider === 'browser' && typeof window !== 'undefined') {
+      window.speechSynthesis.cancel();
+      browserUtteranceRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setTtsPlayingAnswerId(null);
+  }, [ttsProvider]);
+
+  const playAnswerTts = useCallback(
+    async (answer: AnswerNodeData) => {
+      const text = answer.content.trim();
+      if (!text || answer.status === 'streaming') return;
+      if (ttsPlayingAnswerId === answer.id) {
+        stopTts();
+        return;
+      }
+      stopTts();
+
+      if (ttsProvider === 'browser') {
+        if (typeof window === 'undefined' || !window.speechSynthesis) return;
+        const utterance = new SpeechSynthesisUtterance(text.slice(0, 900));
+        utterance.lang =
+          locale === 'ko'
+            ? 'ko-KR'
+            : locale === 'ja'
+              ? 'ja-JP'
+              : locale === 'zh'
+                ? 'zh-CN'
+                : locale === 'es'
+                  ? 'es-ES'
+                  : 'en-US';
+        utterance.onend = () => setTtsPlayingAnswerId(null);
+        utterance.onerror = () => setTtsPlayingAnswerId(null);
+        browserUtteranceRef.current = utterance;
+        setTtsPlayingAnswerId(answer.id);
+        window.speechSynthesis.speak(utterance);
+        return;
+      }
+
+      try {
+        setTtsPlayingAnswerId(answer.id);
+        const prep = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text.slice(0, 900) }),
+        });
+        if (!prep.ok) {
+          setTtsPlayingAnswerId(null);
+          return;
+        }
+        const prepJson = (await prep.json().catch(() => ({}))) as { streamUrl?: string };
+        if (!prepJson.streamUrl) {
+          setTtsPlayingAnswerId(null);
+          return;
+        }
+        const audio = new Audio(prepJson.streamUrl);
+        audioRef.current = audio;
+        audio.onended = () => {
+          setTtsPlayingAnswerId(null);
+          audioRef.current = null;
+        };
+        audio.onerror = () => {
+          setTtsPlayingAnswerId(null);
+          audioRef.current = null;
+        };
+        await audio.play();
+      } catch {
+        setTtsPlayingAnswerId(null);
+      }
+    },
+    [locale, stopTts, ttsPlayingAnswerId, ttsProvider]
+  );
 
   const queryNodes = useMemo(
     () => state.nodes.filter((n): n is QueryNodeData => n.type === 'query'),
@@ -455,13 +550,22 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                               <span className="rounded-full bg-lime-400/20 px-2 py-0.5 text-[11px] font-semibold text-lime-600">
                                 A
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => toggleDashboardPin(a.id)}
-                                className="text-[11px] text-muted-foreground"
-                              >
-                                {state.dashboardNodeIds.includes(a.id) ? 'Unpin' : 'Pin'}
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => void playAnswerTts(a)}
+                                  className="rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground"
+                                >
+                                  {ttsPlayingAnswerId === a.id ? t('nodes.ttsStop') : t('nodes.ttsPlay')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleDashboardPin(a.id)}
+                                  className="text-[11px] text-muted-foreground"
+                                >
+                                  {state.dashboardNodeIds.includes(a.id) ? 'Unpin' : 'Pin'}
+                                </button>
+                              </div>
                             </div>
                             <div
                               className="max-h-52 overflow-y-auto pr-1 text-[13px] leading-relaxed text-foreground/90 select-text"

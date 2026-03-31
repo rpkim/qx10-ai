@@ -79,7 +79,7 @@ export function AnswerNode({ node }: Props) {
       if (typeof window === 'undefined' || !window.speechSynthesis) {
         return;
       }
-      const utterance = new SpeechSynthesisUtterance(text.slice(0, 4000));
+      const utterance = new SpeechSynthesisUtterance(text.slice(0, 900));
       utterance.lang =
         locale === 'ko'
           ? 'ko-KR'
@@ -105,26 +105,27 @@ export function AnswerNode({ node }: Props) {
 
     try {
       setTtsPlaying(true);
-      const res = await fetch('/api/tts', {
+      const prep = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: text.slice(0, 900) }),
       });
-      if (!res.ok) {
+      if (!prep.ok) {
         setTtsPlaying(false);
         return;
       }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
+      const prepJson = (await prep.json().catch(() => ({}))) as { streamUrl?: string };
+      if (!prepJson.streamUrl) {
+        setTtsPlaying(false);
+        return;
+      }
+      const audio = new Audio(prepJson.streamUrl);
       audioRef.current = audio;
       audio.onended = () => {
-        URL.revokeObjectURL(url);
         setTtsPlaying(false);
         audioRef.current = null;
       };
       audio.onerror = () => {
-        URL.revokeObjectURL(url);
         setTtsPlaying(false);
         audioRef.current = null;
       };
@@ -193,8 +194,12 @@ export function AnswerNode({ node }: Props) {
           <div className="flex items-center gap-1">
             <button
               onClick={() => void playTts()}
-              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors"
-              style={{ color: ttsPlaying ? '#00C49A' : 'var(--muted-foreground)' }}
+              className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors"
+              style={{
+                color: ttsPlaying ? '#00C49A' : 'var(--muted-foreground)',
+                borderColor: 'rgba(163,230,53,0.25)',
+                background: ttsPlaying ? 'rgba(0,196,154,0.1)' : 'rgba(255,255,255,0.02)',
+              }}
               title={ttsPlaying ? t('nodes.ttsStop') : t('nodes.ttsPlay')}
             >
               {ttsPlaying ? (
@@ -207,6 +212,7 @@ export function AnswerNode({ node }: Props) {
                   <polygon points="6,4 20,12 6,20" />
                 </svg>
               )}
+              <span>{ttsPlaying ? t('nodes.ttsStop') : t('nodes.ttsPlay')}</span>
             </button>
             <button
               onClick={() => toggleDashboardPin(node.id)}
