@@ -180,6 +180,8 @@ export const es: Messages = {
   'nodes.seedFallbackNotice': 'La generación se retrasó; mostrando preguntas predeterminadas.',
   'nodes.generating': 'Generando…',
   'nodes.answer': 'Respuesta',
+  'nodes.ttsPlay': 'Reproducir voz',
+  'nodes.ttsStop': 'Detener voz',
   'nodes.pinAction': 'Fijar',
   'nodes.pinnedAction': 'Fijado',
   'landing.subLead': 'Pregunta sin fin. Descubre en profundidad. ',

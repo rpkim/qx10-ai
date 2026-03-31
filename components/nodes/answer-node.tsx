@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AnswerNodeData } from '@/lib/types';
 import { FOCUS_QUERY_NODE_EVENT, useWorkspace } from '@/lib/workspace-store';
 import {
@@ -9,19 +9,23 @@ import {
   useIntroduceReveal,
 } from '@/lib/introduce-reveal-context';
 import { useI18n } from '@/components/i18n-provider';
+import { getClientTtsProvider } from '@/lib/tts/config';
 
 interface Props {
   node: AnswerNodeData;
 }
 
 export function AnswerNode({ node }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { addCustomQuery, toggleDashboardPin, state, aiCatalog, isDemoMode } = useWorkspace();
   const introduceReveal = useIntroduceReveal();
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
+  const [ttsPlaying, setTtsPlaying] = useState(false);
   const isPinned = state.dashboardNodeIds.includes(node.id);
+  const browserUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const parentQuery = state.nodes.find((n) => n.id === node.queryId);
   const inheritedModelChoice =
@@ -36,6 +40,99 @@ export function AnswerNode({ node }: Props) {
       : node.content;
 
   const isStreaming = node.status === 'streaming';
+  const ttsProvider = getClientTtsProvider();
+
+  useEffect(() => {
+    return () => {
+      if (browserUtteranceRef.current && typeof window !== 'undefined') {
+        window.speechSynthesis.cancel();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  const stopTts = () => {
+    if (ttsProvider === 'browser' && typeof window !== 'undefined') {
+      window.speechSynthesis.cancel();
+      browserUtteranceRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setTtsPlaying(false);
+  };
+
+  const playTts = async () => {
+    const text = displayText.trim();
+    if (!text || isStreaming) return;
+    if (ttsPlaying) {
+      stopTts();
+      return;
+    }
+
+    if (ttsProvider === 'browser') {
+      if (typeof window === 'undefined' || !window.speechSynthesis) {
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text.slice(0, 4000));
+      utterance.lang =
+        locale === 'ko'
+          ? 'ko-KR'
+          : locale === 'ja'
+            ? 'ja-JP'
+            : locale === 'zh'
+              ? 'zh-CN'
+              : locale === 'es'
+                ? 'es-ES'
+                : 'en-US';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.onend = () => setTtsPlaying(false);
+      utterance.onerror = () => {
+        setTtsPlaying(false);
+      };
+      browserUtteranceRef.current = utterance;
+      setTtsPlaying(true);
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    try {
+      setTtsPlaying(true);
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) {
+        setTtsPlaying(false);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setTtsPlaying(false);
+        audioRef.current = null;
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        setTtsPlaying(false);
+        audioRef.current = null;
+      };
+      await audio.play();
+    } catch {
+      setTtsPlaying(false);
+    }
+  };
 
   // Format bold markdown
   const formattedText = displayText
@@ -93,28 +190,47 @@ export function AnswerNode({ node }: Props) {
 
         {/* Pin to dashboard */}
         {!isStreaming && (
-          <button
-            onClick={() => toggleDashboardPin(node.id)}
-            className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors"
-            style={
-              isPinned
-                ? { background: 'rgba(0,196,154,0.15)', color: '#00C49A' }
-                : { color: 'var(--muted-foreground)' }
-            }
-            title={isPinned ? t('nodes.unpin') : t('nodes.pin')}
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill={isPinned ? 'currentColor' : 'none'}
-              stroke="currentColor"
-              strokeWidth="2"
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => void playTts()}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors"
+              style={{ color: ttsPlaying ? '#00C49A' : 'var(--muted-foreground)' }}
+              title={ttsPlaying ? t('nodes.ttsStop') : t('nodes.ttsPlay')}
             >
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
-            {isPinned ? t('nodes.pinnedAction') : t('nodes.pinAction')}
-          </button>
+              {ttsPlaying ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="5" y="4" width="5" height="16" rx="1" />
+                  <rect x="14" y="4" width="5" height="16" rx="1" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="6,4 20,12 6,20" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={() => toggleDashboardPin(node.id)}
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors"
+              style={
+                isPinned
+                  ? { background: 'rgba(0,196,154,0.15)', color: '#00C49A' }
+                  : { color: 'var(--muted-foreground)' }
+              }
+              title={isPinned ? t('nodes.unpin') : t('nodes.pin')}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill={isPinned ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+              {isPinned ? t('nodes.pinnedAction') : t('nodes.pinAction')}
+            </button>
+          </div>
         )}
       </div>
 
