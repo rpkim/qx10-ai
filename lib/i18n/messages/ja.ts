@@ -178,6 +178,8 @@ export const ja: Messages = {
   'nodes.seedFallbackNotice': '生成が遅延しているため、既定の質問を表示しています。',
   'nodes.generating': '生成中…',
   'nodes.answer': '回答',
+  'nodes.ttsPlay': '音声を再生',
+  'nodes.ttsStop': '音声を停止',
   'nodes.pinAction': 'ピン',
   'nodes.pinnedAction': 'ピン済み',
   'landing.subLead': '尽きない問い、深い発見。 ',

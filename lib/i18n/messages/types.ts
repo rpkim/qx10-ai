@@ -169,6 +169,8 @@ export type MessageKey =
   | 'nodes.seedFallbackNotice'
   | 'nodes.generating'
   | 'nodes.answer'
+  | 'nodes.ttsPlay'
+  | 'nodes.ttsStop'
   | 'nodes.pinAction'
   | 'nodes.pinnedAction'
   | 'landing.subLead'

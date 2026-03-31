@@ -178,6 +178,8 @@ export const en: Messages = {
   'nodes.seedFallbackNotice': 'Suggestion generation is delayed, showing default questions.',
   'nodes.generating': 'Generating…',
   'nodes.answer': 'Answer',
+  'nodes.ttsPlay': 'Play voice',
+  'nodes.ttsStop': 'Stop voice',
   'nodes.pinAction': 'Pin',
   'nodes.pinnedAction': 'Pinned',
   'landing.subLead': 'Ask endlessly. Discover deeply.',

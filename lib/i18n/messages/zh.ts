@@ -175,6 +175,8 @@ export const zh: Messages = {
   'nodes.seedFallbackNotice': '推荐生成较慢，正在显示默认问题。',
   'nodes.generating': '生成中…',
   'nodes.answer': '回答',
+  'nodes.ttsPlay': '播放语音',
+  'nodes.ttsStop': '停止语音',
   'nodes.pinAction': '固定',
   'nodes.pinnedAction': '已固定',
   'landing.subLead': '无尽提问，深入发现。',

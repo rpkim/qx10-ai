@@ -178,6 +178,8 @@ export const ko: Messages = {
   'nodes.seedFallbackNotice': '추천 생성이 지연되어 기본 질문을 표시 중입니다.',
   'nodes.generating': '생성 중…',
   'nodes.answer': '답변',
+  'nodes.ttsPlay': '음성 재생',
+  'nodes.ttsStop': '음성 정지',
   'nodes.pinAction': '고정',
   'nodes.pinnedAction': '고정됨',
   'landing.subLead': '끝없이 질문하고, 깊이 발견하세요. ',
