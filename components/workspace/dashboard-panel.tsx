@@ -29,6 +29,7 @@ import {
   marketDataNodeRefreshSymbol,
 } from '@/lib/market-data-node-refresh';
 import { exportDashboardOnlyPdf, exportDashboardOnlyPng } from '@/lib/workspace-visual-export';
+import { getClientTtsProvider } from '@/lib/tts/config';
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -958,8 +959,12 @@ export function DashboardWidget({
 }
 
 function AnswerWidget({ node, compact }: { node: AnswerNodeData; compact: boolean }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [expanded, setExpanded] = useState(false);
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+  const browserUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsProvider = getClientTtsProvider();
   /** Compact dashboard cards: allow more text before "show more" (mobile-friendly). */
   const limit = compact ? 1400 : 2000;
   const preview = node.content.slice(0, limit);
@@ -976,8 +981,117 @@ function AnswerWidget({ node, compact }: { node: AnswerNodeData; compact: boolea
     </p>
   ));
 
+  useEffect(() => {
+    return () => {
+      if (browserUtteranceRef.current && typeof window !== 'undefined') {
+        window.speechSynthesis.cancel();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  const stopTts = () => {
+    if (ttsProvider === 'browser' && typeof window !== 'undefined') {
+      window.speechSynthesis.cancel();
+      browserUtteranceRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setTtsPlaying(false);
+  };
+
+  const playTts = async () => {
+    const text = node.content.trim();
+    if (!text) return;
+    if (ttsPlaying) {
+      stopTts();
+      return;
+    }
+    if (ttsProvider === 'browser') {
+      if (typeof window === 'undefined' || !window.speechSynthesis) return;
+      const utterance = new SpeechSynthesisUtterance(text.slice(0, 900));
+      utterance.lang =
+        locale === 'ko'
+          ? 'ko-KR'
+          : locale === 'ja'
+            ? 'ja-JP'
+            : locale === 'zh'
+              ? 'zh-CN'
+              : locale === 'es'
+                ? 'es-ES'
+                : 'en-US';
+      utterance.onend = () => setTtsPlaying(false);
+      utterance.onerror = () => setTtsPlaying(false);
+      browserUtteranceRef.current = utterance;
+      setTtsPlaying(true);
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+    try {
+      setTtsPlaying(true);
+      const prep = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.slice(0, 900) }),
+      });
+      if (!prep.ok) {
+        setTtsPlaying(false);
+        return;
+      }
+      const prepJson = (await prep.json().catch(() => ({}))) as { streamUrl?: string };
+      if (!prepJson.streamUrl) {
+        setTtsPlaying(false);
+        return;
+      }
+      const audio = new Audio(prepJson.streamUrl);
+      audioRef.current = audio;
+      audio.onended = () => {
+        setTtsPlaying(false);
+        audioRef.current = null;
+      };
+      audio.onerror = () => {
+        setTtsPlaying(false);
+        audioRef.current = null;
+      };
+      await audio.play();
+    } catch {
+      setTtsPlaying(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3">
+      <div>
+        <button
+          type="button"
+          onClick={() => void playTts()}
+          className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors"
+          style={{
+            color: ttsPlaying ? '#00C49A' : 'var(--muted-foreground)',
+            borderColor: 'rgba(163,230,53,0.25)',
+            background: ttsPlaying ? 'rgba(0,196,154,0.1)' : 'rgba(255,255,255,0.02)',
+          }}
+        >
+          {ttsPlaying ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="5" y="4" width="5" height="16" rx="1" />
+              <rect x="14" y="4" width="5" height="16" rx="1" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="6,4 20,12 6,20" />
+            </svg>
+          )}
+          <span>{ttsPlaying ? t('nodes.ttsStop') : t('nodes.ttsPlay')}</span>
+        </button>
+      </div>
       <div>
         {rendered}
         {isTruncated && !expanded && (
