@@ -506,6 +506,38 @@ export function Toolbar({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <QuestionTemplateDesignerDialog
+        open={tplDesigner.open}
+        onOpenChange={(open) => {
+          if (!open) setTplDesigner({ open: false, templateId: null, seed: null });
+        }}
+        templateId={tplDesigner.templateId}
+        initialPattern={tplDesigner.seed?.pattern ?? ''}
+        initialName={tplDesigner.seed?.name ?? ''}
+        initialToolChoice={tplDesigner.seed?.toolChoice ?? 'auto'}
+        initialFollowUpQuestions={tplDesigner.seed?.followUpQuestions ?? []}
+        onSaved={refreshTplList}
+      />
+
+      <AlertDialog open={deleteTplId != null} onOpenChange={(o) => !o && setDeleteTplId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('toolbar.templateDeleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('toolbar.templateDeleteDesc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteTemplate}
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {isMobile && (
         <div className="pointer-events-auto w-full max-w-[100vw] rounded-2xl border border-border bg-card/95 px-2 py-2 backdrop-blur-sm">
           <div className="flex min-w-0 items-center gap-2">
@@ -533,6 +565,73 @@ export function Toolbar({
                 <FileText className="size-4" />
               </button>
             )}
+            <DropdownMenu onOpenChange={(o) => o && refreshTplList()}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  title={t('toolbar.templatesMenu')}
+                  aria-label={t('toolbar.templatesMenu')}
+                >
+                  <LayoutTemplate className="size-4 text-amber-600 dark:text-amber-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="max-h-[min(70vh,420px)] w-[min(100vw-2rem,16rem)] overflow-y-auto"
+              >
+                <DropdownMenuItem
+                  onSelect={() => {
+                    window.setTimeout(() => openTplDesignerNew(), 0);
+                  }}
+                >
+                  {t('toolbar.templateNew')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {tplList.length === 0 ? (
+                  <div className="px-2 py-2 text-xs text-muted-foreground">{t('templates.emptyList')}</div>
+                ) : (
+                  tplList.map((tpl, idx) => (
+                    <Fragment key={tpl.id}>
+                      {idx > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="max-w-[240px] truncate text-xs font-medium text-muted-foreground">
+                          {tpl.name}
+                        </DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            window.setTimeout(() => placeTemplateOnCanvas(tpl), 0);
+                          }}
+                        >
+                          <LayoutTemplate className="mr-2 size-4 text-amber-600 dark:text-amber-400" />
+                          {t('toolbar.templateAddToCanvas')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            window.setTimeout(() => openTplDesignerEdit(tpl), 0);
+                          }}
+                        >
+                          <Pencil className="mr-2 size-4" />
+                          {t('toolbar.templateEdit')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            window.setTimeout(() => setDeleteTplId(tpl.id), 0);
+                          }}
+                        >
+                          <Trash2 className="mr-2 size-4" />
+                          {t('toolbar.templateDelete')}
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                    </Fragment>
+                  ))
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               type="button"
               onClick={onToggleDashboard}
@@ -798,37 +897,6 @@ export function Toolbar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <QuestionTemplateDesignerDialog
-          open={tplDesigner.open}
-          onOpenChange={(open) => {
-            if (!open) setTplDesigner({ open: false, templateId: null, seed: null });
-          }}
-          templateId={tplDesigner.templateId}
-          initialPattern={tplDesigner.seed?.pattern ?? ''}
-          initialName={tplDesigner.seed?.name ?? ''}
-          initialToolChoice={tplDesigner.seed?.toolChoice ?? 'auto'}
-          initialFollowUpQuestions={tplDesigner.seed?.followUpQuestions ?? []}
-          onSaved={refreshTplList}
-        />
-
-        <AlertDialog open={deleteTplId != null} onOpenChange={(o) => !o && setDeleteTplId(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t('toolbar.templateDeleteTitle')}</AlertDialogTitle>
-              <AlertDialogDescription>{t('toolbar.templateDeleteDesc')}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={confirmDeleteTemplate}
-              >
-                {t('common.delete')}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
         <LanguageSwitcher />
         <ThemeToggle />
         {canUseSummary && (
@@ -897,17 +965,19 @@ export function Toolbar({
           )}
         </button>
 
-        {/* Auto layout button */}
-        <button
-          onClick={autoLayout}
-          className="hidden items-center gap-2 rounded-xl border border-border bg-card/90 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground sm:flex"
-          title={t('toolbar.layoutAutoHint')}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M6 9h12M6 9a3 3 0 1 1 6 0M18 9a3 3 0 0 0-6 0M9 15h6M9 15a3 3 0 1 1 6 0M15 15a3 3 0 0 0-6 0" />
-          </svg>
-          {t('toolbar.layoutAuto')}
-        </button>
+        {/* Auto layout — canvas only (irrelevant in Cards / mobile card view) */}
+        {desktopViewMode === 'canvas' && (
+          <button
+            onClick={autoLayout}
+            className="hidden items-center gap-2 rounded-xl border border-border bg-card/90 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground sm:flex"
+            title={t('toolbar.layoutAutoHint')}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 9h12M6 9a3 3 0 1 1 6 0M18 9a3 3 0 0 0-6 0M9 15h6M9 15a3 3 0 1 1 6 0M15 15a3 3 0 0 0-6 0" />
+            </svg>
+            {t('toolbar.layoutAuto')}
+          </button>
+        )}
 
         {/* Zoom controls */}
         <div className="hidden items-center gap-1 rounded-xl border border-border bg-card/90 p-1 backdrop-blur-sm sm:flex">
