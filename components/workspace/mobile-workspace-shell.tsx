@@ -546,22 +546,41 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
 
                         {a && (
                           <div className="mt-2 rounded-xl border border-border bg-secondary/40 p-2.5">
-                            <div className="mb-1 flex items-center justify-between">
-                              <span className="rounded-full bg-lime-400/20 px-2 py-0.5 text-[11px] font-semibold text-lime-600">
+                            <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
+                              <span className="shrink-0 rounded-full bg-lime-400/20 px-2 py-0.5 text-[11px] font-semibold text-lime-600">
                                 A
                               </span>
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex shrink-0 items-center gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => void playAnswerTts(a)}
-                                  className="rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground"
+                                  className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                                  aria-label={
+                                    ttsPlayingAnswerId === a.id
+                                      ? t('nodes.ttsStop')
+                                      : t('nodes.ttsPlay')
+                                  }
+                                  title={
+                                    ttsPlayingAnswerId === a.id
+                                      ? t('nodes.ttsStop')
+                                      : t('nodes.ttsPlay')
+                                  }
                                 >
-                                  {ttsPlayingAnswerId === a.id ? t('nodes.ttsStop') : t('nodes.ttsPlay')}
+                                  {ttsPlayingAnswerId === a.id ? (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                                      <rect x="5" y="4" width="5" height="16" rx="1" />
+                                      <rect x="14" y="4" width="5" height="16" rx="1" />
+                                    </svg>
+                                  ) : (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                                      <polygon points="6,4 20,12 6,20" />
+                                    </svg>
+                                  )}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => toggleDashboardPin(a.id)}
-                                  className="text-[11px] text-muted-foreground"
+                                  className="shrink-0 text-[11px] text-muted-foreground"
                                 >
                                   {state.dashboardNodeIds.includes(a.id) ? 'Unpin' : 'Pin'}
                                 </button>
