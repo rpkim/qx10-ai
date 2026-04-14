@@ -81,8 +81,6 @@ function putKrnameCached(
 export default function KoreanNamePage() {
   const [nameInput, setNameInput] = useState('');
   const [koreanName, setKoreanName] = useState('');
-  const [pronunciationGuide, setPronunciationGuide] = useState('');
-  const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [selectedCardStyle, setSelectedCardStyle] = useState<CardStyleId>(DEFAULT_CARD_STYLE);
@@ -97,8 +95,6 @@ export default function KoreanNamePage() {
     if (cached) {
       setErrorMessage('');
       setKoreanName(cached.koreanName);
-      setPronunciationGuide(cached.pronunciationGuide);
-      setReason(cached.reason);
       return;
     }
 
@@ -122,8 +118,6 @@ export default function KoreanNamePage() {
       const pronunciationGuide = data.pronunciationGuide ?? '';
       const reason = data.reason ?? '';
       setKoreanName(data.koreanName);
-      setPronunciationGuide(pronunciationGuide);
-      setReason(reason);
       putKrnameCached(trimmedName, {
         koreanName: data.koreanName,
         pronunciationGuide,
@@ -133,8 +127,6 @@ export default function KoreanNamePage() {
       const message = error instanceof Error ? error.message : 'Failed to generate Korean name';
       setErrorMessage(message);
       setKoreanName('');
-      setPronunciationGuide('');
-      setReason('');
     } finally {
       setLoading(false);
     }
@@ -247,23 +239,11 @@ export default function KoreanNamePage() {
                   boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
                 }}
               >
-                <p className="text-xs uppercase tracking-[0.22em] text-[#6b6675]">Your Korean Name</p>
                 <p
-                  className="mt-4 wrap-break-word text-4xl font-bold text-[#1e3f3f] sm:text-5xl"
+                  className="wrap-break-word text-4xl font-bold text-[#1e3f3f] sm:text-5xl"
                   style={{ lineHeight: 1.25 }}
                 >
-                  {koreanName || '한글 이름'}
-                </p>
-                {pronunciationGuide ? (
-                  <p className="mt-3 text-sm font-medium text-[#24484b]">Pronunciation: {pronunciationGuide}</p>
-                ) : null}
-                {reason ? <p className="mt-2 text-xs text-[#5a5565]">{reason}</p> : null}
-                <p className="mt-3 text-sm text-[#5a5565]">
-                  {nameInput.trim()
-                    ? loading
-                      ? 'AI is creating your Korean name...'
-                      : `From "${nameInput}"`
-                    : 'Type your name and click "Generate with AI"'}
+                  {loading ? '…' : koreanName || '한글 이름'}
                 </p>
               </div>
 
