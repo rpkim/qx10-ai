@@ -1,26 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
-type SpeechRecognitionResultEvent = Event & {
-  results: ArrayLike<{
-    isFinal: boolean;
-    0: { transcript: string };
-  }>;
-};
-
-type SpeechRecognitionLike = {
-  lang: string;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onresult: ((event: SpeechRecognitionResultEvent) => void) | null;
-  onerror: (() => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-
-type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 type CardStyleId = 'hanok' | 'taegeuk' | 'golden' | 'bts';
 
 const CARD_STYLE_OPTIONS = [
@@ -104,11 +85,8 @@ export default function KoreanNamePage() {
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [voiceSupported, setVoiceSupported] = useState(false);
   const [selectedCardStyle, setSelectedCardStyle] = useState<CardStyleId>(DEFAULT_CARD_STYLE);
   const [downloadingCard, setDownloadingCard] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const koreanStyleCardExportRef = useRef<HTMLDivElement | null>(null);
 
   const generateKoreanName = async () => {
@@ -160,54 +138,6 @@ export default function KoreanNamePage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const speechApi = window as typeof window & {
-      SpeechRecognition?: SpeechRecognitionConstructor;
-      webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    };
-    const RecognitionCtor = speechApi.SpeechRecognition ?? speechApi.webkitSpeechRecognition;
-    if (!RecognitionCtor) {
-      setVoiceSupported(false);
-      return;
-    }
-    setVoiceSupported(true);
-
-    const recognition = new RecognitionCtor();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onresult = (event) => {
-      const result = event.results[0];
-      const transcript = result?.[0]?.transcript?.trim() ?? '';
-      if (!transcript) return;
-      setNameInput(transcript);
-    };
-    recognition.onerror = () => {
-      setErrorMessage('Microphone recognition failed. Please try again.');
-      setIsListening(false);
-    };
-    recognition.onend = () => setIsListening(false);
-
-    recognitionRef.current = recognition;
-    return () => {
-      recognition.stop();
-      recognitionRef.current = null;
-    };
-  }, []);
-
-  const toggleListening = () => {
-    if (!recognitionRef.current || loading) return;
-    setErrorMessage('');
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-      return;
-    }
-    recognitionRef.current.start();
-    setIsListening(true);
   };
 
   const downloadKoreanStyleCard = async () => {
@@ -270,20 +200,6 @@ export default function KoreanNamePage() {
             />
 
             <div className="mt-5 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={toggleListening}
-                disabled={!voiceSupported || loading}
-                className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                  isListening ? 'bg-[#a24238] hover:bg-[#8f392f]' : 'bg-[#6a4aa1] hover:bg-[#593d88]'
-                }`}
-              >
-                {voiceSupported
-                  ? isListening
-                    ? 'Stop Mic'
-                    : 'Use Microphone'
-                  : 'Mic Not Supported'}
-              </button>
               <button
                 type="button"
                 onClick={generateKoreanName}
