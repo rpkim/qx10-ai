@@ -155,7 +155,7 @@ export default function KoreanNamePage() {
         useCORS: true,
         allowTaint: false,
         logging: false,
-        backgroundColor: '#f8f6ef',
+        backgroundColor: '#fffdf7',
       });
       const safe = nameInput.trim().replace(/[^\w\u3400-\u9FFF-]+/g, '_').slice(0, 40) || 'card';
       const url = canvas.toDataURL('image/png');
@@ -226,22 +226,28 @@ export default function KoreanNamePage() {
                 color: '#101018',
                 fontFamily: '"Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif',
                 border: '1px solid #d4cdc0',
-                backgroundColor: 'rgba(255, 252, 247, 0.97)',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.9), 0 4px 18px rgba(0,0,0,0.07)',
+                backgroundColor: '#fffdf7',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
               }}
             >
               <div
-                className="relative rounded-2xl border px-5 py-6 text-center sm:px-6 sm:py-7"
+                className="relative flex w-full min-h-[132px] items-center justify-center rounded-2xl border px-5 sm:min-h-[152px] sm:px-6"
                 style={{
                   borderColor: '#d9d3c3',
                   borderWidth: 1,
-                  backgroundColor: 'rgba(255,255,255,0.96)',
-                  boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.05)',
+                  backgroundColor: '#ffffff',
+                  boxShadow: 'none',
                 }}
               >
                 <p
-                  className="wrap-break-word text-4xl font-bold text-[#1e3f3f] sm:text-5xl"
-                  style={{ lineHeight: 1.25 }}
+                  className="wrap-break-word text-center text-4xl font-bold sm:text-5xl"
+                  style={{
+                    color: '#1e3f3f',
+                    lineHeight: 1.2,
+                    margin: 0,
+                    padding: 0,
+                    WebkitFontSmoothing: 'antialiased',
+                  }}
                 >
                   {loading ? '…' : koreanName || '한글 이름'}
                 </p>
@@ -312,7 +318,7 @@ function PhotoCardIllustration({ src, alt }: { src: string; alt: string }) {
   return (
     <div
       className="overflow-hidden rounded-2xl border border-[#d9d3c3]"
-      style={{ backgroundColor: 'rgba(255,255,255,0.78)' }}
+      style={{ backgroundColor: '#ffffff' }}
     >
       <img src={src} alt={alt} className="block h-auto w-full object-cover" crossOrigin="anonymous" />
     </div>
@@ -323,7 +329,7 @@ function TaegukIllustration() {
   return (
     <div
       className="rounded-2xl border border-[#d9d3c3] p-3"
-      style={{ backgroundColor: 'rgba(255,255,255,0.78)' }}
+      style={{ backgroundColor: '#ffffff' }}
     >
       <svg
         viewBox="-36 -24 72 48"
