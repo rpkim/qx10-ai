@@ -1,4 +1,5 @@
 import type { GoalType, QueryToolChoice } from '@/lib/types';
+import { isLocale, type Locale } from '@/lib/i18n/constants';
 import {
   buildModelCatalog,
   readGeminiApiKey,
@@ -15,6 +16,7 @@ export async function POST(req: Request) {
     keyword?: string;
     goal?: GoalType;
     contextPairs?: Array<{ question?: string; answer?: string }>;
+    locale?: string;
     /** Catalog id e.g. `openai:gpt-4o-mini` */
     modelChoice?: string | null;
     toolChoice?: QueryToolChoice | null;
@@ -61,6 +63,7 @@ export async function POST(req: Request) {
         .filter((p) => p.question && p.answer)
         .slice(-10)
     : [];
+  const locale: Locale = isLocale(body.locale) ? body.locale : 'en';
 
   const catalog = buildModelCatalog();
   if (catalog.options.length === 0) {
@@ -94,7 +97,7 @@ export async function POST(req: Request) {
 
   const stream = createWorkspaceQueryReadableStream(
     selection,
-    { question, keyword, goal, toolChoice, contextPairs },
+    { question, keyword, goal, locale, toolChoice, contextPairs },
     { openaiKey, geminiKey }
   );
 

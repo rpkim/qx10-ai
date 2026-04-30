@@ -45,6 +45,7 @@ import {
   loadGeminiKeyEncrypted,
   saveGeminiKeyEncrypted,
 } from '@/lib/byok-gemini';
+import { isLocale, type Locale } from '@/lib/i18n/constants';
 
 /* ─────────────────────────────────────────────
    Canvas layout (tree-aware — avoids Answer / Query overlap)
@@ -411,6 +412,16 @@ Rules:
 - Exactly 5 strings in "questions".
 - Each is one short, specific first-step question.
 - No duplicates; cover different angles.`;
+
+function readLocaleForAi(): Locale {
+  if (typeof window === 'undefined') return 'en';
+  try {
+    const raw = window.localStorage.getItem('qx10.locale');
+    return isLocale(raw) ? raw : 'en';
+  } catch {
+    return 'en';
+  }
+}
 
 /** Slot values for a query spawned from a template row (for {{var}} in follow-ups). */
 function slotValuesForTemplateQuery(
@@ -787,7 +798,7 @@ interface WorkspaceContextValue {
   unlockBrowserGeminiKey: (passphrase: string) => Promise<void>;
   lockBrowserGeminiKey: () => void;
   clearBrowserGeminiKey: () => Promise<void>;
-  generateBrowserSeedQueries: (keyword: string, goal: GoalType) => Promise<string[]>;
+  generateBrowserSeedQueries: (keyword: string, goal: GoalType, locale: Locale) => Promise<string[]>;
   isDemoMode: boolean;
 }
 
@@ -986,7 +997,7 @@ export function WorkspaceProvider({
   }, [aiCatalog, hasBrowserGeminiKey]);
 
   const generateBrowserSeedQueries = useCallback(
-    async (keyword: string, goal: GoalType): Promise<string[]> => {
+    async (keyword: string, goal: GoalType, locale: Locale): Promise<string[]> => {
       if (!browserGeminiKey) return [];
       try {
         const geminiOption = effectiveAiCatalog?.options.find((o) => o.provider === 'gemini');
@@ -996,7 +1007,17 @@ export function WorkspaceProvider({
           model: modelName,
           generationConfig: { responseMimeType: 'application/json' },
         });
-        const user = `Topic / keyword: "${keyword}"\nExploration mode: ${goal}`;
+        const lang =
+          locale === 'ko'
+            ? 'Korean (ko)'
+            : locale === 'ja'
+              ? 'Japanese (ja)'
+              : locale === 'es'
+                ? 'Spanish (es)'
+                : locale === 'zh'
+                  ? 'Simplified Chinese (zh-Hans)'
+                  : 'English (en)';
+        const user = `Topic / keyword: "${keyword}"\nExploration mode: ${goal}\nDefault output language: ${lang}\nIf the topic explicitly asks for another language, follow that explicit request.`;
         const r = await model.generateContent(`${BROWSER_SEED_SYSTEM}\n\n${user}`);
         const raw = r.response.text();
         if (!raw?.trim()) return [];
@@ -1315,6 +1336,7 @@ export function WorkspaceProvider({
               contextPairs,
               modelChoice: queryNode.modelChoice ?? null,
               toolChoice: queryNode.toolChoice ?? 'auto',
+              locale: readLocaleForAi(),
             }),
           });
         } catch {

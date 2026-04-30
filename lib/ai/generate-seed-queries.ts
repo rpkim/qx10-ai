@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { GoalType } from '@/lib/types';
 import type { CatalogOption } from '@/lib/ai/model-config';
 import { GOAL_HINT } from '@/lib/ai/prompts';
+import type { Locale } from '@/lib/i18n/constants';
 
 const seedSchema = z.object({
   questions: z.array(z.string()).min(4).max(8),
@@ -19,14 +20,26 @@ Rules:
 
 export async function generateSeedQuestions(
   selection: CatalogOption,
-  params: { keyword: string; goal: GoalType },
+  params: { keyword: string; goal: GoalType; locale: Locale },
   keys: { openaiKey: string | undefined; geminiKey: string | undefined }
 ): Promise<string[]> {
-  const { keyword, goal } = params;
+  const { keyword, goal, locale } = params;
   const hint = GOAL_HINT[goal] ?? GOAL_HINT.learn;
+  const lang =
+    locale === 'ko'
+      ? 'Korean (ko)'
+      : locale === 'ja'
+        ? 'Japanese (ja)'
+        : locale === 'es'
+          ? 'Spanish (es)'
+          : locale === 'zh'
+            ? 'Simplified Chinese (zh-Hans)'
+            : 'English (en)';
   const user = `Topic / keyword: "${keyword}"
 Exploration mode: ${goal}
-Mode guidance for biasing the questions: ${hint}`;
+Mode guidance for biasing the questions: ${hint}
+Default output language: ${lang}
+If the topic text itself explicitly asks for another language, follow that explicit request.`;
 
   let raw: string | undefined;
 
