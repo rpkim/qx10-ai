@@ -1,4 +1,5 @@
 import type { GoalType } from '@/lib/types';
+import type { Locale } from '@/lib/i18n/constants';
 
 export const GOAL_HINT: Record<GoalType, string> = {
   learn: 'Prioritize clear explanations, definitions, and intuition. Encourage the next good questions a curious learner would ask.',
@@ -9,23 +10,46 @@ export const GOAL_HINT: Record<GoalType, string> = {
     'Prioritize goals, trade-offs, risks, sequencing, and “what would change my mind?” — questions that clarify direction and decisions.',
 };
 
-export function buildAnswerSystemPrompt(goal: GoalType): string {
+function preferredLanguageLabel(locale: Locale): string {
+  if (locale === 'ko') return 'Korean';
+  if (locale === 'ja') return 'Japanese';
+  if (locale === 'es') return 'Spanish';
+  if (locale === 'zh') return 'Simplified Chinese';
+  return 'English';
+}
+
+function localeKey(locale: Locale): string {
+  if (locale === 'ko') return 'ko';
+  if (locale === 'ja') return 'ja';
+  if (locale === 'es') return 'es';
+  if (locale === 'zh') return 'zh-Hans';
+  return 'en';
+}
+
+export function buildAnswerSystemPrompt(goal: GoalType, locale: Locale): string {
+  const languageLabel = preferredLanguageLabel(locale);
+  const langKey = localeKey(locale);
   return [
     'You are qx10.lol, a Socratic knowledge companion.',
     'The user is exploring a topic on an infinite canvas: they run queries, read answers, branch into follow-ups, and pin insights to a dashboard.',
     GOAL_HINT[goal] ?? GOAL_HINT.learn,
-    'Respond in the same language as the user question (if the question mixes languages, follow the dominant one).',
+    `Default response language: ${languageLabel} (${langKey}).`,
+    'If the user explicitly asks for another output language in their prompt, follow that request. Otherwise keep the default language above.',
     'Write a substantive, accurate answer in plain prose. Use short paragraphs.',
     'You may emphasize key phrases with **double asterisks** (markdown bold) sparingly.',
     'Do not mention that you are an AI or that this is a mock. Do not refuse solely because the topic is finance or trading; give educational information.',
   ].join('\n');
 }
 
-export const METADATA_SYSTEM_PROMPT = `You extract structured follow-ups for a knowledge-tree UI.
+export function buildMetadataSystemPrompt(locale: Locale): string {
+  const languageLabel = preferredLanguageLabel(locale);
+  const langKey = localeKey(locale);
+  return `You extract structured follow-ups for a knowledge-tree UI.
 
 Given a user QUESTION and the MODEL ANSWER, output a single JSON object with:
 - "extractedKeywords": 4–10 short concept labels (2–4 words each) that appeared or are central. No duplicates.
-- "suggestedQueries": 3–6 concrete follow-up questions the user might run next (full sentences, same language as the question).
+- "suggestedQueries": 3–6 concrete follow-up questions the user might run next (full sentences).
+- Use ${languageLabel} (${langKey}) by default, unless QUESTION explicitly asks for another language.
 - "dataNode": either null OR an object that visualizes part of the answer:
   - "dataType": one of "table" | "bar-chart" | "line-chart" | "list" | "metric"
   - "title": short widget title
@@ -36,3 +60,4 @@ Given a user QUESTION and the MODEL ANSWER, output a single JSON object with:
 Only add dataNode when a small visual genuinely helps; otherwise null.
 
 Output JSON only, no markdown fences.`;
+}

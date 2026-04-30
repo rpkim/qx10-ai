@@ -50,7 +50,7 @@ interface Props {
 }
 
 export function RootNode({ node }: Props) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { addCustomQuery, generateBrowserSeedQueries, isBrowserGeminiUnlocked, isDemoMode, state } =
     useWorkspace();
   const introduceReveal = useIntroduceReveal();
@@ -66,7 +66,7 @@ export function RootNode({ node }: Props) {
   );
 
   useEffect(() => {
-    const cacheKey = `${node.keyword}::${node.goal}`;
+    const cacheKey = `${node.keyword}::${node.goal}::${locale}`;
 
     if (introduceReveal) {
       const fromGraphQs = sortedRootChildQueries.map((q) => q.question.trim()).filter(Boolean);
@@ -104,7 +104,7 @@ export function RootNode({ node }: Props) {
     fetch('/api/workspace/seed-queries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keyword: node.keyword, goal: node.goal }),
+      body: JSON.stringify({ keyword: node.keyword, goal: node.goal, locale }),
     })
       .then((r) => r.json())
       .then((data: { questions?: string[] }) => {
@@ -135,7 +135,7 @@ export function RootNode({ node }: Props) {
           setIsLoadingSuggestions(false);
           return;
         }
-        void generateBrowserSeedQueries(node.keyword, node.goal).then((browserQs) => {
+        void generateBrowserSeedQueries(node.keyword, node.goal, locale).then((browserQs) => {
           if (cancelled) return;
           if (browserQs.length >= 3) {
             const payload = { questions: browserQs, status: 'ai' as const };
@@ -165,7 +165,7 @@ export function RootNode({ node }: Props) {
           setIsLoadingSuggestions(false);
           return;
         }
-        void generateBrowserSeedQueries(node.keyword, node.goal).then((browserQs) => {
+        void generateBrowserSeedQueries(node.keyword, node.goal, locale).then((browserQs) => {
           if (cancelled) return;
           if (browserQs.length >= 3) {
             const payload = { questions: browserQs, status: 'ai' as const };
@@ -190,6 +190,7 @@ export function RootNode({ node }: Props) {
     node.keyword,
     node.goal,
     node.id,
+    locale,
     introduceReveal,
     sortedRootChildQueries,
     generateBrowserSeedQueries,
