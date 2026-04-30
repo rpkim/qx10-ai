@@ -156,7 +156,7 @@ export default function LandingPage() {
   };
 
   return (
-    <main className="relative flex h-screen w-screen flex-col items-center justify-start overflow-hidden bg-background">
+    <main className="fixed inset-0 overflow-y-auto overscroll-y-contain bg-background [-webkit-overflow-scrolling:touch]">
       {starting && (
         <div className="pointer-events-none fixed inset-0 z-50">
           <div
@@ -265,10 +265,10 @@ export default function LandingPage() {
 
       <div
         className={[
-          'relative z-10 flex w-full flex-col px-6 transition-all duration-300 ease-out',
+          'relative z-10 mx-auto flex w-full flex-col px-6 transition-all duration-300 ease-out',
           isMobile
-            ? 'h-full max-w-md justify-start gap-6 overflow-y-auto pb-8 pt-20'
-            : 'max-w-2xl items-center gap-8 overflow-y-auto pb-10 pt-28',
+            ? 'min-h-full max-w-md justify-start gap-6 pb-[max(5rem,env(safe-area-inset-bottom))] pt-20'
+            : 'max-w-2xl items-center gap-8 pb-10 pt-28',
           starting ? 'translate-y-2 opacity-0 blur-[1px]' : 'translate-y-0 opacity-100',
         ].join(' ')}
       >
