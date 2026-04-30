@@ -251,7 +251,8 @@ export function SettingsClient() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col gap-8 px-4 py-10">
+    <div className="fixed inset-0 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+      <div className="mx-auto flex min-h-full max-w-lg flex-col gap-8 px-4 py-10 pb-[max(6rem,env(safe-area-inset-bottom))]">
       <div>
         <Link
           href="/"
@@ -390,6 +391,7 @@ export function SettingsClient() {
           )}
         </div>
       </section>
+      </div>
     </div>
   );
 }
