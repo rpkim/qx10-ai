@@ -57,11 +57,19 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
   }>;
 }
 
-export async function fetchGoogleUserInfo(accessToken: string): Promise<{ email?: string; name?: string }> {
-  const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+export async function fetchGoogleUserInfo(
+  accessToken: string
+): Promise<{ sub?: string; email?: string; name?: string; picture?: string }> {
+  // v3 (OpenID) returns the stable subject id along with profile fields.
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) return {};
-  const j = (await res.json()) as { email?: string; name?: string };
-  return { email: j.email, name: j.name };
+  const j = (await res.json()) as {
+    sub?: string;
+    email?: string;
+    name?: string;
+    picture?: string;
+  };
+  return { sub: j.sub, email: j.email, name: j.name, picture: j.picture };
 }

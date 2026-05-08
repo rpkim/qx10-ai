@@ -10,6 +10,7 @@ import {
 } from '@/lib/introduce-reveal-context';
 import { useI18n } from '@/components/i18n-provider';
 import { getClientTtsProvider } from '@/lib/tts/config';
+import { RefreshCw } from 'lucide-react';
 
 interface Props {
   node: AnswerNodeData;
@@ -17,12 +18,14 @@ interface Props {
 
 export function AnswerNode({ node }: Props) {
   const { t, locale } = useI18n();
-  const { addCustomQuery, toggleDashboardPin, state, aiCatalog, isDemoMode } = useWorkspace();
+  const { addCustomQuery, toggleDashboardPin, state, aiCatalog, isDemoMode, refreshAnswerMetadata } =
+    useWorkspace();
   const introduceReveal = useIntroduceReveal();
   const [showAllKeywords, setShowAllKeywords] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
   const [ttsPlaying, setTtsPlaying] = useState(false);
+  const [metaRefreshing, setMetaRefreshing] = useState(false);
   const isPinned = state.dashboardNodeIds.includes(node.id);
   const browserUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -163,7 +166,7 @@ export function AnswerNode({ node }: Props) {
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-2xl border p-4 transition-all duration-300"
+      className="flex min-w-0 max-w-full flex-col gap-3 rounded-2xl border p-4 transition-all duration-300"
       style={{
         borderColor: isPinned ? 'rgba(0,196,154,0.5)' : 'rgba(163,230,53,0.25)',
         background: 'rgba(163,230,53,0.03)',
@@ -172,7 +175,7 @@ export function AnswerNode({ node }: Props) {
           : '0 4px 16px rgba(0,0,0,0.35)',
         backdropFilter: 'blur(8px)',
         maxWidth: 340,
-        minWidth: 300,
+        minWidth: 280,
       }}
     >
       {/* Header */}
@@ -191,7 +194,27 @@ export function AnswerNode({ node }: Props) {
 
         {/* Pin to dashboard */}
         {!isStreaming && (
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            {!isDemoMode && (
+              <button
+                type="button"
+                disabled={metaRefreshing}
+                onClick={() => {
+                  setMetaRefreshing(true);
+                  void refreshAnswerMetadata(node.id).finally(() => setMetaRefreshing(false));
+                }}
+                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs transition-colors disabled:opacity-50"
+                style={{
+                  color: 'var(--muted-foreground)',
+                  borderColor: 'rgba(163,230,53,0.25)',
+                  background: 'rgba(255,255,255,0.02)',
+                }}
+                title={t('nodes.refreshKeywords')}
+              >
+                <RefreshCw className={`size-3 ${metaRefreshing ? 'animate-spin' : ''}`} aria-hidden />
+                <span className="hidden sm:inline">{t('nodes.refreshKeywordsShort')}</span>
+              </button>
+            )}
             <button
               onClick={() => void playTts()}
               className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors"

@@ -7,10 +7,11 @@ import type { GoalType } from '@/lib/types';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { UserMenu } from '@/components/auth/user-menu';
 import { useI18n } from '@/components/i18n-provider';
 import { workspaceUrl } from '@/lib/workspace-url';
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
-import { KeyRound, Lock, LockOpen, Settings } from 'lucide-react';
+import { ExternalLink, HelpCircle, KeyRound, Lock, LockOpen, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,7 @@ import {
 import { readWorkspaceLaunch } from '@/lib/workspace-launch';
 import { removeWorkspaceFromLocalStorage } from '@/lib/workspace-snapshot';
 import { removeDashboardGrid } from '@/lib/dashboard-layout-storage';
+import { trackSearch } from '@/lib/telemetry/client';
 
 const EXAMPLE_KEYWORDS = [
   'Quant Trading',
@@ -41,6 +43,7 @@ export default function LandingPage() {
   const [recent, setRecent] = useState<WorkspaceIndexEntry[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [byokOpen, setByokOpen] = useState(false);
+  const [byokHowto, setByokHowto] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [passphraseInput, setPassphraseInput] = useState('');
   const [byokBusy, setByokBusy] = useState(false);
@@ -55,7 +58,9 @@ export default function LandingPage() {
     setStarting(true);
     setStartAnimPhase(false);
     window.requestAnimationFrame(() => setStartAnimPhase(true));
-    const target = workspaceUrl({ keyword: keyword.trim(), goal });
+    const trimmed = keyword.trim();
+    trackSearch({ keyword: trimmed, goal, surface: 'landing' });
+    const target = workspaceUrl({ keyword: trimmed, goal });
     window.setTimeout(() => {
       router.push(target);
     }, 520);
@@ -200,6 +205,7 @@ export default function LandingPage() {
         </button>
         <LanguageSwitcher />
         <ThemeToggle />
+        <UserMenu />
       </div>
       <Dialog open={byokOpen} onOpenChange={setByokOpen}>
         <DialogContent className="border-border sm:max-w-md">
@@ -207,9 +213,61 @@ export default function LandingPage() {
             <DialogTitle>Gemini BYOK (Browser Only)</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-3 py-2">
-            <div className="text-xs text-muted-foreground">
-              All data stays local in your browser. Gemini key is encrypted in IndexedDB (Web Crypto).
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-xs text-muted-foreground">
+                All data stays local in your browser. Gemini key is encrypted in IndexedDB (Web Crypto).
+              </div>
+              <button
+                type="button"
+                onClick={() => setByokHowto((v) => !v)}
+                aria-expanded={byokHowto}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+              >
+                <HelpCircle className="size-3.5" aria-hidden />
+                How-To
+              </button>
             </div>
+            {byokHowto && (
+              <div className="rounded-xl border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
+                <div className="mb-2 font-semibold text-foreground">How to get a Gemini API key</div>
+                <ol className="list-decimal space-y-1 pl-4">
+                  <li>
+                    Open{' '}
+                    <a
+                      href="https://aistudio.google.com/apikey"
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
+                    >
+                      Google AI Studio
+                      <ExternalLink className="size-3" aria-hidden />
+                    </a>{' '}
+                    and sign in with your Google account.
+                  </li>
+                  <li>
+                    Click <span className="font-medium text-foreground">Create API key</span>, then pick a Google Cloud project (or accept the default).
+                  </li>
+                  <li>
+                    Copy the key (starts with <code className="rounded bg-background px-1 py-0.5 text-[10.5px]">AIza…</code>) and paste it below.
+                  </li>
+                  <li>
+                    Choose any passphrase — it stays in this browser and is used to encrypt the key locally.
+                  </li>
+                </ol>
+                <div className="mt-2 text-[11px] text-muted-foreground/80">
+                  The free tier is enough to try the app. The key is never sent to our servers.
+                </div>
+                <a
+                  href="https://aistudio.google.com/apikey"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/15"
+                >
+                  Open AI Studio
+                  <ExternalLink className="size-3" aria-hidden />
+                </a>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">Gemini API Key</span>
               <Input
