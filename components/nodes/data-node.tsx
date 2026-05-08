@@ -67,7 +67,7 @@ export function DataNode({ node }: Props) {
           ? '0 0 20px rgba(0,196,154,0.12)'
           : '0 4px 16px rgba(0,0,0,0.35)',
         backdropFilter: 'blur(8px)',
-        minWidth: 300,
+        minWidth: 260,
         maxWidth: 340,
       }}
     >
@@ -166,14 +166,14 @@ function DataIcon({ type }: { type: string }) {
 function TableView({ node }: { node: DataNodeData }) {
   if (!node.tableColumns || !node.tableRows) return null;
   return (
-    <div className="overflow-x-auto rounded-xl" style={{ background: 'rgba(0,0,0,0.25)' }}>
-      <table className="w-full text-xs">
+    <div className="max-h-[min(50vh,420px)] min-w-0 overflow-x-auto overflow-y-auto overscroll-y-contain rounded-xl [scrollbar-width:thin]">
+      <table className="w-full min-w-0 table-fixed text-xs" style={{ background: 'rgba(0,0,0,0.25)' }}>
         <thead>
           <tr>
             {node.tableColumns.map((col) => (
               <th
                 key={col}
-                className="border-b px-3 py-2 text-left font-semibold text-muted-foreground"
+                className="min-w-0 max-w-0 border-b px-2 py-2 text-left align-top font-semibold break-words text-muted-foreground [overflow-wrap:anywhere] sm:px-3"
                 style={{ borderColor: 'rgba(245,158,11,0.15)' }}
               >
                 {col}
@@ -187,7 +187,7 @@ function TableView({ node }: { node: DataNodeData }) {
               {node.tableColumns!.map((col) => (
                 <td
                   key={col}
-                  className="border-b px-3 py-2 text-foreground/80"
+                  className="min-w-0 max-w-0 border-b px-2 py-2 align-top break-words text-foreground/80 [overflow-wrap:anywhere] sm:px-3"
                   style={{ borderColor: 'rgba(245,158,11,0.08)' }}
                 >
                   {String(row[col] ?? '')}

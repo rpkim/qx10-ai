@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type {
   AnswerNodeData,
   DataNodeData,
@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RootNode } from '@/components/nodes/root-node';
 import { DashboardWidget } from '@/components/workspace/dashboard-panel';
 import { getClientTtsProvider } from '@/lib/tts/config';
+import { RefreshCw } from 'lucide-react';
 
 interface Props {
   showDashboard: boolean;
@@ -42,6 +43,8 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
     runTemplateSlot,
     deleteTemplateSlotNode,
     deleteNode,
+    refreshAnswerMetadata,
+    isDemoMode,
   } = useWorkspace();
   const [customInputByAnswer, setCustomInputByAnswer] = useState<Record<string, string>>({});
   const [collapsedByQuery, setCollapsedByQuery] = useState<Record<string, boolean>>({});
@@ -49,6 +52,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
     Record<string, boolean>
   >({});
   const [ttsPlayingAnswerId, setTtsPlayingAnswerId] = useState<string | null>(null);
+  const [metaRefreshingAnswerId, setMetaRefreshingAnswerId] = useState<string | null>(null);
   const browserUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ttsProvider = getClientTtsProvider();
@@ -441,7 +445,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                   <div
                     key={q.id}
                     data-mobile-query-card-id={q.id}
-                    className="rounded-2xl border border-border bg-card p-3 shadow-sm"
+                    className="min-w-0 max-w-full rounded-2xl border border-border bg-card p-3 shadow-sm"
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
@@ -584,10 +588,30 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                                 >
                                   {state.dashboardNodeIds.includes(a.id) ? 'Unpin' : 'Pin'}
                                 </button>
+                                {!isDemoMode && (
+                                  <button
+                                    type="button"
+                                    disabled={metaRefreshingAnswerId === a.id}
+                                    onClick={() => {
+                                      setMetaRefreshingAnswerId(a.id);
+                                      void refreshAnswerMetadata(a.id).finally(() =>
+                                        setMetaRefreshingAnswerId(null)
+                                      );
+                                    }}
+                                    className="flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] text-muted-foreground disabled:opacity-50"
+                                    title={t('nodes.refreshKeywords')}
+                                  >
+                                    <RefreshCw
+                                      className={`size-3 ${metaRefreshingAnswerId === a.id ? 'animate-spin' : ''}`}
+                                      aria-hidden
+                                    />
+                                    {t('nodes.refreshKeywordsShort')}
+                                  </button>
+                                )}
                               </div>
                             </div>
                             <div
-                              className="max-h-52 overflow-y-auto pr-1 text-[13px] leading-relaxed text-foreground/90 select-text"
+                              className="max-h-52 min-w-0 overflow-y-auto overflow-x-hidden pr-1 text-[13px] leading-relaxed text-foreground/90 select-text [overflow-wrap:anywhere] break-words"
                               style={{
                                 scrollbarWidth: 'thin',
                                 overscrollBehavior: 'contain',
@@ -715,14 +739,14 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                               </button>
                             </div>
                             {d.dataType === 'table' && d.tableRows && d.tableColumns ? (
-                              <div className="overflow-x-auto rounded-lg border border-border bg-card/70">
-                                <table className="w-full min-w-[360px] text-xs">
+                              <div className="max-h-[min(48vh,360px)] min-w-0 overflow-x-auto overflow-y-auto overscroll-y-contain rounded-lg border border-border bg-card/70 [scrollbar-width:thin]">
+                                <table className="w-full min-w-0 table-fixed text-xs">
                                   <thead>
                                     <tr>
-                                      {d.tableColumns.map((col) => (
+                                      {(d.tableColumns ?? []).map((col) => (
                                         <th
                                           key={col}
-                                          className="border-b border-border px-2 py-1.5 text-left font-semibold text-muted-foreground"
+                                          className="min-w-0 max-w-0 border-b border-border px-2 py-1.5 text-left align-top font-semibold break-words text-muted-foreground [overflow-wrap:anywhere]"
                                         >
                                           {col}
                                         </th>
@@ -732,10 +756,10 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                                   <tbody>
                                     {d.tableRows.slice(0, 8).map((row, idx) => (
                                       <tr key={idx}>
-                                        {d.tableColumns.map((col) => (
+                                        {(d.tableColumns ?? []).map((col) => (
                                           <td
                                             key={col}
-                                            className="border-b border-border px-2 py-1.5 text-foreground/85"
+                                            className="min-w-0 max-w-0 border-b border-border px-2 py-1.5 align-top break-words text-foreground/85 [overflow-wrap:anywhere]"
                                           >
                                             {String(row[col] ?? '')}
                                           </td>
@@ -805,7 +829,7 @@ function dataSummary(d: DataNodeData): string {
   return d.title;
 }
 
-function renderSimpleMarkdown(content: string): JSX.Element {
+function renderSimpleMarkdown(content: string): ReactElement {
   const blocks = content.split('\n\n').filter((b) => b.trim().length > 0);
   return (
     <div className="space-y-2">
@@ -837,12 +861,15 @@ function renderSimpleMarkdown(content: string): JSX.Element {
           const headers = toCells(lines[0]);
           const rows = lines.slice(2).map(toCells);
           return (
-            <div key={idx} className="overflow-x-auto rounded-lg border border-border bg-card/70">
-              <table className="w-full min-w-[360px] text-xs">
+            <div key={idx} className="max-h-[min(40vh,320px)] min-w-0 overflow-x-auto overflow-y-auto overscroll-y-contain rounded-lg border border-border bg-card/70 [scrollbar-width:thin]">
+              <table className="w-full min-w-0 table-fixed text-xs">
                 <thead>
                   <tr>
                     {headers.map((h, hIdx) => (
-                      <th key={hIdx} className="border-b border-border px-2 py-1.5 text-left font-semibold text-muted-foreground">
+                      <th
+                        key={hIdx}
+                        className="min-w-0 max-w-0 border-b border-border px-2 py-1.5 text-left align-top font-semibold break-words text-muted-foreground [overflow-wrap:anywhere]"
+                      >
                         {formatBoldInline(h)}
                       </th>
                     ))}
@@ -852,7 +879,10 @@ function renderSimpleMarkdown(content: string): JSX.Element {
                   {rows.map((row, rowIdx) => (
                     <tr key={rowIdx}>
                       {headers.map((_, colIdx) => (
-                        <td key={colIdx} className="border-b border-border px-2 py-1.5 text-foreground/85">
+                        <td
+                          key={colIdx}
+                          className="min-w-0 max-w-0 border-b border-border px-2 py-1.5 align-top break-words text-foreground/85 [overflow-wrap:anywhere]"
+                        >
                           {formatBoldInline(row[colIdx] ?? '')}
                         </td>
                       ))}
@@ -919,7 +949,7 @@ function renderSimpleMarkdown(content: string): JSX.Element {
   );
 }
 
-function formatBoldInline(text: string): (string | JSX.Element)[] {
+function formatBoldInline(text: string): (string | ReactElement)[] {
   const parts = text.split(/\*\*(.*?)\*\*/g);
   return parts.map((part, i) =>
     i % 2 === 1 ? (

@@ -799,6 +799,8 @@ interface WorkspaceContextValue {
   lockBrowserGeminiKey: () => void;
   clearBrowserGeminiKey: () => Promise<void>;
   generateBrowserSeedQueries: (keyword: string, goal: GoalType, locale: Locale) => Promise<string[]>;
+  /** Re-run metadata extraction (keywords, follow-ups, optional data widget) for a completed answer. */
+  refreshAnswerMetadata: (answerId: string) => Promise<void>;
   isDemoMode: boolean;
 }
 
@@ -1264,7 +1266,7 @@ export function WorkspaceProvider({
           const genAI = new GoogleGenerativeAI(browserGeminiKey);
           const model = genAI.getGenerativeModel({
             model: selected?.model || modelId.replace(/^gemini:/, ''),
-            systemInstruction: buildAnswerSystemPrompt(goalRef.current),
+            systemInstruction: buildAnswerSystemPrompt(goalRef.current, readLocaleForAi()),
           });
           const contextText =
             contextPairs.length > 0
@@ -1669,6 +1671,103 @@ export function WorkspaceProvider({
     dispatch({ type: 'DELETE_NODE', id: nodeId });
   }, []);
 
+  const refreshAnswerMetadata = useCallback(async (answerId: string) => {
+    if (Object.keys(demoResponsesRef.current).length > 0) {
+      toast.message(tr('nodes.refreshMetaDemoDisabled'));
+      return;
+    }
+    const nodes = nodesRef.current;
+    const answer = nodes.find((n): n is AnswerNodeData => n.id === answerId && n.type === 'answer');
+    if (!answer || answer.status !== 'complete' || !answer.content.trim()) return;
+    const query = nodes.find((n) => n.id === answer.queryId && n.type === 'query');
+    if (!query || query.type !== 'query') return;
+
+    const toastId = toast.loading(tr('nodes.refreshMetaRunning'));
+    try {
+      const res = await fetch('/api/workspace/extract-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: query.question,
+          answer: answer.content,
+          keyword: keywordRef.current,
+          goal: goalRef.current,
+          locale: readLocaleForAi(),
+          modelChoice: query.modelChoice ?? null,
+        }),
+      });
+      const data = (await res.json()) as {
+        extractedKeywords?: string[];
+        suggestedQueries?: string[];
+        dataNode?: Record<string, unknown> | null;
+        error?: string;
+      };
+      if (!res.ok || data.error) {
+        toast.error(data.error || tr('ai.requestFailed', { status: res.status }), { id: toastId });
+        return;
+      }
+      const extractedKeywords = Array.isArray(data.extractedKeywords) ? data.extractedKeywords : [];
+      const mergedSuggested = mergeTemplateFollowUpsIntoSuggested(
+        nodesRef.current,
+        query.id,
+        Array.isArray(data.suggestedQueries) ? data.suggestedQueries : []
+      );
+      dispatch({
+        type: 'UPDATE_NODE',
+        id: answerId,
+        updates: {
+          extractedKeywords,
+          suggestedQueries: mergedSuggested,
+        } as Partial<WorkspaceNode>,
+      });
+
+      const payload = data.dataNode;
+      if (payload && typeof payload === 'object' && 'dataType' in payload && 'title' in payload) {
+        const dataChild = nodesRef.current.find(
+          (n): n is DataNodeData => n.type === 'data' && n.parentId === answerId
+        );
+        if (dataChild) {
+          dispatch({
+            type: 'UPDATE_NODE',
+            id: dataChild.id,
+            updates: {
+              dataType: payload.dataType as DataNodeType,
+              title: String(payload.title),
+              subtitle: typeof payload.subtitle === 'string' ? payload.subtitle : undefined,
+              tableColumns: Array.isArray(payload.tableColumns)
+                ? (payload.tableColumns as string[])
+                : undefined,
+              tableRows: Array.isArray(payload.tableRows)
+                ? (payload.tableRows as DataNodeData['tableRows'])
+                : undefined,
+              chartData: Array.isArray(payload.chartData)
+                ? (payload.chartData as DataNodeData['chartData'])
+                : undefined,
+              metrics: Array.isArray(payload.metrics)
+                ? (payload.metrics as DataNodeData['metrics'])
+                : undefined,
+              listItems: Array.isArray(payload.listItems)
+                ? (payload.listItems as string[])
+                : undefined,
+              status: 'complete',
+            } as Partial<WorkspaceNode>,
+          });
+        } else {
+          const dataId = `data-${answer.queryId}-${Date.now()}`;
+          attachAnswerChildren(dispatch, {
+            answerId,
+            answerPos: answer.position,
+            dataId,
+            dataPayload: payload as Record<string, unknown>,
+          });
+        }
+      }
+      toast.success(tr('nodes.refreshMetaDone'), { id: toastId });
+    } catch {
+      toast.error(tr('ai.networkError'), { id: toastId });
+    }
+  }, [dispatch]);
+
   const isDemoMode = Object.keys(demoResponsesRef.current).length > 0;
 
   return (
@@ -1693,6 +1792,7 @@ export function WorkspaceProvider({
         lockBrowserGeminiKey,
         clearBrowserGeminiKey,
         generateBrowserSeedQueries,
+        refreshAnswerMetadata,
         isDemoMode,
       }}
     >

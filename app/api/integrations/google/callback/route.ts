@@ -8,6 +8,13 @@ import {
 import { exchangeCodeForTokens, fetchGoogleUserInfo } from '@/lib/integrations/google-oauth-exchange';
 import { sealGoogleTokens } from '@/lib/integrations/google-token-crypto';
 import { safeOAuthNextPath } from '@/lib/integrations/safe-oauth-redirect';
+import {
+  AUTH_SESSION_COOKIE,
+  authCookieBase as authCookieBaseShared,
+  authCookieMaxAge,
+  sealAuthSession,
+} from '@/lib/auth/session';
+import { getAnalyticsStore } from '@/lib/server/analytics/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -60,10 +67,14 @@ export async function GET(req: Request) {
 
     let email: string | undefined;
     let name: string | undefined;
+    let sub: string | undefined;
+    let picture: string | undefined;
     try {
       const u = await fetchGoogleUserInfo(tokens.access_token);
       email = u.email;
       name = u.name;
+      sub = u.sub;
+      picture = u.picture;
     } catch {
       /* optional profile */
     }
@@ -79,6 +90,27 @@ export async function GET(req: Request) {
     const res = NextResponse.redirect(dest);
     clearOAuthCookies(res);
     res.cookies.set(GOOGLE_TOKEN_COOKIE, sealed, { ...cookieBase, maxAge: 60 * 60 * 24 * 365 });
+
+    // Drive consent implies the user has signed in with Google — establish
+    // (or refresh) the app's sign-in session at the same time.
+    if (sub && email) {
+      const sealedSession = sealAuthSession({ sub, email, name, picture });
+      res.cookies.set(AUTH_SESSION_COOKIE, sealedSession, {
+        ...authCookieBaseShared,
+        maxAge: authCookieMaxAge,
+      });
+      try {
+        await getAnalyticsStore().upsertUserOnSignIn({
+          sub,
+          email,
+          name,
+          picture,
+          ts: Date.now(),
+        });
+      } catch (e) {
+        console.error('[telemetry] sign-in upsert (drive) failed', e);
+      }
+    }
     return res;
   } catch {
     return redirectSettings({ gdrive: 'error', reason: 'exchange' });

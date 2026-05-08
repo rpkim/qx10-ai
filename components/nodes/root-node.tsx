@@ -65,10 +65,17 @@ export function RootNode({ node }: Props) {
     [state.nodes, node.id]
   );
 
+  /** Stable primitive so effect deps never use an array of objects (avoids variable-length / identity churn). */
+  const rootChildQueriesKey = useMemo(
+    () => sortedRootChildQueries.map((q) => `${q.id}\u001f${q.question}`).join('\u001e'),
+    [sortedRootChildQueries]
+  );
+  const introduceRevealActive = introduceReveal != null;
+
   useEffect(() => {
     const cacheKey = `${node.keyword}::${node.goal}::${locale}`;
 
-    if (introduceReveal) {
+    if (introduceRevealActive) {
       const fromGraphQs = sortedRootChildQueries.map((q) => q.question.trim()).filter(Boolean);
       if (fromGraphQs.length > 0) {
         setSeedSuggestions(fromGraphQs);
@@ -191,8 +198,8 @@ export function RootNode({ node }: Props) {
     node.goal,
     node.id,
     locale,
-    introduceReveal,
-    sortedRootChildQueries,
+    introduceRevealActive,
+    rootChildQueriesKey,
     generateBrowserSeedQueries,
     isBrowserGeminiUnlocked,
   ]);
@@ -217,7 +224,7 @@ export function RootNode({ node }: Props) {
 
   return (
     <div
-      className="relative flex flex-col items-center justify-center rounded-2xl border px-6 py-4"
+      className="relative flex w-full min-w-0 max-w-full flex-col items-center justify-center rounded-2xl border px-4 py-4 sm:px-6"
       style={{
         background: 'linear-gradient(135deg, rgba(0,196,154,0.12), rgba(0,196,154,0.04))',
         borderColor: 'rgba(0,196,154,0.5)',

@@ -1,6 +1,14 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -1056,7 +1064,7 @@ function tryRenderInlineAsteriskList(trimmed: string, keyIdx: number): ReactNode
   return null;
 }
 
-function renderSummaryMarkdown(content: string): JSX.Element {
+function renderSummaryMarkdown(content: string): ReactElement {
   const blocks = content.split('\n\n').filter((b) => b.trim().length > 0);
   return (
     <div className="space-y-2">
@@ -1155,7 +1163,7 @@ function renderSummaryMarkdown(content: string): JSX.Element {
   );
 }
 
-function formatSummaryBoldInline(text: string): (string | JSX.Element)[] {
+function formatSummaryBoldInline(text: string): (string | ReactElement)[] {
   const parts = text.split(/\*\*(.*?)\*\*/g);
   return parts.map((part, i) =>
     i % 2 === 1 ? (

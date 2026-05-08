@@ -33,7 +33,8 @@ function userPayload(
   return `Workspace root keyword/topic: "${keyword}"\nExploration goal: ${goal}\n\n${contextText}User query:\n${question}`;
 }
 
-async function extractMetadata(
+/** Re-run keyword / follow-up / optional data-node extraction for an existing Q&A (no full answer regeneration). */
+export async function extractAnswerMetadata(
   selection: CatalogOption,
   question: string,
   fullAnswer: string,
@@ -259,8 +260,13 @@ export function createWorkspaceQueryReadableStream(
             'I could not generate an answer for this request. Please try rephrasing the question or narrowing the topic.';
         }
 
-        const meta = await extractMetadata(selection, question, fullAnswer, locale, keys);
-        let { extractedKeywords, suggestedQueries, dataNode } = meta;
+        let { extractedKeywords, suggestedQueries, dataNode } = await extractAnswerMetadata(
+          selection,
+          question,
+          fullAnswer,
+          locale,
+          keys
+        );
 
         // Tool enrichment path:
         // - explicit tool selection should override model-generated dataNode

@@ -960,8 +960,10 @@ export function DashboardWidget({
 
 function AnswerWidget({ node, compact }: { node: AnswerNodeData; compact: boolean }) {
   const { t, locale } = useI18n();
+  const { refreshAnswerMetadata, isDemoMode } = useWorkspace();
   const [expanded, setExpanded] = useState(false);
   const [ttsPlaying, setTtsPlaying] = useState(false);
+  const [metaRefreshing, setMetaRefreshing] = useState(false);
   const browserUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ttsProvider = getClientTtsProvider();
@@ -1067,8 +1069,8 @@ function AnswerWidget({ node, compact }: { node: AnswerNodeData; compact: boolea
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div>
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => void playTts()}
@@ -1091,8 +1093,34 @@ function AnswerWidget({ node, compact }: { node: AnswerNodeData; compact: boolea
           )}
           <span>{ttsPlaying ? t('nodes.ttsStop') : t('nodes.ttsPlay')}</span>
         </button>
+        {!isDemoMode && (
+          <button
+            type="button"
+            disabled={metaRefreshing}
+            onClick={() => {
+              setMetaRefreshing(true);
+              void refreshAnswerMetadata(node.id).finally(() => setMetaRefreshing(false));
+            }}
+            className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs transition-colors disabled:opacity-50"
+            style={{
+              color: 'var(--muted-foreground)',
+              borderColor: 'rgba(163,230,53,0.25)',
+              background: 'rgba(255,255,255,0.02)',
+            }}
+            title={t('nodes.refreshKeywords')}
+          >
+            <RefreshCw className={`size-3 ${metaRefreshing ? 'animate-spin' : ''}`} aria-hidden />
+            <span>{t('nodes.refreshKeywordsShort')}</span>
+          </button>
+        )}
       </div>
-      <div>
+      <div
+        className={
+          compact
+            ? 'max-h-[min(52vh,440px)] overflow-y-auto overscroll-y-contain pr-1 [scrollbar-width:thin]'
+            : 'min-w-0'
+        }
+      >
         {rendered}
         {isTruncated && !expanded && (
           <span className="text-xs leading-relaxed text-foreground/70">...</span>
@@ -1205,14 +1233,17 @@ function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean })
         </ResponsiveContainer>
       )}
       {node.dataType === 'table' && node.tableRows && (
-        <div className="overflow-x-auto rounded-xl" style={{ background: 'rgba(0,0,0,0.2)' }}>
-          <table className="w-full text-xs">
+        <div
+          className="max-h-[min(56vh,480px)] min-w-0 overflow-x-auto overflow-y-auto overscroll-y-contain rounded-xl [scrollbar-width:thin]"
+          style={{ background: 'rgba(0,0,0,0.2)' }}
+        >
+          <table className="w-full min-w-0 table-fixed text-xs">
             <thead>
               <tr>
                 {node.tableColumns?.map((col) => (
                   <th
                     key={col}
-                    className="border-b px-3 py-2 text-left font-semibold text-muted-foreground"
+                    className="min-w-0 max-w-0 border-b px-2 py-2 text-left align-top font-semibold break-words text-muted-foreground [overflow-wrap:anywhere] sm:px-3"
                     style={{ borderColor: 'rgba(245,158,11,0.12)' }}
                   >
                     {col}
@@ -1226,7 +1257,7 @@ function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean })
                   {node.tableColumns?.map((col) => (
                     <td
                       key={col}
-                      className="border-b px-3 py-2 text-foreground/80"
+                      className="min-w-0 max-w-0 border-b px-2 py-2 align-top break-words text-foreground/80 [overflow-wrap:anywhere] sm:px-3"
                       style={{ borderColor: 'rgba(245,158,11,0.06)' }}
                     >
                       {String(row[col] ?? '')}
