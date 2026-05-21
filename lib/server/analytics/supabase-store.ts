@@ -14,6 +14,7 @@ import type {
   AnalyticsStore,
   UserRecord,
 } from './types';
+import { decryptField, decryptFieldOr, encryptField } from './pii-encrypt';
 
 type DbUserRow = {
   sub: string;
@@ -45,9 +46,9 @@ type DbEventRow = {
 function rowToUser(r: DbUserRow): UserRecord {
   return {
     sub: r.sub,
-    email: r.email,
-    name: r.name ?? undefined,
-    picture: r.picture ?? undefined,
+    email: decryptFieldOr(r.email, r.email),
+    name: decryptField(r.name) ?? undefined,
+    picture: decryptField(r.picture) ?? undefined,
     createdAt: Number(r.created_at),
     lastSeenAt: Number(r.last_seen_at),
     signInCount: r.sign_in_count,
@@ -62,9 +63,9 @@ function rowToEvent(r: DbEventRow): ActivityEvent {
     return {
       type: 'search',
       sub: r.sub,
-      email: r.email,
+      email: decryptFieldOr(r.email, r.email),
       ts: Number(r.ts),
-      keyword: r.keyword ?? '',
+      keyword: decryptFieldOr(r.keyword, ''),
       goal: r.goal ?? '',
       surface: r.surface ?? undefined,
     };
@@ -73,7 +74,7 @@ function rowToEvent(r: DbEventRow): ActivityEvent {
     return {
       type: 'consent',
       sub: r.sub,
-      email: r.email,
+      email: decryptFieldOr(r.email, r.email),
       ts: Number(r.ts),
       version: r.consent_version ?? 'v?',
     };
@@ -81,10 +82,10 @@ function rowToEvent(r: DbEventRow): ActivityEvent {
   return {
     type: 'signin',
     sub: r.sub,
-    email: r.email,
+    email: decryptFieldOr(r.email, r.email),
     ts: Number(r.ts),
-    name: r.name ?? undefined,
-    picture: r.picture ?? undefined,
+    name: decryptField(r.name) ?? undefined,
+    picture: decryptField(r.picture) ?? undefined,
   };
 }
 
@@ -123,20 +124,24 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
       .maybeSingle<DbUserRow>();
     if (getErr) throw new Error(`upsertUser: ${getErr.message}`);
 
+    const encEmail = encryptField(email);
+    const encName = name ? encryptField(name) : null;
+    const encPicture = picture ? encryptField(picture) : null;
+
     const payload: Partial<DbUserRow> & { sub: string; email: string } = existing
       ? {
           sub,
-          email,
-          name: name ?? existing.name,
-          picture: picture ?? existing.picture,
+          email: encEmail,
+          name: encName ?? existing.name,
+          picture: encPicture ?? existing.picture,
           last_seen_at: ts,
           sign_in_count: (existing.sign_in_count ?? 0) + 1,
         }
       : {
           sub,
-          email,
-          name: name ?? null,
-          picture: picture ?? null,
+          email: encEmail,
+          name: encName,
+          picture: encPicture,
           created_at: ts,
           last_seen_at: ts,
           sign_in_count: 1,
@@ -153,10 +158,10 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
     const { error: evErr } = await this.client.from('events').insert({
       type: 'signin',
       sub,
-      email,
+      email: encEmail,
       ts,
-      name: name ?? null,
-      picture: picture ?? null,
+      name: encName,
+      picture: encPicture,
     });
     if (evErr) console.error('[supabase] signin event insert failed', evErr);
 
@@ -175,8 +180,8 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
     const lower = keyword.toLowerCase();
     const { error } = await this.client.rpc('fn_record_search', {
       p_sub: input.sub,
-      p_email: input.email,
-      p_keyword: keyword,
+      p_email: encryptField(input.email),
+      p_keyword: encryptField(keyword),
       p_keyword_lower: lower,
       p_goal: input.goal,
       p_surface: input.surface ?? null,
@@ -200,7 +205,7 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
     const { error } = await this.client.from('events').insert({
       type: 'consent',
       sub: input.sub,
-      email: input.email,
+      email: encryptField(input.email),
       ts: input.ts,
       consent_version: input.version,
     });
@@ -211,18 +216,18 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
     const row: Partial<DbEventRow> = {
       type: e.type,
       sub: e.sub,
-      email: e.email,
+      email: encryptField(e.email),
       ts: e.ts,
     };
     if (e.type === 'search') {
-      row.keyword = e.keyword;
+      row.keyword = encryptField(e.keyword);
       row.goal = e.goal;
       row.surface = e.surface ?? null;
     } else if (e.type === 'consent') {
       row.consent_version = e.version;
     } else if (e.type === 'signin') {
-      row.name = e.name ?? null;
-      row.picture = e.picture ?? null;
+      row.name = e.name ? encryptField(e.name) : null;
+      row.picture = e.picture ? encryptField(e.picture) : null;
     }
     const { error } = await this.client.from('events').insert(row);
     if (error) throw new Error(`appendEvent: ${error.message}`);

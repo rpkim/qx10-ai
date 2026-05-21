@@ -11,6 +11,7 @@ import type {
   AnalyticsStore,
   UserRecord,
 } from './types';
+import { decryptField, decryptFieldOr, encryptField } from './pii-encrypt';
 
 type FileShape = {
   users: Record<string, UserRecord>;
@@ -19,6 +20,58 @@ type FileShape = {
 };
 
 const MAX_EVENTS = 5000;
+
+function encryptUserRecord(u: UserRecord): UserRecord {
+  return {
+    ...u,
+    email: encryptField(u.email),
+    name: u.name ? encryptField(u.name) : u.name,
+    picture: u.picture ? encryptField(u.picture) : u.picture,
+  };
+}
+
+function decryptUserRecord(u: UserRecord): UserRecord {
+  return {
+    ...u,
+    email: decryptFieldOr(u.email, u.email),
+    name: u.name ? (decryptField(u.name) ?? u.name) : u.name,
+    picture: u.picture ? (decryptField(u.picture) ?? u.picture) : u.picture,
+  };
+}
+
+function encryptEvent(e: ActivityEvent): ActivityEvent {
+  if (e.type === 'search') {
+    return { ...e, email: encryptField(e.email), keyword: encryptField(e.keyword) };
+  }
+  if (e.type === 'signin') {
+    return {
+      ...e,
+      email: encryptField(e.email),
+      name: e.name ? encryptField(e.name) : e.name,
+      picture: e.picture ? encryptField(e.picture) : e.picture,
+    };
+  }
+  return { ...e, email: encryptField(e.email) };
+}
+
+function decryptEvent(e: ActivityEvent): ActivityEvent {
+  if (e.type === 'search') {
+    return {
+      ...e,
+      email: decryptFieldOr(e.email, e.email),
+      keyword: decryptFieldOr(e.keyword, e.keyword),
+    };
+  }
+  if (e.type === 'signin') {
+    return {
+      ...e,
+      email: decryptFieldOr(e.email, e.email),
+      name: e.name ? (decryptField(e.name) ?? e.name) : e.name,
+      picture: e.picture ? (decryptField(e.picture) ?? e.picture) : e.picture,
+    };
+  }
+  return { ...e, email: decryptFieldOr(e.email, e.email) };
+}
 
 export class FileAnalyticsStore implements AnalyticsStore {
   private readonly file: string;
@@ -39,9 +92,13 @@ export class FileAnalyticsStore implements AnalyticsStore {
     try {
       const raw = await fs.readFile(this.file, 'utf8');
       const parsed = JSON.parse(raw) as Partial<FileShape>;
+      const users: Record<string, UserRecord> = {};
+      for (const [sub, u] of Object.entries(parsed.users ?? {})) {
+        users[sub] = decryptUserRecord(u);
+      }
       return {
-        users: parsed.users ?? {},
-        events: Array.isArray(parsed.events) ? parsed.events : [],
+        users,
+        events: Array.isArray(parsed.events) ? parsed.events.map(decryptEvent) : [],
         keywords: parsed.keywords ?? {},
       };
     } catch (e) {
@@ -54,8 +111,15 @@ export class FileAnalyticsStore implements AnalyticsStore {
 
   private async writeState(state: FileShape): Promise<void> {
     await fs.mkdir(path.dirname(this.file), { recursive: true });
+    const encrypted: FileShape = {
+      users: Object.fromEntries(
+        Object.entries(state.users).map(([sub, u]) => [sub, encryptUserRecord(u)])
+      ),
+      events: state.events.map(encryptEvent),
+      keywords: state.keywords,
+    };
     const tmp = `${this.file}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(state), 'utf8');
+    await fs.writeFile(tmp, JSON.stringify(encrypted), 'utf8');
     await fs.rename(tmp, this.file);
   }
 

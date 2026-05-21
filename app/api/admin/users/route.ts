@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth/require-admin';
-import { getAnalyticsStore } from '@/lib/server/analytics/store';
+import { getAnalyticsStore, getAnalyticsStoreKind } from '@/lib/server/analytics/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,8 +15,17 @@ export async function GET(req: Request) {
   const sort: 'lastSeen' | 'createdAt' | 'searchCount' =
     sortRaw === 'createdAt' || sortRaw === 'searchCount' ? sortRaw : 'lastSeen';
 
-  const users = await getAnalyticsStore().listUsers({ limit, sort });
-  return NextResponse.json({ users });
+  try {
+    const users = await getAnalyticsStore().listUsers({ limit, sort });
+    return NextResponse.json({ users });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error('[admin/users] failed', { message, error: e });
+    return NextResponse.json(
+      { error: 'analytics_store_error', backend: getAnalyticsStoreKind(), message },
+      { status: 500 }
+    );
+  }
 }
 
 function clampInt(s: string | null, min: number, max: number, fallback: number): number {
