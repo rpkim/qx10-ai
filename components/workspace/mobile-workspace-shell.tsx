@@ -293,6 +293,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
 
   return (
     <div
+      id="workspace-cards-export-container"
       className={[
         'absolute inset-0 overflow-y-auto bg-background',
         embedded
@@ -303,6 +304,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
       ].join(' ')}
     >
       <div
+        id="workspace-cards-content"
         className={[
           'mx-auto flex w-full flex-col gap-3 px-3 py-3',
           isMobile ? 'max-w-xl' : 'max-w-5xl',

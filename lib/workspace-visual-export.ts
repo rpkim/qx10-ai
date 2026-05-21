@@ -2,6 +2,8 @@ const EXPORT_TARGET_ID = 'workspace-tree-export-target';
 const EXPORT_ALL_TARGET_ID = 'workspace-export-all-target';
 const EXPORT_DASHBOARD_ID = 'dashboard-export-target';
 const GRAPH_CAPTURE_ID = 'workspace-graph-capture-root';
+const CARDS_CONTAINER_ID = 'workspace-cards-export-container';
+const CARDS_CONTENT_ID = 'workspace-cards-content';
 
 /** Stay under common browser canvas limits (width/height / memory). */
 const MAX_CAPTURE_DIM_PX = 4096;
@@ -26,6 +28,22 @@ function getDashboardExportTarget(): HTMLElement {
   const el = document.getElementById(EXPORT_DASHBOARD_ID);
   if (!el) {
     throw new Error('EXPORT_DASHBOARD_TARGET_MISSING');
+  }
+  return el;
+}
+
+function getCardsContainer(): HTMLElement {
+  const el = document.getElementById(CARDS_CONTAINER_ID);
+  if (!el) {
+    throw new Error('CARDS_CONTAINER_MISSING');
+  }
+  return el;
+}
+
+function getCardsContent(): HTMLElement {
+  const el = document.getElementById(CARDS_CONTENT_ID);
+  if (!el) {
+    throw new Error('CARDS_CONTENT_MISSING');
   }
   return el;
 }
@@ -213,17 +231,14 @@ async function captureTreeToCanvas(
   maxScale: number,
   backgroundColor: string | null
 ): Promise<HTMLCanvasElement> {
-  const graphRect = graphRoot.getBoundingClientRect();
   const crop = computeTightCropWithinGraph(graphRoot);
-  const graphW = Math.max(1, graphRect.width);
-  const graphH = Math.max(1, graphRect.height);
   const pad = 80;
-  const contentW = Math.ceil(graphW + pad * 2);
-  const contentH = Math.ceil(graphH + pad * 2);
-  const innerW = typeof window !== 'undefined' ? window.innerWidth : contentW;
-  const innerH = typeof window !== 'undefined' ? window.innerHeight : contentH;
-  const windowWidth = Math.max(innerW, contentW);
-  const windowHeight = Math.max(innerH, contentH);
+  // windowWidth/windowHeight must cover the full graph-coordinate extent of the
+  // captured content so that html2canvas doesn't clip absolutely-positioned nodes.
+  const innerW = typeof window !== 'undefined' ? window.innerWidth : 1920;
+  const innerH = typeof window !== 'undefined' ? window.innerHeight : 1080;
+  const windowWidth = Math.max(innerW, crop.x + crop.w + pad);
+  const windowHeight = Math.max(innerH, crop.y + crop.h + pad);
 
   const html2canvas = (await import('html2canvas')).default;
   const scales = normalizeCaptureScales(crop.w, crop.h, maxScale);
@@ -356,6 +371,76 @@ async function captureElementToCanvas(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
+/**
+ * Capture the full scrollable cards view to a canvas.
+ *
+ * The outer container (#workspace-cards-export-container) uses overflow-y:auto
+ * so html2canvas would normally clip to the visible viewport height.  In the
+ * clone we strip the scroll constraints and expand to the real content height so
+ * that the full card list is rendered.
+ */
+async function captureCardsViewToCanvas(
+  container: HTMLElement,
+  content: HTMLElement,
+  maxScale: number,
+  backgroundColor: string | null
+): Promise<HTMLCanvasElement> {
+  const containerRect = container.getBoundingClientRect();
+  const captureW = Math.max(1, Math.ceil(containerRect.width));
+  // Use scrollHeight of the content element for the full height.
+  const captureH = Math.max(1, Math.ceil(content.scrollHeight + 32));
+
+  const html2canvas = (await import('html2canvas')).default;
+  const scales = normalizeCaptureScales(captureW, captureH, maxScale);
+  const innerW = typeof window !== 'undefined' ? window.innerWidth : captureW;
+
+  let lastError: unknown;
+  for (let i = 0; i < scales.length; i++) {
+    const scale = scales[i];
+    const foreignObjectRendering = i === scales.length - 1;
+    try {
+      return await html2canvas(container, {
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor,
+        x: 0,
+        y: 0,
+        width: captureW,
+        height: captureH,
+        windowWidth: Math.max(innerW, captureW),
+        windowHeight: captureH,
+        scale,
+        logging: false,
+        removeContainer: true,
+        foreignObjectRendering,
+        onclone: (doc) => {
+          // Expand the scrollable container so all content is visible.
+          const outer = doc.getElementById(CARDS_CONTAINER_ID);
+          if (outer) {
+            outer.style.position = 'static';
+            outer.style.overflow = 'visible';
+            outer.style.height = `${captureH}px`;
+            outer.style.width = `${captureW}px`;
+            outer.style.top = '0';
+            outer.style.left = '0';
+            outer.style.inset = '0';
+          }
+          // Remove overflow on all ancestors too.
+          let el = outer?.parentElement;
+          while (el) {
+            el.style.overflow = 'visible';
+            if (el.tagName === 'HTML') break;
+            el = el.parentElement;
+          }
+        },
+      });
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 async function canvasToJpegBytes(canvas: HTMLCanvasElement, quality: number): Promise<Uint8Array> {
   const blob = await new Promise<Blob | null>((resolve) => {
     canvas.toBlob((b) => resolve(b), 'image/jpeg', quality);
@@ -399,6 +484,87 @@ export async function exportWorkspaceTreePng(keyword: string): Promise<void> {
   const canvas = await captureTreeToCanvas(graphRoot, 1.5, '#ffffff');
   const pngBytes = await canvasToPngBytes(canvas);
   triggerBrowserDownload(new Blob([pngBytes], { type: 'image/png' }), `${buildFileStem(keyword)}.png`);
+}
+
+export async function exportCardsViewPng(keyword: string): Promise<void> {
+  const container = getCardsContainer();
+  const content = getCardsContent();
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  const canvas = await captureCardsViewToCanvas(container, content, 1.5, '#ffffff');
+  const pngBytes = await canvasToPngBytes(canvas);
+  triggerBrowserDownload(
+    new Blob([pngBytes], { type: 'image/png' }),
+    `${buildFileStem(keyword)}-cards.png`
+  );
+}
+
+export async function exportCardsViewPdf(keyword: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const container = getCardsContainer();
+  const content = getCardsContent();
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  const canvas = await captureCardsViewToCanvas(container, content, 1.25, '#ffffff');
+
+  if (canvas.width < 2 || canvas.height < 2) {
+    throw new Error('CAPTURE_EMPTY');
+  }
+
+  const { PDFDocument } = await import('pdf-lib');
+  const pdfDoc = await PDFDocument.create();
+
+  const pageW = 595.28; // A4 portrait pt
+  const pageH = 841.89;
+  const margin = 24;
+  const usableW = pageW - margin * 2;
+  const usableH = pageH - margin * 2;
+
+  // Scale image to fit the page width, then paginate vertically.
+  const scale = usableW / canvas.width;
+  const totalImgPtH = canvas.height * scale;
+  const pageCount = Math.max(1, Math.ceil(totalImgPtH / usableH));
+  // Height of each source-pixel slice.
+  const slicePixH = Math.ceil(canvas.height / pageCount);
+
+  for (let p = 0; p < pageCount; p++) {
+    const srcY = p * slicePixH;
+    const thisSliceH = Math.min(slicePixH, canvas.height - srcY);
+    if (thisSliceH <= 0) break;
+
+    // Draw the slice into a temporary canvas so we can embed it independently.
+    const sliceCanvas = document.createElement('canvas');
+    sliceCanvas.width = canvas.width;
+    sliceCanvas.height = thisSliceH;
+    const ctx = sliceCanvas.getContext('2d');
+    if (!ctx) continue;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+    ctx.drawImage(canvas, 0, srcY, canvas.width, thisSliceH, 0, 0, canvas.width, thisSliceH);
+
+    let img;
+    try {
+      const jpegBytes = await canvasToJpegBytes(sliceCanvas, 0.88);
+      img = await pdfDoc.embedJpg(jpegBytes);
+    } catch {
+      const pngBytes = await canvasToPngBytes(sliceCanvas);
+      img = await pdfDoc.embedPng(pngBytes);
+    }
+
+    const drawH = thisSliceH * scale;
+    // pdf-lib y=0 is page bottom; draw from top-margin downward.
+    const page = pdfDoc.addPage([pageW, pageH]);
+    page.drawImage(img, {
+      x: margin,
+      y: pageH - margin - drawH,
+      width: usableW,
+      height: drawH,
+    });
+  }
+
+  const bytes = await pdfDoc.save();
+  triggerBrowserDownload(
+    new Blob([bytes], { type: 'application/pdf' }),
+    `${buildFileStem(keyword)}-cards.pdf`
+  );
 }
 
 export async function exportWorkspaceWithDashboardPng(keyword: string): Promise<void> {

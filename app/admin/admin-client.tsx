@@ -67,6 +67,20 @@ export function AdminClient({ currentEmail }: { currentEmail: string }) {
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
     setError(null);
+
+    const explain = async (label: string, res: Response): Promise<never> => {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const j = (await res.json()) as { message?: string; hint?: string; backend?: string };
+        if (j.message) detail = j.message;
+        if (j.hint) detail += ` — ${j.hint}`;
+        if (j.backend) detail += ` (backend: ${j.backend})`;
+      } catch {
+        /* non-JSON body */
+      }
+      throw new Error(`${label}: ${detail}`);
+    };
+
     try {
       const [ovRes, usersRes, evRes] = await Promise.all([
         fetch('/api/admin/overview', { credentials: 'include' }),
@@ -76,9 +90,9 @@ export function AdminClient({ currentEmail }: { currentEmail: string }) {
           { credentials: 'include' }
         ),
       ]);
-      if (!ovRes.ok) throw new Error(`overview ${ovRes.status}`);
-      if (!usersRes.ok) throw new Error(`users ${usersRes.status}`);
-      if (!evRes.ok) throw new Error(`events ${evRes.status}`);
+      if (!ovRes.ok) await explain('overview', ovRes);
+      if (!usersRes.ok) await explain('users', usersRes);
+      if (!evRes.ok) await explain('events', evRes);
       const ov = (await ovRes.json()) as Overview;
       const u = (await usersRes.json()) as { users: UserRecord[] };
       const ev = (await evRes.json()) as { events: ActivityEvent[] };
