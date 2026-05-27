@@ -20,10 +20,10 @@ Rules:
 
 export async function generateSeedQuestions(
   selection: CatalogOption,
-  params: { keyword: string; goal: GoalType; locale: Locale },
+  params: { keyword: string; goal: GoalType; locale: Locale; context?: string },
   keys: { openaiKey: string | undefined; geminiKey: string | undefined }
 ): Promise<string[]> {
-  const { keyword, goal, locale } = params;
+  const { keyword, goal, locale, context } = params;
   const hint = GOAL_HINT[goal] ?? GOAL_HINT.learn;
   const lang =
     locale === 'ko'
@@ -35,7 +35,8 @@ export async function generateSeedQuestions(
           : locale === 'zh'
             ? 'Simplified Chinese (zh-Hans)'
             : 'English (en)';
-  const user = `Topic / keyword: "${keyword}"
+  const contextLine = context ? `\nContext: "${context}"` : '';
+  const user = `Topic / keyword: "${keyword}"${contextLine}
 Exploration mode: ${goal}
 Mode guidance for biasing the questions: ${hint}
 Default output language: ${lang}

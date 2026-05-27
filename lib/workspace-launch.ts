@@ -17,6 +17,7 @@ function normalizeGoal(raw: string | null): GoalType {
 export function readWorkspaceLaunch(search: SearchLike): {
   keyword: string;
   goal: GoalType;
+  context?: string;
 } | null {
   const keyword =
     search.get('keyword') ??
@@ -28,6 +29,7 @@ export function readWorkspaceLaunch(search: SearchLike): {
   if (!kw) return null;
 
   const goal = normalizeGoal(search.get('goal') ?? search.get('mode') ?? search.get('g'));
-  return { keyword: kw, goal };
+  const context = search.get('context')?.trim() || undefined;
+  return { keyword: kw, goal, context };
 }
 

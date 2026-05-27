@@ -8,6 +8,7 @@ import type { GoalType } from './types';
 export function workspaceUrl(opts: {
   keyword: string;
   goal: GoalType | string;
+  context?: string;
   ws?: string;
   view?: 'workspace' | 'dashboard';
 }): string {
@@ -18,6 +19,10 @@ export function workspaceUrl(opts: {
     goal: String(opts.goal),
     ws,
   });
+  const context = opts.context?.trim();
+  if (context) {
+    q.set('context', context);
+  }
   if (opts.view === 'dashboard') {
     q.set('view', 'dashboard');
   }

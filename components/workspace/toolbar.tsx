@@ -111,6 +111,7 @@ export function Toolbar({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
   const [newKeyword, setNewKeyword] = useState('');
+  const [newContext, setNewContext] = useState('');
   const [newGoal, setNewGoal] = useState<GoalType>('learn');
   const [recentOpen, setRecentOpen] = useState(false);
   const [tplList, setTplList] = useState<QuestionTemplate[]>([]);
@@ -235,6 +236,7 @@ export function Toolbar({
 
   const openNewWorkspaceDialog = () => {
     setNewKeyword('');
+    setNewContext('');
     setNewGoal(goal);
     setNewWorkspaceOpen(true);
   };
@@ -246,7 +248,7 @@ export function Toolbar({
       return;
     }
     setNewWorkspaceOpen(false);
-    router.push(workspaceUrl({ keyword: k, goal: newGoal }));
+    router.push(workspaceUrl({ keyword: k, goal: newGoal, context: newContext.trim() || undefined }));
   };
 
   const goToRecent = (entry: { keyword: string; goal: GoalType }) => {
@@ -450,6 +452,20 @@ export function Toolbar({
                 value={newKeyword}
                 onChange={(e) => setNewKeyword(e.target.value)}
                 placeholder={t('toolbar.topicPlaceholder')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') confirmNewWorkspace();
+                }}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">{t('toolbar.contextLabel')}</span>
+                <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/60">{t('toolbar.contextOptional')}</span>
+              </div>
+              <Input
+                value={newContext}
+                onChange={(e) => setNewContext(e.target.value)}
+                placeholder={t('toolbar.contextPlaceholder')}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') confirmNewWorkspace();
                 }}

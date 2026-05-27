@@ -73,7 +73,7 @@ export function RootNode({ node }: Props) {
   const introduceRevealActive = introduceReveal != null;
 
   useEffect(() => {
-    const cacheKey = `${node.keyword}::${node.goal}::${locale}`;
+    const cacheKey = `${node.keyword}::${node.context ?? ''}::${node.goal}::${locale}`;
 
     if (introduceRevealActive) {
       const fromGraphQs = sortedRootChildQueries.map((q) => q.question.trim()).filter(Boolean);
@@ -111,7 +111,7 @@ export function RootNode({ node }: Props) {
     fetch('/api/workspace/seed-queries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keyword: node.keyword, goal: node.goal, locale }),
+      body: JSON.stringify({ keyword: node.keyword, goal: node.goal, locale, context: node.context }),
     })
       .then((r) => r.json())
       .then((data: { questions?: string[] }) => {
@@ -196,6 +196,7 @@ export function RootNode({ node }: Props) {
   }, [
     node.keyword,
     node.goal,
+    node.context,
     node.id,
     locale,
     introduceRevealActive,
@@ -255,6 +256,12 @@ export function RootNode({ node }: Props) {
         >
           {node.keyword}
         </h2>
+
+        {node.context && (
+          <p className="text-center text-xs text-muted-foreground">
+            in &ldquo;{node.context}&rdquo;
+          </p>
+        )}
 
         {(isLoadingSuggestions || seedSuggestions.length > 0) && (
           <div className="mt-1 flex w-full flex-col gap-1.5 rounded-xl border border-border bg-card/70 p-2">

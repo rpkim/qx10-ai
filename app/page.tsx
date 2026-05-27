@@ -38,8 +38,10 @@ export default function LandingPage() {
   const { t, locale } = useI18n();
   const router = useRouter();
   const [keyword, setKeyword] = useState('');
+  const [context, setContext] = useState('');
   const [goal, setGoal] = useState<GoalType>('learn');
   const [focused, setFocused] = useState(false);
+  const [contextFocused, setContextFocused] = useState(false);
   const [recent, setRecent] = useState<WorkspaceIndexEntry[]>([]);
   const [isMobile, setIsMobile] = useState(false);
   const [byokOpen, setByokOpen] = useState(false);
@@ -60,7 +62,7 @@ export default function LandingPage() {
     window.requestAnimationFrame(() => setStartAnimPhase(true));
     const trimmed = keyword.trim();
     trackSearch({ keyword: trimmed, goal, surface: 'landing' });
-    const target = workspaceUrl({ keyword: trimmed, goal });
+    const target = workspaceUrl({ keyword: trimmed, goal, context: context.trim() || undefined });
     window.setTimeout(() => {
       router.push(target);
     }, 520);
@@ -409,6 +411,61 @@ export default function LandingPage() {
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
             </button>
+          </div>
+
+          {/* Context input */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-xs font-semibold uppercase tracking-widest text-primary/70">
+                {t('toolbar.contextLabel')}
+              </span>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary/60">
+                {t('toolbar.contextOptional')}
+              </span>
+            </div>
+            <div
+              className={[
+                'flex min-w-0 items-center gap-3 rounded-2xl border-2 px-5 py-3.5 transition-all duration-200',
+                contextFocused
+                  ? 'border-primary bg-primary/5 shadow-[0_0_0_4px_rgba(0,196,154,0.1)]'
+                  : context
+                    ? 'border-primary/40 bg-primary/3'
+                    : 'border-dashed border-primary/25 bg-primary/2 hover:border-primary/40',
+              ].join(' ')}
+            >
+              <span
+                className={[
+                  'shrink-0 rounded-lg px-2 py-0.5 text-xs font-bold transition-colors',
+                  contextFocused || context
+                    ? 'bg-primary/15 text-primary'
+                    : 'bg-muted text-muted-foreground',
+                ].join(' ')}
+              >
+                in
+              </span>
+              <input
+                type="text"
+                value={context}
+                onChange={(e) => setContext(e.target.value)}
+                onFocus={() => setContextFocused(true)}
+                onBlur={() => setContextFocused(false)}
+                onKeyDown={handleKeyDown}
+                placeholder={t('toolbar.contextPlaceholder')}
+                className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
+              />
+              {context && (
+                <button
+                  type="button"
+                  onClick={() => setContext('')}
+                  className="shrink-0 rounded-full p-0.5 text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+                  aria-label="Clear context"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Example keywords */}
