@@ -54,6 +54,8 @@ export interface RootNodeData extends BaseNode {
   type: 'root';
   keyword: string;
   goal: GoalType;
+  /** Optional context that scopes the keyword (e.g. "ETF regulation" for keyword "Bitcoin"). */
+  context?: string;
 }
 
 export interface QueryNodeData extends BaseNode {
@@ -138,6 +140,8 @@ export interface Viewport {
 export interface WorkspaceState {
   keyword: string;
   goal: GoalType;
+  /** Optional context that scopes the keyword (e.g. "ETF regulation" for keyword "Bitcoin"). */
+  context?: string;
   nodes: WorkspaceNode[];
   edges: Edge[];
   viewport: Viewport;

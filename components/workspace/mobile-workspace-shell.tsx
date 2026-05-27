@@ -300,7 +300,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
           ? 'top-0 pb-8 pt-1'
           : isMobile
             ? 'top-[calc(env(safe-area-inset-top)+6.75rem)] pb-[max(6rem,env(safe-area-inset-bottom))]'
-            : 'top-20 pb-6',
+            : 'top-36 pb-6',
       ].join(' ')}
     >
       <div

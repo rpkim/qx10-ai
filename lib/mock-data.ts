@@ -218,7 +218,8 @@ export function getMockResponse(question: string): MockResponse {
 /** Root only — starter queries are loaded via AI (see SET_SEED_QUERIES) or API fallback. */
 export function buildInitialWorkspace(
   keyword: string,
-  goal: string
+  goal: string,
+  context?: string
 ): { nodes: WorkspaceNode[]; edges: Edge[] } {
   const nodes: WorkspaceNode[] = [
     {
@@ -226,6 +227,7 @@ export function buildInitialWorkspace(
       type: 'root',
       keyword,
       goal: goal as any,
+      context: context || undefined,
       position: { x: 620, y: 80 },
       status: 'complete',
       width: 260,

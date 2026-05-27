@@ -89,7 +89,7 @@ function WorkspaceInner() {
       if (saved.ok) {
         dispatch({ type: 'LOAD_SNAPSHOT', snapshot: saved.state });
       } else {
-        initWorkspace(launch.keyword, launch.goal);
+        initWorkspace(launch.keyword, launch.goal, launch.context);
       }
       if (initialView === 'dashboard') {
         setShowDashboard(true);

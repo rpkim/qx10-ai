@@ -498,7 +498,7 @@ function attachAnswerChildren(
    Action types
 ───────────────────────────────────────────── */
 type Action =
-  | { type: 'INIT_WORKSPACE'; keyword: string; goal: GoalType }
+  | { type: 'INIT_WORKSPACE'; keyword: string; goal: GoalType; context?: string }
   | { type: 'SET_SEED_QUERIES'; questions: string[] }
   | { type: 'UPDATE_NODE'; id: string; updates: Partial<WorkspaceNode> }
   | { type: 'ADD_NODE'; node: WorkspaceNode }
@@ -527,6 +527,7 @@ type Action =
 const initialState: WorkspaceState = {
   keyword: '',
   goal: 'learn',
+  context: undefined,
   nodes: [],
   edges: [],
   viewport: { x: 0, y: 0, zoom: 0.75 },
@@ -538,11 +539,12 @@ const initialState: WorkspaceState = {
 function reducer(state: WorkspaceState, action: Action): WorkspaceState {
   switch (action.type) {
     case 'INIT_WORKSPACE': {
-      const { nodes, edges } = buildInitialWorkspace(action.keyword, action.goal);
+      const { nodes, edges } = buildInitialWorkspace(action.keyword, action.goal, action.context);
       return {
         ...state,
         keyword: action.keyword,
         goal: action.goal,
+        context: action.context,
         nodes,
         edges,
         viewport: { x: 120, y: 80, zoom: 0.72 },
@@ -750,6 +752,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         ...initialState,
         keyword: s.keyword,
         goal: s.goal,
+        context: s.context,
         nodes: s.nodes,
         edges,
         viewport: s.viewport,
@@ -770,7 +773,7 @@ interface WorkspaceContextValue {
   state: WorkspaceState;
   dispatch: React.Dispatch<Action>;
   aiCatalog: AiModelCatalog | null;
-  initWorkspace: (keyword: string, goal: GoalType) => void;
+  initWorkspace: (keyword: string, goal: GoalType, context?: string) => void;
   runQuery: (queryId: string) => void;
   addCustomQuery: (
     question: string,
@@ -951,6 +954,7 @@ export function WorkspaceProvider({
   const edgesRef = React.useRef(state.edges);
   const keywordRef = React.useRef(state.keyword);
   const goalRef = React.useRef(state.goal);
+  const contextRef = React.useRef(state.context);
   React.useEffect(() => {
     nodesRef.current = state.nodes;
   }, [state.nodes]);
@@ -960,7 +964,8 @@ export function WorkspaceProvider({
   React.useEffect(() => {
     keywordRef.current = state.keyword;
     goalRef.current = state.goal;
-  }, [state.keyword, state.goal]);
+    contextRef.current = state.context;
+  }, [state.keyword, state.goal, state.context]);
 
   React.useEffect(() => {
     if (!state.keyword.trim()) return;
@@ -1019,7 +1024,8 @@ export function WorkspaceProvider({
                 : locale === 'zh'
                   ? 'Simplified Chinese (zh-Hans)'
                   : 'English (en)';
-        const user = `Topic / keyword: "${keyword}"\nExploration mode: ${goal}\nDefault output language: ${lang}\nIf the topic explicitly asks for another language, follow that explicit request.`;
+        const contextLine = contextRef.current ? `\nContext: "${contextRef.current}"` : '';
+        const user = `Topic / keyword: "${keyword}"${contextLine}\nExploration mode: ${goal}\nDefault output language: ${lang}\nIf the topic explicitly asks for another language, follow that explicit request.`;
         const r = await model.generateContent(`${BROWSER_SEED_SYSTEM}\n\n${user}`);
         const raw = r.response.text();
         if (!raw?.trim()) return [];
@@ -1037,8 +1043,8 @@ export function WorkspaceProvider({
   );
 
   const initWorkspace = useCallback(
-    (keyword: string, goal: GoalType) => {
-      dispatch({ type: 'INIT_WORKSPACE', keyword, goal });
+    (keyword: string, goal: GoalType, context?: string) => {
+      dispatch({ type: 'INIT_WORKSPACE', keyword, goal, context });
     },
     []
   );
@@ -1278,7 +1284,8 @@ export function WorkspaceProvider({
                   '',
                 ].join('\n')
               : '';
-          const userText = `Workspace root keyword/topic: "${keywordRef.current}"\nExploration goal: ${goalRef.current}\n\n${contextText}User query:\n${queryNode.question}`;
+          const contextSuffix = contextRef.current ? ` (context: "${contextRef.current}")` : '';
+          const userText = `Workspace root keyword/topic: "${keywordRef.current}"${contextSuffix}\nExploration goal: ${goalRef.current}\n\n${contextText}User query:\n${queryNode.question}`;
           const streamResult = await model.generateContentStream(userText);
           for await (const chunk of streamResult.stream) {
             let text = '';
@@ -1335,6 +1342,7 @@ export function WorkspaceProvider({
               question: queryNode.question,
               keyword: keywordRef.current,
               goal: goalRef.current,
+              context: contextRef.current ?? null,
               contextPairs,
               modelChoice: queryNode.modelChoice ?? null,
               toolChoice: queryNode.toolChoice ?? 'auto',

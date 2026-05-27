@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     question?: string;
     keyword?: string;
     goal?: GoalType;
+    context?: string | null;
     contextPairs?: Array<{ question?: string; answer?: string }>;
     locale?: string;
     /** Catalog id e.g. `openai:gpt-4o-mini` */
@@ -64,6 +65,8 @@ export async function POST(req: Request) {
         .slice(-10)
     : [];
   const locale: Locale = isLocale(body.locale) ? body.locale : 'en';
+  const rootContext =
+    typeof body.context === 'string' && body.context.trim() ? body.context.trim() : undefined;
 
   const catalog = buildModelCatalog();
   if (catalog.options.length === 0) {
@@ -97,7 +100,7 @@ export async function POST(req: Request) {
 
   const stream = createWorkspaceQueryReadableStream(
     selection,
-    { question, keyword, goal, locale, toolChoice, contextPairs },
+    { question, keyword, goal, locale, toolChoice, contextPairs, context: rootContext },
     { openaiKey, geminiKey }
   );
 

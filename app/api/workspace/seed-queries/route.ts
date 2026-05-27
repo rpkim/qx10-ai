@@ -69,7 +69,7 @@ function parseGoal(raw: unknown): GoalType {
  * Falls back to static templates when no API keys or generation fails.
  */
 export async function POST(req: Request) {
-  let body: { keyword?: string; goal?: unknown; locale?: string };
+  let body: { keyword?: string; goal?: unknown; locale?: string; context?: string };
   try {
     body = await req.json();
   } catch {
@@ -92,6 +92,8 @@ export async function POST(req: Request) {
 
   const goal = parseGoal(body.goal);
   const locale: Locale = isLocale(body.locale) ? body.locale : 'en';
+  const rootContext =
+    typeof body.context === 'string' && body.context.trim() ? body.context.trim() : undefined;
 
   const fallback = () => fallbackSeedQueries(keyword, locale);
 
@@ -110,7 +112,7 @@ export async function POST(req: Request) {
 
   const generated = await generateSeedQuestions(
     selection,
-    { keyword, goal, locale },
+    { keyword, goal, locale, context: rootContext },
     { openaiKey, geminiKey }
   );
 

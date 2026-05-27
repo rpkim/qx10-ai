@@ -18,7 +18,8 @@ function userPayload(
   keyword: string,
   goal: GoalType,
   question: string,
-  contextPairs?: Array<{ question: string; answer: string }>
+  contextPairs?: Array<{ question: string; answer: string }>,
+  rootContext?: string
 ) {
   const contextText =
     contextPairs && contextPairs.length > 0
@@ -30,7 +31,8 @@ function userPayload(
           '',
         ].join('\n')
       : '';
-  return `Workspace root keyword/topic: "${keyword}"\nExploration goal: ${goal}\n\n${contextText}User query:\n${question}`;
+  const contextSuffix = rootContext ? ` (context: "${rootContext}")` : '';
+  return `Workspace root keyword/topic: "${keyword}"${contextSuffix}\nExploration goal: ${goal}\n\n${contextText}User query:\n${question}`;
 }
 
 /** Re-run keyword / follow-up / optional data-node extraction for an existing Q&A (no full answer regeneration). */
@@ -111,11 +113,12 @@ export function createWorkspaceQueryReadableStream(
     locale: Locale;
     toolChoice?: QueryToolChoice;
     contextPairs?: Array<{ question: string; answer: string }>;
+    context?: string;
   },
   keys: { openaiKey: string | undefined; geminiKey: string | undefined }
 ): ReadableStream<Uint8Array> {
-  const { question, keyword, goal, locale, toolChoice, contextPairs } = params;
-  const userText = userPayload(keyword, goal, question, contextPairs);
+  const { question, keyword, goal, locale, toolChoice, contextPairs, context } = params;
+  const userText = userPayload(keyword, goal, question, contextPairs, context);
   const systemText = buildAnswerSystemPrompt(goal, locale);
 
   return new ReadableStream({
