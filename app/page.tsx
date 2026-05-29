@@ -384,7 +384,7 @@ export default function LandingPage() {
           starting ? 'translate-y-2 opacity-0 blur-[1px]' : 'translate-y-0 opacity-100',
         ].join(' ')}
       >
-        <div className="flex shrink-0 flex-col gap-4 pb-3 md:gap-8 md:pb-0">
+        <div className="flex w-full shrink-0 flex-col gap-4 pb-3 md:gap-8 md:pb-0">
           {/* Logo */}
           <div className="flex min-w-0 flex-col gap-2 md:items-center md:gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2 md:flex-nowrap md:justify-center">
@@ -539,7 +539,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] md:flex-none md:overflow-visible md:pb-0">
+        <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto overscroll-y-contain pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] md:flex-none md:overflow-visible md:pb-0">
           {recentSection}
         </div>
       </div>
