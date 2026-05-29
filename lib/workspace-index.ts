@@ -5,6 +5,7 @@ const INDEX_KEY = 'qx10.workspace.index.v1';
 export interface WorkspaceIndexEntry {
   keyword: string;
   goal: GoalType;
+  context?: string;
   updatedAt: string;
 }
 
@@ -32,13 +33,14 @@ export function listRecentWorkspaces(limit = 12): WorkspaceIndexEntry[] {
   return readRaw().slice(0, limit);
 }
 
-export function registerWorkspaceVisit(keyword: string, goal: GoalType): void {
+export function registerWorkspaceVisit(keyword: string, goal: GoalType, context?: string): void {
   if (typeof window === 'undefined' || !keyword.trim()) return;
   const kw = keyword.trim();
   const list = readRaw().filter((e) => e.keyword !== kw);
   list.unshift({
     keyword: kw,
     goal,
+    ...(context ? { context } : {}),
     updatedAt: new Date().toISOString(),
   });
   try {

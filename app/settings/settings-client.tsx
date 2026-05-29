@@ -159,9 +159,9 @@ export function SettingsClient() {
         toast.error(t('settings.googleDrive.restoreFail'));
         return;
       }
-      registerWorkspaceVisit(parsed.state.keyword, parsed.state.goal);
+      registerWorkspaceVisit(parsed.state.keyword, parsed.state.goal, parsed.state.context);
       toast.success(t('settings.googleDrive.restoreDone'));
-      router.push(workspaceUrl({ keyword: parsed.state.keyword, goal: parsed.state.goal }));
+      router.push(workspaceUrl({ keyword: parsed.state.keyword, goal: parsed.state.goal, context: parsed.state.context }));
     } catch {
       toast.error(t('settings.googleDrive.restoreFail'));
     } finally {
@@ -199,7 +199,7 @@ export function SettingsClient() {
         if (!parsed.ok) continue;
         const save = saveWorkspaceToLocalStorage(parsed.state);
         if (!save.ok) continue;
-        registerWorkspaceVisit(parsed.state.keyword, parsed.state.goal);
+        registerWorkspaceVisit(parsed.state.keyword, parsed.state.goal, parsed.state.context);
         restored += 1;
       }
 

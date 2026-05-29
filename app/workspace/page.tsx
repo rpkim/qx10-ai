@@ -105,7 +105,7 @@ function WorkspaceInner() {
 
   useEffect(() => {
     if (!ready || !state.keyword) return;
-    registerWorkspaceVisit(state.keyword, state.goal);
+    registerWorkspaceVisit(state.keyword, state.goal, state.context);
   }, [ready, state.keyword, state.goal]);
 
   /**
