@@ -3,14 +3,10 @@
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import { FOCUS_QUERY_NODE_EVENT, useWorkspace } from '@/lib/workspace-store';
 import { focusQueryNodeOnCanvas } from '@/lib/workspace-focus-query-node';
-import { useI18n } from '@/components/i18n-provider';
-import { QuestionTemplatePlaceDialog } from '@/components/question-template-place-dialog';
 import { ConnectionLines } from './connection-lines';
 import { NodeChrome } from './node-chrome';
 import { RootNode } from '@/components/nodes/root-node';
 import { QueryNode } from '@/components/nodes/query-node';
-import { QueryTemplateNode } from '@/components/nodes/query-template-node';
-import { TemplateSlotNode } from '@/components/nodes/template-slot-node';
 import { AnswerNode } from '@/components/nodes/answer-node';
 import { DataNode } from '@/components/nodes/data-node';
 import type { WorkspaceNode, Position } from '@/lib/types';
@@ -22,8 +18,7 @@ import {
 import { useIntroduceReveal } from '@/lib/introduce-reveal-context';
 
 export function Canvas() {
-  const { t } = useI18n();
-  const { state, dispatch, addQueryTemplateNode } = useWorkspace();
+  const { state, dispatch } = useWorkspace();
   const { nodes, edges, viewport, selectedNodeIds, collapsedNodeIds } = state;
   const { x: panX, y: panY, zoom } = viewport;
   const introduceReveal = useIntroduceReveal();
@@ -35,7 +30,12 @@ export function Canvas() {
     return getVisibleNodeIds(roots, childrenMap, collapsedSet);
   }, [nodes, edges, childrenMap, collapsedSet]);
   const visibleNodes = useMemo(() => {
-    const collapsed = nodes.filter((n) => visibleIds.has(n.id));
+    const collapsed = nodes.filter(
+      (n) =>
+        visibleIds.has(n.id) &&
+        n.type !== 'query-template' &&
+        n.type !== 'template-slot'
+    );
     if (!introduceReveal) return collapsed;
     return collapsed.filter((n) => introduceReveal.isCanvasNodeVisible(n, nodes));
   }, [nodes, visibleIds, introduceReveal]);
@@ -53,12 +53,6 @@ export function Canvas() {
   } | null>(null);
   const spaceHeld = useRef(false);
   const [cursor, setCursor] = useState<'default' | 'grab' | 'grabbing'>('default');
-  const [canvasCtx, setCanvasCtx] = useState<{ x: number; y: number } | null>(null);
-  const [placeTemplate, setPlaceTemplate] = useState<{
-    open: boolean;
-    world: Position | null;
-  }>({ open: false, world: null });
-  const canvasCtxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     selectedRef.current = selectedNodeIds;
@@ -75,16 +69,6 @@ export function Canvas() {
     window.addEventListener(FOCUS_QUERY_NODE_EVENT, onFocusQuery as EventListener);
     return () => window.removeEventListener(FOCUS_QUERY_NODE_EVENT, onFocusQuery as EventListener);
   }, [nodes, viewport.zoom, dispatch]);
-
-  useEffect(() => {
-    if (!canvasCtx) return;
-    const onDown = (e: MouseEvent) => {
-      if (canvasCtxRef.current?.contains(e.target as Node)) return;
-      setCanvasCtx(null);
-    };
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
-  }, [canvasCtx]);
 
   /* ── Spacebar hold to pan ── */
   useEffect(() => {
@@ -322,12 +306,6 @@ export function Canvas() {
     [dispatch]
   );
 
-  const handleCanvasContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('[data-workspace-node]')) return;
-    e.preventDefault();
-    setCanvasCtx({ x: e.clientX, y: e.clientY });
-  }, []);
-
   const cursorStyle =
     cursor === 'grabbing' ? 'grabbing' :
     cursor === 'grab'     ? 'grab' :
@@ -357,7 +335,6 @@ export function Canvas() {
         e.preventDefault();
       }}
       onClick={handleCanvasClick}
-      onContextMenu={handleCanvasContextMenu}
     >
       {/* Dot-grid background — tagged so blank-area detection works */}
       <div
@@ -397,54 +374,6 @@ export function Canvas() {
           />
         ))}
       </div>
-
-      {canvasCtx && (
-        <div
-          ref={canvasCtxRef}
-          data-canvas-context-menu="true"
-          className="border-border bg-popover text-popover-foreground fixed z-200 min-w-[220px] rounded-lg border py-1 shadow-lg"
-          style={{ left: canvasCtx.x, top: canvasCtx.y }}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          <button
-            type="button"
-            className="hover:bg-accent block w-full px-3 py-2 text-left text-sm"
-            onClick={() => {
-              const el = canvasRef.current;
-              if (!el || !canvasCtx) {
-                setCanvasCtx(null);
-                return;
-              }
-              const rect = el.getBoundingClientRect();
-              const world: Position = {
-                x: (canvasCtx.x - rect.left - panX) / zoom,
-                y: (canvasCtx.y - rect.top - panY) / zoom,
-              };
-              setPlaceTemplate({ open: true, world });
-              setCanvasCtx(null);
-            }}
-          >
-            {t('templates.addFromMenu')}
-          </button>
-        </div>
-      )}
-
-      <QuestionTemplatePlaceDialog
-        open={placeTemplate.open}
-        onOpenChange={(open) => {
-          if (!open) setPlaceTemplate({ open: false, world: null });
-        }}
-        onPick={(tpl) => {
-          if (!placeTemplate.world) return;
-          addQueryTemplateNode({
-            displayName: tpl.name,
-            pattern: tpl.pattern,
-            position: placeTemplate.world,
-            toolChoice: tpl.toolChoice,
-            followUpQuestions: tpl.followUpQuestions,
-          });
-        }}
-      />
     </div>
   );
 }
@@ -506,15 +435,9 @@ function NodeRenderer({
       }}
     >
       <NodeChrome node={node} hasChildren={hasChildren} isCollapsed={isCollapsed} />
-      <div className="min-h-0 min-w-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1" data-workspace-node-body="true">
         {node.type === 'root' && <RootNode node={node as any} />}
         {node.type === 'query' && <QueryNode node={node as any} />}
-        {node.type === 'query-template' && (
-          <QueryTemplateNode node={node as any} />
-        )}
-        {node.type === 'template-slot' && (
-          <TemplateSlotNode node={node as any} />
-        )}
         {node.type === 'answer' && <AnswerNode node={node as any} />}
         {node.type === 'data' && <DataNode node={node as any} />}
       </div>

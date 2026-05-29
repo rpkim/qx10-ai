@@ -28,12 +28,22 @@ import {
   fetchMarketQuotePayload,
   marketDataNodeRefreshSymbol,
 } from '@/lib/market-data-node-refresh';
-import { exportDashboardOnlyPdf, exportDashboardOnlyPng } from '@/lib/workspace-visual-export';
 import { getClientTtsProvider } from '@/lib/tts/config';
+import { useDashboardWidgetReorder } from '@/lib/use-dashboard-widget-reorder';
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
+
+/** Dashboard data widgets — warm amber/cream, aligned with canvas Data nodes. */
+const DATA_DASHBOARD_CARD_CLASS =
+  'border-amber-200/80 bg-gradient-to-br from-amber-50/95 via-amber-50/70 to-amber-100/45 shadow-sm shadow-amber-200/25 dark:border-amber-500/30 dark:from-amber-500/[0.12] dark:via-amber-500/[0.07] dark:to-amber-600/[0.04] dark:shadow-amber-900/20';
+const DATA_DASHBOARD_HEADER_CLASS = 'border-amber-200/60 dark:border-amber-500/20';
+/** Inner data panel — white content on cream card (matches canvas Data node). */
+const DATA_DASHBOARD_INNER_CLASS =
+  'rounded-xl bg-white p-3 shadow-sm ring-1 ring-black/[0.04] sm:p-4 dark:bg-zinc-950 dark:ring-amber-500/15';
+const DATA_DASHBOARD_BADGE_CLASS =
+  'rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/20 dark:text-amber-300';
 
 interface Props {
   onClose: () => void;
@@ -45,14 +55,10 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
   const { t } = useI18n();
   const { state, toggleDashboardPin } = useWorkspace();
   const { nodes, dashboardNodeIds, keyword, goal } = state;
-  const [widgetOrder, setWidgetOrder] = useState<string[]>([]);
-  const [dragOver, setDragOver] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [usePointerDnD, setUsePointerDnD] = useState(false);
-
   const [gridLayout, setGridLayout] = useState<DashboardGridItem[]>([]);
   const [editingGrid, setEditingGrid] = useState(false);
   const [compactHeights, setCompactHeights] = useState<Record<string, number>>({});
+  const [collapsedWidgets, setCollapsedWidgets] = useState<Record<string, boolean>>({});
   const layoutBaselineRef = useRef<DashboardGridItem[] | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
@@ -80,30 +86,8 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
   } | null>(null);
 
   const pinnedNodes = nodes.filter((n) => dashboardNodeIds.includes(n.id));
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const touchCapable =
-      'ontouchstart' in window || (navigator.maxTouchPoints ?? 0) > 0;
-    // HTML5 drag/drop is unreliable on mobile browsers.
-    setUsePointerDnD(touchCapable);
-  }, []);
-
-  const orderedIds = useMemo(
-    () => [
-      ...widgetOrder.filter((id) => dashboardNodeIds.includes(id)),
-      ...dashboardNodeIds.filter((id) => !widgetOrder.includes(id)),
-    ],
-    [widgetOrder, dashboardNodeIds]
-  );
-
-  const orderedNodes = useMemo(
-    () =>
-      orderedIds
-        .map((id) => pinnedNodes.find((n) => n.id === id))
-        .filter(Boolean) as WorkspaceNode[],
-    [orderedIds, pinnedNodes]
-  );
+  const { orderedNodes, orderedIds, dragging, dragOver, handleCompactPointerDown } =
+    useDashboardWidgetReorder(dashboardNodeIds, pinnedNodes);
 
   const orderedIdsKey = orderedIds.join(',');
   const compactHeightsKey = `qx10.dashboard.compactHeights:${keyword}`;
@@ -189,115 +173,6 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
   const collapseExpanded = () => {
     if (editingGrid) cancelEditLayout();
     onExpandedChange(false);
-  };
-
-  const handleDragStart = (id: string) => setDragging(id);
-  const handleDragOver = (e: React.DragEvent, id: string) => {
-    e.preventDefault();
-    setDragOver(id);
-  };
-  const handleDrop = (targetId: string) => {
-    if (!dragging || dragging === targetId) return;
-    const base = orderedIds.filter((id) => id !== dragging);
-    const idx = base.indexOf(targetId);
-    base.splice(idx, 0, dragging);
-    setWidgetOrder(base);
-    setDragging(null);
-    setDragOver(null);
-  };
-  const handleDragEnd = () => {
-    setDragging(null);
-    setDragOver(null);
-  };
-
-  const compactDragRef = useRef<{
-    id: string;
-    pointerId: number;
-  } | null>(null);
-  const compactOverRef = useRef<string | null>(null);
-
-  const handleCompactPointerDown = (id: string) => (e: React.PointerEvent) => {
-    if (!usePointerDnD) return;
-    if (e.button !== 0) return;
-
-    // Let buttons (pin/remove/etc) work normally.
-    const target = e.target as HTMLElement | null;
-    if (target?.closest('button,[role="button"],a,input,textarea,select')) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    compactDragRef.current = { id, pointerId: e.pointerId };
-    setDragging(id);
-    setDragOver(id);
-    compactOverRef.current = id;
-
-    const onMove = (ev: PointerEvent) => {
-      if (!compactDragRef.current) return;
-      const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
-      const widgetEl = el?.closest('[data-dashboard-compact-widget-id]') as HTMLElement | null;
-      const overId = widgetEl?.dataset.dashboardCompactWidgetId ?? null;
-      compactOverRef.current = overId;
-      setDragOver(overId);
-    };
-
-    const onUp = () => {
-      const d = compactDragRef.current;
-      compactDragRef.current = null;
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      if (!d) return;
-      const overId = compactOverRef.current;
-      if (!overId || overId === d.id) {
-        setDragging(null);
-        setDragOver(null);
-        return;
-      }
-      const base = orderedIds.filter((x) => x !== d.id);
-      const idx = base.indexOf(overId);
-      if (idx < 0) {
-        setDragging(null);
-        setDragOver(null);
-        return;
-      }
-      base.splice(idx, 0, d.id);
-      setWidgetOrder(base);
-      setDragging(null);
-      setDragOver(null);
-    };
-
-    window.addEventListener('pointermove', onMove, { passive: false });
-    window.addEventListener('pointerup', onUp);
-  };
-
-  const handleExport = () => {
-    const data = orderedNodes.map((n) => ({
-      type: n.type,
-      title: n.type === 'answer' ? 'Answer' : (n as DataNodeData).title,
-      content: n.type === 'answer' ? (n as AnswerNodeData).content : undefined,
-      keywords: n.type === 'answer' ? (n as AnswerNodeData).extractedKeywords : undefined,
-    }));
-    const blob = new Blob([JSON.stringify({ keyword, goal, widgets: data }, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `qx10-dashboard-${keyword.replace(/\s+/g, '-').toLowerCase()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportDashboardPng = () => {
-    void exportDashboardOnlyPng(keyword)
-      .then(() => toast.success(t('dashboard.exportPngDone')))
-      .catch(() => toast.error(t('dashboard.exportImageFail')));
-  };
-
-  const handleExportDashboardPdf = () => {
-    void exportDashboardOnlyPdf(keyword)
-      .then(() => toast.success(t('dashboard.exportPdfDone')))
-      .catch(() => toast.error(t('dashboard.exportImageFail')));
   };
 
   const onHeaderPointerDown = useCallback(
@@ -535,37 +410,6 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
           >
             {expanded ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
           </Button>
-          {pinnedNodes.length > 0 && (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="hidden h-8 text-xs sm:inline-flex"
-                onClick={handleExportDashboardPng}
-              >
-                {t('dashboard.exportPng')}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="hidden h-8 text-xs sm:inline-flex"
-                onClick={handleExportDashboardPdf}
-              >
-                {t('dashboard.exportPdf')}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="hidden h-8 text-xs sm:inline-flex"
-                onClick={handleExport}
-              >
-                {t('dashboard.export')}
-              </Button>
-            </>
-          )}
           <Button
             type="button"
             variant="ghost"
@@ -620,7 +464,8 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                     key={node.id}
                     data-dashboard-export-item="true"
                     className={[
-                      'absolute overflow-hidden rounded-2xl border border-border bg-card shadow-sm',
+                      'absolute overflow-hidden rounded-2xl border',
+                      node.type === 'data' ? DATA_DASHBOARD_CARD_CLASS : 'border-border bg-card shadow-sm',
                       editingGrid ? 'ring-1 ring-primary/20 shadow-lg' : '',
                     ].join(' ')}
                     style={{
@@ -666,25 +511,21 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                   key={node.id}
                   data-dashboard-export-item="true"
                   data-dashboard-compact-widget-id={node.id}
-                  draggable={!usePointerDnD}
-                  onDragStart={!usePointerDnD ? () => handleDragStart(node.id) : undefined}
-                  onDragOver={
-                    !usePointerDnD ? (e) => handleDragOver(e, node.id) : undefined
-                  }
-                  onDrop={!usePointerDnD ? () => handleDrop(node.id) : undefined}
-                  onDragEnd={!usePointerDnD ? handleDragEnd : undefined}
-                  onPointerDown={usePointerDnD ? handleCompactPointerDown(node.id) : undefined}
+                  onPointerDown={handleCompactPointerDown(node.id)}
                   style={{
                     opacity: dragging === node.id ? 0.4 : 1,
-                    touchAction: usePointerDnD ? 'none' : undefined,
                     outline:
                       dragOver === node.id && dragging !== node.id
                         ? '2px solid rgba(0,196,154,0.6)'
                         : 'none',
                     borderRadius: '16px',
-                    transition: 'opacity 0.15s, outline 0.1s',
+                    transition: 'opacity 0.15s, outline 0.1s, height 0.2s',
                     position: 'relative',
-                    height: compactHeights[node.id] ? `${compactHeights[node.id]}px` : undefined,
+                    height: collapsedWidgets[node.id]
+                      ? 'auto'
+                      : compactHeights[node.id]
+                        ? `${compactHeights[node.id]}px`
+                        : undefined,
                   }}
                 >
                   <DashboardWidget
@@ -692,7 +533,12 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                     onUnpin={() => toggleDashboardPin(node.id)}
                     compact
                     disableCompactHeightCap
+                    collapsed={collapsedWidgets[node.id] ?? false}
+                    onCollapsedChange={(next) =>
+                      setCollapsedWidgets((prev) => ({ ...prev, [node.id]: next }))
+                    }
                   />
+                  {!collapsedWidgets[node.id] && (
                   <button
                     type="button"
                     onPointerDown={onCompactResizePointerDown(node.id)}
@@ -705,6 +551,7 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                       <path d="M7 17 17 7M13 17h4v-4" />
                     </svg>
                   </button>
+                  )}
                 </div>
               ))}
 
@@ -721,8 +568,7 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
                   ].map((s) => (
                     <div
                       key={s.label}
-                      className="flex flex-col items-center gap-0.5 rounded-xl py-2"
-                      style={{ background: 'rgba(0,0,0,0.2)' }}
+                      className="flex flex-col items-center gap-0.5 rounded-xl bg-amber-50/80 py-2 dark:bg-amber-500/10"
                     >
                       <span
                         className="text-xl font-bold"
@@ -792,6 +638,8 @@ export function DashboardWidget({
   onHeaderPointerDown,
   /** When false (e.g. mobile stack), cap widget height so body scrolls inside. */
   disableCompactHeightCap = false,
+  collapsed: collapsedProp,
+  onCollapsedChange,
 }: {
   node: WorkspaceNode;
   onUnpin: () => void;
@@ -799,10 +647,18 @@ export function DashboardWidget({
   editMode?: boolean;
   onHeaderPointerDown?: (e: React.PointerEvent) => void;
   disableCompactHeightCap?: boolean;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }) {
   const { t } = useI18n();
   const { dispatch } = useWorkspace();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsedInternal, setCollapsedInternal] = useState(false);
+  const collapsed = collapsedProp ?? collapsedInternal;
+  const setCollapsed = (next: boolean | ((prev: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(collapsed) : next;
+    if (collapsedProp === undefined) setCollapsedInternal(value);
+    onCollapsedChange?.(value);
+  };
   const [dataRefreshing, setDataRefreshing] = useState(false);
 
   const title = node.type === 'answer' ? t('nodes.answer') : (node as DataNodeData).title;
@@ -831,30 +687,40 @@ export function DashboardWidget({
   const badge =
     node.type === 'answer'
       ? { bg: 'rgba(163,230,53,0.15)', color: '#A3E635', label: 'A' }
-      : { bg: 'rgba(245,158,11,0.15)', color: '#F59E0B', label: 'D' };
+      : { bg: '#F59E0B', color: '#080C12', label: 'D' };
+
+  const isDataWidget = node.type === 'data';
+  const showDataCardShell = isDataWidget && compact;
 
   return (
     <div
       className={[
-        'flex min-h-0 flex-col overflow-hidden rounded-2xl',
-        compact && !disableCompactHeightCap
-          ? 'max-h-[min(70vh,520px)] min-h-[10rem]'
-          : 'h-full',
-        compact && disableCompactHeightCap ? 'min-h-[10rem]' : '',
+        'flex flex-col overflow-hidden rounded-2xl',
+        collapsed ? 'h-auto' : 'min-h-0',
+        showDataCardShell ? `border ${DATA_DASHBOARD_CARD_CLASS}` : '',
+        !collapsed && compact && !disableCompactHeightCap
+          ? 'max-h-[min(70vh,520px)] min-h-40'
+          : '',
+        !collapsed && compact && disableCompactHeightCap ? 'min-h-40' : '',
+        !collapsed && !compact ? 'h-full' : '',
       ].join(' ')}
-      style={{ background: 'rgba(255,255,255,0.015)' }}
     >
       <div
-        className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:px-4 sm:py-3"
+        data-dashboard-widget-header
+        className={[
+          'flex shrink-0 items-center justify-between gap-2 px-3 py-2.5 sm:px-4 sm:py-3',
+          !collapsed && isDataWidget ? `border-b ${DATA_DASHBOARD_HEADER_CLASS}` : '',
+          !collapsed && !isDataWidget ? 'border-b border-border' : '',
+        ].join(' ')}
         onPointerDown={editMode ? onHeaderPointerDown : undefined}
         style={{
           cursor: editMode ? 'move' : compact ? 'grab' : 'default',
-          borderBottom: collapsed ? 'none' : undefined,
         }}
       >
         <div className="flex min-w-0 items-center gap-2">
           {compact && (
             <svg
+              data-dashboard-drag-handle
               width="12"
               height="12"
               viewBox="0 0 24 24"
@@ -876,6 +742,9 @@ export function DashboardWidget({
               {t('dashboard.dragBadge')}
             </span>
           )}
+          {isDataWidget && compact && (
+            <span className={DATA_DASHBOARD_BADGE_CLASS}>{t('dashboard.data')}</span>
+          )}
           <span
             className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold"
             style={{ background: badge.bg, color: badge.color }}
@@ -884,7 +753,8 @@ export function DashboardWidget({
           </span>
           <span
             className={[
-              'min-w-0 text-sm font-medium text-foreground',
+              'min-w-0 text-sm font-medium',
+              isDataWidget ? 'text-amber-900 dark:text-amber-100' : 'text-foreground',
               compact ? 'line-clamp-2 break-words' : 'truncate',
             ].join(' ')}
           >
@@ -939,7 +809,7 @@ export function DashboardWidget({
               e.stopPropagation();
               onUnpin();
             }}
-            className="rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:text-destructive"
+            className="rounded-lg p-1.5 text-amber-700/55 transition-colors hover:text-amber-900 dark:text-amber-300/55 dark:hover:text-amber-200"
             title={t('dashboard.removeWidget')}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -952,7 +822,8 @@ export function DashboardWidget({
       {!collapsed && (
         <div
           className={[
-            'min-h-0 flex-1 overflow-y-auto px-3 py-2 sm:px-4 sm:py-3',
+            'min-h-0 flex-1 overflow-y-auto',
+            isDataWidget ? 'p-3 sm:p-4' : 'px-3 py-2 sm:px-4 sm:py-3',
             compact ? '' : 'text-sm',
           ].join(' ')}
         >
@@ -1174,7 +1045,7 @@ function formatBold(text: string): React.ReactNode[] {
 function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean }) {
   const chartH = compact ? 140 : 200;
   return (
-    <div className="min-w-0 overflow-x-hidden">
+    <div className={`min-w-0 overflow-x-hidden ${DATA_DASHBOARD_INNER_CLASS}`}>
       {node.subtitle && (
         <p className="mb-2 min-w-0 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
           {node.subtitle}
@@ -1239,18 +1110,14 @@ function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean })
         </ResponsiveContainer>
       )}
       {node.dataType === 'table' && node.tableRows && (
-        <div
-          className="max-h-[min(56vh,480px)] min-w-0 overflow-x-auto overflow-y-auto overscroll-y-contain rounded-xl [scrollbar-width:thin]"
-          style={{ background: 'rgba(0,0,0,0.2)' }}
-        >
+        <div className="max-h-[min(56vh,480px)] min-w-0 overflow-x-auto overflow-y-auto overscroll-y-contain rounded-lg [scrollbar-width:thin]">
           <table className="w-full min-w-0 table-fixed text-xs">
             <thead>
               <tr>
                 {node.tableColumns?.map((col) => (
                   <th
                     key={col}
-                    className="min-w-0 max-w-0 border-b px-2 py-2 text-left align-top font-semibold break-words text-muted-foreground [overflow-wrap:anywhere] sm:px-3"
-                    style={{ borderColor: 'rgba(245,158,11,0.12)' }}
+                    className="min-w-0 max-w-0 border-b border-border/70 px-2 py-2 text-left align-top font-semibold break-words text-muted-foreground [overflow-wrap:anywhere] sm:px-3"
                   >
                     {col}
                   </th>
@@ -1259,12 +1126,11 @@ function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean })
             </thead>
             <tbody>
               {node.tableRows.map((row, i) => (
-                <tr key={i} className="transition-colors hover:bg-white/2">
+                <tr key={i} className="transition-colors hover:bg-muted/40">
                   {node.tableColumns?.map((col) => (
                     <td
                       key={col}
-                      className="min-w-0 max-w-0 border-b px-2 py-2 align-top break-words text-foreground/80 [overflow-wrap:anywhere] sm:px-3"
-                      style={{ borderColor: 'rgba(245,158,11,0.06)' }}
+                      className="min-w-0 max-w-0 border-b border-border/40 px-2 py-2 align-top break-words text-foreground/85 [overflow-wrap:anywhere] sm:px-3"
                     >
                       {String(row[col] ?? '')}
                     </td>
@@ -1299,7 +1165,10 @@ function DataWidget({ node, compact }: { node: DataNodeData; compact: boolean })
       {node.dataType === 'metric' && node.metrics && (
         <div className="grid grid-cols-2 gap-2">
           {node.metrics.map((m) => (
-            <div key={m.label} className="flex flex-col gap-1 rounded-xl p-3" style={{ background: 'rgba(0,0,0,0.2)' }}>
+            <div
+              key={m.label}
+              className="flex flex-col gap-1 rounded-lg border border-border/50 bg-muted/25 p-3"
+            >
               <span className="text-xs text-muted-foreground">{m.label}</span>
               <span
                 className="text-xl font-bold"

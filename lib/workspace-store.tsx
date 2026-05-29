@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 import { buildInitialWorkspace, getMockResponse } from './mock-data';
 import { consumeWorkspaceQueryStream } from '@/lib/ai/consume-query-stream';
 import { NODE_CANVAS_TOOLBAR_HEIGHT_PX } from './canvas-node-chrome';
+import { measureWorkspaceNodeContentHeights } from './canvas-node-measure';
 import { tr } from '@/lib/i18n/runtime';
 import {
   normalizeTemplateSlotGraph,
@@ -80,7 +81,14 @@ function estimateTemplateSlotHeight(keyCount: number): number {
  * Layout uses stored height when present; otherwise conservative estimates so
  * auto-layout does not place children inside underestimated parent boxes (overlap).
  */
-function layoutNodeSize(n: WorkspaceNode): { w: number; h: number } {
+const ROOT_SEED_UI_ROWS = 6;
+const ROOT_SEED_ROW_HEIGHT_PX = 42;
+
+function estimateRootContentHeightPx(): number {
+  return 140 + ROOT_SEED_UI_ROWS * ROOT_SEED_ROW_HEIGHT_PX + 72 + LAYOUT_HEIGHT_BUFFER;
+}
+
+function layoutNodeSize(n: WorkspaceNode, opts?: { measured?: boolean }): { w: number; h: number } {
   const w =
     n.width ??
     (n.type === 'root'
@@ -91,6 +99,10 @@ function layoutNodeSize(n: WorkspaceNode): { w: number; h: number } {
           ? 300
           : 280);
   let h = n.height ?? LAYOUT_DEFAULT_HEIGHT[n.type];
+
+  if (opts?.measured && n.height != null && n.height > 0) {
+    return { w, h: h + 16 };
+  }
 
   if (n.type === 'query') {
     h = Math.max(h, 320 + LAYOUT_HEIGHT_BUFFER);
@@ -104,7 +116,9 @@ function layoutNodeSize(n: WorkspaceNode): { w: number; h: number } {
   } else if (n.type === 'answer') {
     h = Math.max(h, CANVAS_ANSWER_LAYOUT_HEIGHT + LAYOUT_HEIGHT_BUFFER + 64);
   } else if (n.type === 'root') {
-    h = Math.max(h, 100);
+    const seedBody =
+      140 + ROOT_SEED_UI_ROWS * ROOT_SEED_ROW_HEIGHT_PX + 72 + LAYOUT_HEIGHT_BUFFER;
+    h = Math.max(h, seedBody, 320 + LAYOUT_HEIGHT_BUFFER);
   }
 
   return { w, h };
@@ -114,16 +128,17 @@ function subtreeMaxRight(
   id: string,
   nodeMap: Map<string, WorkspaceNode>,
   childrenMap: Map<string, string[]>,
-  positions: Map<string, Position>
+  positions: Map<string, Position>,
+  sizeOf: (n: WorkspaceNode) => { w: number; h: number } = layoutNodeSize
 ): number {
   const n = nodeMap.get(id);
   if (!n) return 0;
   const pos = positions.get(id);
   if (!pos) return 0;
-  const { w } = layoutNodeSize(n);
+  const { w } = sizeOf(n);
   let right = pos.x + w;
   for (const c of childrenMap.get(id) ?? []) {
-    right = Math.max(right, subtreeMaxRight(c, nodeMap, childrenMap, positions));
+    right = Math.max(right, subtreeMaxRight(c, nodeMap, childrenMap, positions, sizeOf));
   }
   return right;
 }
@@ -136,8 +151,16 @@ interface LayoutBox {
 /**
  * Recursive layout: Answer → data nodes to the right; follow-up Queries in a row below the answer.
  */
-function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): WorkspaceNode[] {
+function computeTreeAwareLayout(
+  nodes: WorkspaceNode[],
+  edges: Edge[],
+  measuredHeights?: Record<string, number>
+): WorkspaceNode[] {
   if (nodes.length === 0) return nodes;
+
+  const measuredIds = new Set(Object.keys(measuredHeights ?? {}));
+  const sizeOf = (n: WorkspaceNode) =>
+    layoutNodeSize(n, { measured: measuredIds.has(n.id) });
 
   const chromeH = NODE_CANVAS_TOOLBAR_HEIGHT_PX;
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
@@ -155,8 +178,15 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
       return;
     }
     const bucket = childrenMap.get(e.sourceId);
-    if (!bucket) return;
+    if (!bucket || bucket.includes(e.targetId)) return;
     bucket.push(e.targetId);
+  });
+  // parentId links without an edge (legacy / race) still participate in layout
+  nodes.forEach((n) => {
+    if (!n.parentId) return;
+    const bucket = childrenMap.get(n.parentId);
+    if (!bucket || bucket.includes(n.id)) return;
+    bucket.push(n.id);
   });
 
   const positions = new Map<string, Position>();
@@ -178,25 +208,25 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
   function layoutSubtree(id: string, x: number, y: number): LayoutBox {
     const n = nodeMap.get(id);
     if (!n) return { bottom: y, rightEdge: x };
-    const { w, h } = layoutNodeSize(n);
+    const { w, h } = sizeOf(n);
+    const kids = childrenMap.get(id) ?? [];
+
     positions.set(id, { x, y });
 
-    const kids = childrenMap.get(id) ?? [];
     if (kids.length === 0) {
       return { bottom: y + h + chromeH, rightEdge: x + w };
     }
 
     if (n.type === 'root') {
       const rowY = y + h + chromeH + LAYOUT_GAP_Y;
-      const slotW = Math.max(380, LAYOUT_QUERY_SIBLING_X);
-      const totalW = kids.length * slotW;
-      const startX = x + w / 2 - totalW / 2;
       let maxBottom = y + h + chromeH;
       let maxRight = x + w;
-      kids.forEach((kidId, i) => {
-        const box = layoutSubtree(kidId, startX + i * slotW, rowY);
+      let qx = x;
+      kids.forEach((kidId) => {
+        const box = layoutSubtree(kidId, qx, rowY);
         maxBottom = Math.max(maxBottom, box.bottom);
         maxRight = Math.max(maxRight, box.rightEdge);
+        qx = box.rightEdge + LAYOUT_GAP_X;
       });
       return { bottom: maxBottom, rightEdge: maxRight };
     }
@@ -208,14 +238,13 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
       const otherKids = kids.filter((k) => nodeMap.get(k)?.type !== 'query');
       let maxBottom = y + h + chromeH;
       let rightEdge = x + w;
-      const colW = Math.max(380, LAYOUT_QUERY_SIBLING_X);
+      let qx = x;
       if (queryKids.length > 0) {
-        const totalW = queryKids.length * colW;
-        const startX = x + w / 2 - totalW / 2;
-        queryKids.forEach((kidId, i) => {
-          const box = layoutSubtree(kidId, startX + i * colW, rowY);
+        queryKids.forEach((kidId) => {
+          const box = layoutSubtree(kidId, qx, rowY);
           maxBottom = Math.max(maxBottom, box.bottom);
           rightEdge = Math.max(rightEdge, box.rightEdge);
+          qx = box.rightEdge + LAYOUT_GAP_X;
         });
       }
       let curY = queryKids.length > 0 ? maxBottom + LAYOUT_GAP_Y : rowY;
@@ -304,7 +333,7 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
     layoutSubtree(r.id, x, y);
     packCursorRight = Math.max(
       packCursorRight,
-      subtreeMaxRight(r.id, nodeMap, childrenMap, positions)
+      subtreeMaxRight(r.id, nodeMap, childrenMap, positions, sizeOf)
     );
   });
 
@@ -322,9 +351,9 @@ function computeTreeAwareLayout(nodes: WorkspaceNode[], edges: Edge[]): Workspac
     if (slotIds.length === 0) continue;
     const tplPos = positions.get(tpl.id);
     if (!tplPos) continue;
-    const { w: tplW } = layoutNodeSize(tpl);
-    const widths = slotIds.map((id) => layoutNodeSize(nodeMap.get(id)!).w);
-    const heights = slotIds.map((id) => layoutNodeSize(nodeMap.get(id)!).h);
+    const { w: tplW } = sizeOf(tpl);
+    const widths = slotIds.map((id) => sizeOf(nodeMap.get(id)!).w);
+    const heights = slotIds.map((id) => sizeOf(nodeMap.get(id)!).h);
     const maxSlotH = Math.max(...heights);
     const gapX = LAYOUT_GAP_X;
     const totalW = widths.reduce((acc, w, i) => acc + w + (i > 0 ? gapX : 0), 0);
@@ -506,8 +535,23 @@ type Action =
       chars: number;
     }
   | { type: 'COMPLETE_ANSWER'; answerId: string }
-  | { type: 'AUTO_LAYOUT' }
+  | { type: 'AUTO_LAYOUT'; measuredHeights?: Record<string, number> }
   | { type: 'LOAD_SNAPSHOT'; snapshot: WorkspaceState };
+
+function isPinnableNodeType(type: WorkspaceNode['type']): boolean {
+  return type === 'data';
+}
+
+/** Data widgets default to the dashboard; answers are never pinned. */
+function normalizeDashboardPinIds(
+  dashboardNodeIds: string[],
+  nodes: WorkspaceNode[]
+): string[] {
+  const dataIds = new Set(nodes.filter((n) => n.type === 'data').map((n) => n.id));
+  const ids = new Set(dashboardNodeIds.filter((id) => dataIds.has(id)));
+  for (const id of dataIds) ids.add(id);
+  return Array.from(ids);
+}
 
 const initialState: WorkspaceState = {
   keyword: '',
@@ -554,7 +598,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         .slice(0, 6);
       if (questions.length === 0) return state;
 
-      const rh = root.height ?? LAYOUT_DEFAULT_HEIGHT.root;
+      const rh = Math.max(root.height ?? 0, estimateRootContentHeightPx());
       const rw = root.width ?? 260;
       const slotW = LAYOUT_QUERY_SIBLING_X;
       const rowY =
@@ -595,7 +639,12 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
       };
     }
     case 'ADD_NODE': {
-      return { ...state, nodes: [...state.nodes, action.node] };
+      const node = action.node;
+      const dashboardNodeIds =
+        isPinnableNodeType(node.type) && !state.dashboardNodeIds.includes(node.id)
+          ? [...state.dashboardNodeIds, node.id]
+          : state.dashboardNodeIds;
+      return { ...state, nodes: [...state.nodes, node], dashboardNodeIds };
     }
     case 'ADD_EDGE': {
       return { ...state, edges: [...state.edges, action.edge] };
@@ -637,6 +686,8 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
       };
     }
     case 'TOGGLE_DASHBOARD_PIN': {
+      const node = state.nodes.find((n) => n.id === action.id);
+      if (!node || node.type !== 'data') return state;
       const pinned = state.dashboardNodeIds.includes(action.id)
         ? state.dashboardNodeIds.filter((id) => id !== action.id)
         : [...state.dashboardNodeIds, action.id];
@@ -723,7 +774,19 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
     }
     case 'AUTO_LAYOUT': {
       const edges = normalizeTemplateSlotGraph(state.nodes, state.edges);
-      const layoutedNodes = computeTreeAwareLayout(state.nodes, edges);
+      const measured = action.measuredHeights;
+      const nodesForLayout = measured
+        ? state.nodes.map((n) => {
+            const mh = measured[n.id];
+            if (mh != null && mh > 0) return { ...n, height: mh };
+            if (n.type === 'root' || n.type === 'query') {
+              const { height: _drop, ...rest } = n;
+              return rest as WorkspaceNode;
+            }
+            return n;
+          })
+        : state.nodes;
+      const layoutedNodes = computeTreeAwareLayout(nodesForLayout, edges, measured);
       return {
         ...state,
         edges,
@@ -742,7 +805,7 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         edges,
         viewport: s.viewport,
         selectedNodeIds: [],
-        dashboardNodeIds: s.dashboardNodeIds,
+        dashboardNodeIds: normalizeDashboardPinIds(s.dashboardNodeIds, s.nodes),
         collapsedNodeIds: s.collapsedNodeIds,
       };
     }
@@ -768,20 +831,11 @@ interface WorkspaceContextValue {
     toolChoice?: QueryToolChoice,
     autoRun?: boolean
   ) => string;
-  addQueryTemplateNode: (args: {
-    displayName: string;
-    pattern: string;
-    position: Position;
-    toolChoice?: QueryToolChoice;
-    followUpQuestions?: string[];
-  }) => void;
-  addTemplateSlotNode: (templateNodeId: string) => string | null;
-  deleteTemplateSlotNode: (slotNodeId: string) => void;
-  runTemplateSlot: (slotNodeId: string) => void;
   toggleDashboardPin: (nodeId: string) => void;
   deleteNode: (nodeId: string) => void;
   /** Re-run metadata extraction (keywords, follow-ups, optional data widget) for a completed answer. */
   refreshAnswerMetadata: (answerId: string) => Promise<void>;
+  autoLayout: () => void;
   isDemoMode: boolean;
 }
 
@@ -923,6 +977,15 @@ export function WorkspaceProvider({
       }
     };
   }, [state]);
+
+  const autoLayout = useCallback(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const measuredHeights = measureWorkspaceNodeContentHeights();
+        dispatch({ type: 'AUTO_LAYOUT', measuredHeights });
+      });
+    });
+  }, []);
 
   const initWorkspace = useCallback(
     (keyword: string, goal: GoalType, context?: string) => {
@@ -1318,9 +1381,9 @@ export function WorkspaceProvider({
       },
     });
 
-    dispatch({ type: 'AUTO_LAYOUT' });
+    autoLayout();
     return slotId;
-  }, []);
+  }, [autoLayout]);
 
   const deleteTemplateSlotNode = useCallback((slotNodeId: string) => {
     const slot = nodesRef.current.find(
@@ -1331,8 +1394,8 @@ export function WorkspaceProvider({
       dispatch({ type: 'DELETE_NODE', id: slot.linkedQueryId });
     }
     dispatch({ type: 'DELETE_TEMPLATE_SLOT', slotId: slotNodeId });
-    dispatch({ type: 'AUTO_LAYOUT' });
-  }, []);
+    autoLayout();
+  }, [autoLayout]);
 
   const runTemplateSlot = useCallback(
     (slotNodeId: string) => {
@@ -1399,7 +1462,7 @@ export function WorkspaceProvider({
         updates: { linkedQueryId: queryId } as Partial<WorkspaceNode>,
       });
 
-      dispatch({ type: 'AUTO_LAYOUT' });
+      autoLayout();
 
       // Wait until the new query node is reflected in nodesRef.
       const tryRun = (attempt = 0) => {
@@ -1413,7 +1476,7 @@ export function WorkspaceProvider({
       };
       window.setTimeout(() => tryRun(0), 0);
     },
-    [runQuery]
+    [runQuery, autoLayout]
   );
 
   const addCustomQuery = useCallback(
@@ -1433,7 +1496,10 @@ export function WorkspaceProvider({
 
       const parent = nodesRef.current.find((n) => n.id === parentId);
       let dy = 160;
-      if (parent?.type === 'answer') {
+      if (parent?.type === 'root') {
+        const ph = parent.height ?? estimateRootContentHeightPx();
+        dy = NODE_CANVAS_TOOLBAR_HEIGHT_PX + ph + LAYOUT_GAP_Y;
+      } else if (parent?.type === 'answer') {
         const ph = parent.height ?? CANVAS_ANSWER_LAYOUT_HEIGHT;
         dy = NODE_CANVAS_TOOLBAR_HEIGHT_PX + ph + LAYOUT_GAP_Y;
       } else if (parent?.type === 'query') {
@@ -1593,13 +1659,10 @@ export function WorkspaceProvider({
         initWorkspace,
         runQuery,
         addCustomQuery,
-        addQueryTemplateNode,
-        addTemplateSlotNode,
-        deleteTemplateSlotNode,
-        runTemplateSlot,
         toggleDashboardPin,
         deleteNode,
         refreshAnswerMetadata,
+        autoLayout,
         isDemoMode,
       }}
     >

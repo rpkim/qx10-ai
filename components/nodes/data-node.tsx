@@ -24,6 +24,12 @@ interface Props {
   node: DataNodeData;
 }
 
+/** Cream card shell + white inner panel (aligned with dashboard Data widgets). */
+const DATA_NODE_CARD_CLASS =
+  'border-amber-200/80 bg-gradient-to-br from-amber-50/95 via-amber-50/70 to-amber-100/45 shadow-md shadow-amber-200/20 dark:border-amber-500/30 dark:from-amber-500/[0.12] dark:via-amber-500/[0.07] dark:to-amber-600/[0.04]';
+const DATA_NODE_INNER_CLASS =
+  'rounded-xl bg-white p-3 shadow-sm ring-1 ring-black/[0.04] dark:bg-zinc-950 dark:ring-amber-500/15';
+
 export function DataNode({ node }: Props) {
   const { t } = useI18n();
   const { toggleDashboardPin, state, dispatch } = useWorkspace();
@@ -59,17 +65,12 @@ export function DataNode({ node }: Props) {
 
   return (
     <div
-      className="flex min-w-0 max-w-full flex-col gap-3 overflow-hidden rounded-2xl border p-4 transition-all duration-300"
-      style={{
-        borderColor: isPinned ? 'rgba(0,196,154,0.5)' : 'rgba(245,158,11,0.25)',
-        background: 'rgba(245,158,11,0.03)',
-        boxShadow: isPinned
-          ? '0 0 20px rgba(0,196,154,0.12)'
-          : '0 4px 16px rgba(0,0,0,0.35)',
-        backdropFilter: 'blur(8px)',
-        minWidth: 260,
-        maxWidth: 340,
-      }}
+      className={[
+        'flex min-w-0 max-w-full flex-col gap-3 overflow-hidden rounded-2xl border p-4 transition-all duration-300',
+        DATA_NODE_CARD_CLASS,
+        isPinned ? 'border-primary/50 shadow-[0_0_20px_rgba(0,196,154,0.12)]' : '',
+      ].join(' ')}
+      style={{ minWidth: 260, maxWidth: 340 }}
     >
       {/* Header */}
       <div className="flex min-w-0 items-center justify-between gap-2">
@@ -121,7 +122,7 @@ export function DataNode({ node }: Props) {
       </div>
 
       {/* Data rendering */}
-      <div className="min-h-[160px] min-w-0 overflow-x-hidden">
+      <div className={`min-h-[160px] min-w-0 overflow-x-hidden ${DATA_NODE_INNER_CLASS}`}>
         {node.dataType === 'table' && <TableView node={node} />}
         {node.dataType === 'bar-chart' && <BarChartView node={node} />}
         {node.dataType === 'line-chart' && <LineChartView node={node} />}
@@ -166,15 +167,14 @@ function DataIcon({ type }: { type: string }) {
 function TableView({ node }: { node: DataNodeData }) {
   if (!node.tableColumns || !node.tableRows) return null;
   return (
-    <div className="max-h-[min(50vh,420px)] min-w-0 overflow-x-auto overflow-y-auto overscroll-y-contain rounded-xl [scrollbar-width:thin]">
-      <table className="w-full min-w-0 table-fixed text-xs" style={{ background: 'rgba(0,0,0,0.25)' }}>
+    <div className="max-h-[min(50vh,420px)] min-w-0 overflow-x-auto overflow-y-auto overscroll-y-contain rounded-lg [scrollbar-width:thin]">
+      <table className="w-full min-w-0 table-fixed text-xs">
         <thead>
           <tr>
             {node.tableColumns.map((col) => (
               <th
                 key={col}
-                className="min-w-0 max-w-0 border-b px-2 py-2 text-left align-top font-semibold break-words text-muted-foreground [overflow-wrap:anywhere] sm:px-3"
-                style={{ borderColor: 'rgba(245,158,11,0.15)' }}
+                className="min-w-0 max-w-0 border-b border-border/70 px-2 py-2 text-left align-top font-semibold break-words text-muted-foreground [overflow-wrap:anywhere] sm:px-3"
               >
                 {col}
               </th>
@@ -183,12 +183,11 @@ function TableView({ node }: { node: DataNodeData }) {
         </thead>
         <tbody>
           {node.tableRows.map((row, i) => (
-            <tr key={i} className="transition-colors hover:bg-white/2">
+            <tr key={i} className="transition-colors hover:bg-muted/40">
               {node.tableColumns!.map((col) => (
                 <td
                   key={col}
-                  className="min-w-0 max-w-0 border-b px-2 py-2 align-top break-words text-foreground/80 [overflow-wrap:anywhere] sm:px-3"
-                  style={{ borderColor: 'rgba(245,158,11,0.08)' }}
+                  className="min-w-0 max-w-0 border-b border-border/40 px-2 py-2 align-top break-words text-foreground/85 [overflow-wrap:anywhere] sm:px-3"
                 >
                   {String(row[col] ?? '')}
                 </td>
@@ -292,8 +291,7 @@ function MetricView({ node }: { node: DataNodeData }) {
       {node.metrics.map((m) => (
         <div
           key={m.label}
-          className="flex flex-col gap-1 rounded-xl p-3"
-          style={{ background: 'rgba(0,0,0,0.25)' }}
+          className="flex flex-col gap-1 rounded-lg border border-border/50 bg-muted/25 p-3"
         >
           <span className="text-xs text-muted-foreground">{m.label}</span>
           <span

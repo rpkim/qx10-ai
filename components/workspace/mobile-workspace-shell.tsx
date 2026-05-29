@@ -5,9 +5,7 @@ import type {
   AnswerNodeData,
   DataNodeData,
   QueryNodeData,
-  QueryTemplateNodeData,
   RootNodeData,
-  TemplateSlotNodeData,
   WorkspaceNode,
 } from '@/lib/types';
 import { FOCUS_QUERY_NODE_EVENT, useWorkspace } from '@/lib/workspace-store';
@@ -20,6 +18,7 @@ import { useI18n } from '@/components/i18n-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RootNode } from '@/components/nodes/root-node';
 import { DashboardWidget } from '@/components/workspace/dashboard-panel';
+import { useDashboardWidgetReorder } from '@/lib/use-dashboard-widget-reorder';
 import { getClientTtsProvider } from '@/lib/tts/config';
 import { RefreshCw } from 'lucide-react';
 
@@ -39,18 +38,12 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
     addCustomQuery,
     toggleDashboardPin,
     aiCatalog,
-    addTemplateSlotNode,
-    runTemplateSlot,
-    deleteTemplateSlotNode,
     deleteNode,
     refreshAnswerMetadata,
     isDemoMode,
   } = useWorkspace();
   const [customInputByAnswer, setCustomInputByAnswer] = useState<Record<string, string>>({});
   const [collapsedByQuery, setCollapsedByQuery] = useState<Record<string, boolean>>({});
-  const [collapsedExecutedByTemplate, setCollapsedExecutedByTemplate] = useState<
-    Record<string, boolean>
-  >({});
   const [ttsPlayingAnswerId, setTtsPlayingAnswerId] = useState<string | null>(null);
   const [metaRefreshingAnswerId, setMetaRefreshingAnswerId] = useState<string | null>(null);
   const browserUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -151,17 +144,6 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
     () => state.nodes.filter((n): n is QueryNodeData => n.type === 'query'),
     [state.nodes]
   );
-  const templateNodes = useMemo(
-    () =>
-      state.nodes
-        .filter((n): n is QueryTemplateNodeData => n.type === 'query-template')
-        .sort((a, b) => a.templateName.localeCompare(b.templateName)),
-    [state.nodes]
-  );
-  const slotNodes = useMemo(
-    () => state.nodes.filter((n): n is TemplateSlotNodeData => n.type === 'template-slot'),
-    [state.nodes]
-  );
   const rootNode = useMemo(
     () => state.nodes.find((n): n is RootNodeData => n.type === 'root') ?? null,
     [state.nodes]
@@ -176,7 +158,6 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
   }, [state.nodes]);
   const queryHierarchy = useMemo(() => {
     const queryById = new Map(queryNodes.map((q) => [q.id, q]));
-    const templateIdSet = new Set(templateNodes.map((t) => t.id));
     const answerOwnerById = new Map<string, string>();
     for (const n of state.nodes) {
       if (n.type === 'answer') answerOwnerById.set(n.id, n.queryId);
@@ -212,13 +193,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
 
     const createdAt = (id: string) => Number(id.match(/(\d{10,})/)?.[1] ?? 0);
     const sortByCreated = (a: QueryNodeData, b: QueryNodeData) => createdAt(b.id) - createdAt(a.id);
-    roots.sort((a, b) => {
-      const aFromTemplate = !!a.parentId && templateIdSet.has(a.parentId);
-      const bFromTemplate = !!b.parentId && templateIdSet.has(b.parentId);
-      if (aFromTemplate !== bFromTemplate) return aFromTemplate ? -1 : 1;
-      if (aFromTemplate && bFromTemplate) return sortByCreated(a, b);
-      return sortByCreated(a, b);
-    });
+    roots.sort(sortByCreated);
     for (const arr of childrenMap.values()) arr.sort(sortByCreated);
 
     const out: QueryNodeData[] = [];
@@ -228,7 +203,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
     };
     for (const r of roots) walk(r);
     return { ordered: out, parentById: parentQueryByQuery };
-  }, [queryNodes, state.nodes, templateNodes]);
+  }, [queryNodes, state.nodes]);
   const orderedQueryNodes = queryHierarchy.ordered;
   const visibleOrderedQueryNodes = useMemo(
     () =>
@@ -263,6 +238,9 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
     () => state.nodes.filter((n) => state.dashboardNodeIds.includes(n.id)),
     [state.nodes, state.dashboardNodeIds]
   );
+  const { orderedNodes: orderedPinned, dragging, dragOver, handleCompactPointerDown } =
+    useDashboardWidgetReorder(state.dashboardNodeIds, pinned);
+  const [collapsedWidgets, setCollapsedWidgets] = useState<Record<string, boolean>>({});
 
   const modelLabel = (q: QueryNodeData): string => {
     const id = q.modelChoice ?? aiCatalog?.defaultChoice ?? '';
@@ -321,115 +299,6 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
               <p className="px-1 text-center text-xs text-muted-foreground">
                 Tap a suggestion on ROOT to reveal a question card.
               </p>
-            )}
-            {templateNodes.length > 0 && (
-              <div className="mb-1 rounded-2xl border border-border bg-card p-3">
-                <div className="mb-2 text-xs font-semibold text-muted-foreground">Question Templates</div>
-                <div className="flex flex-col gap-2">
-                  {templateNodes.map((tpl) => {
-                    const slots = slotNodes.filter((s) => s.templateNodeId === tpl.id);
-                    const pendingSlots = slots.filter((s) => !s.linkedQueryId);
-                    const executedSlots = slots.filter((s) => !!s.linkedQueryId);
-                    const executedCollapsed = collapsedExecutedByTemplate[tpl.id] ?? true;
-                    const renderSlot = (slot: TemplateSlotNodeData) => (
-                      <div key={slot.id} className="rounded-lg border border-border bg-card p-2">
-                        {Object.keys(slot.values).length > 0 ? (
-                          <div className="mb-1.5 grid grid-cols-1 gap-1.5">
-                            {Object.entries(slot.values).map(([key, value]) => (
-                              <input
-                                key={key}
-                                value={value}
-                                onChange={(e) =>
-                                  dispatch({
-                                    type: 'UPDATE_NODE',
-                                    id: slot.id,
-                                    updates: {
-                                      values: { ...slot.values, [key]: e.target.value },
-                                    } as Partial<WorkspaceNode>,
-                                  })
-                                }
-                                placeholder={key}
-                                className="rounded-md border border-border bg-background px-2 py-1 text-xs outline-none"
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="mb-1.5 text-[11px] text-muted-foreground">No variables</div>
-                        )}
-                        <div className="flex gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => runTemplateSlot(slot.id)}
-                            className="rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground"
-                          >
-                            Run
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteTemplateSlotNode(slot.id)}
-                            className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    );
-                    return (
-                      <div key={tpl.id} className="rounded-xl border border-border bg-secondary/30 p-2.5">
-                        <div className="mb-1.5 flex items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-foreground">{tpl.templateName}</div>
-                          <button
-                            type="button"
-                            onClick={() => addTemplateSlotNode(tpl.id)}
-                            className="rounded-lg border border-border px-2 py-1 text-[11px] text-muted-foreground"
-                          >
-                            + Slot
-                          </button>
-                        </div>
-                        <div className="mb-2 text-xs text-muted-foreground">{tpl.pattern}</div>
-                        {pendingSlots.length > 0 && (
-                          <div className="flex flex-col gap-1.5">
-                            {pendingSlots.map(renderSlot)}
-                          </div>
-                        )}
-                        {executedSlots.length > 0 && (
-                          <div className="mt-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCollapsedExecutedByTemplate((prev) => ({
-                                  ...prev,
-                                  [tpl.id]: !prev[tpl.id],
-                                }))
-                              }
-                              className="mb-1.5 flex w-full items-center justify-between rounded-lg border border-border bg-card px-2 py-1.5 text-left text-[11px] text-muted-foreground"
-                            >
-                              <span>Executed slots ({executedSlots.length})</span>
-                              <svg
-                                width="11"
-                                height="11"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                                style={{
-                                  transform: executedCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
-                                  transition: 'transform 0.15s ease',
-                                }}
-                              >
-                                <polyline points="6 9 12 15 18 9" />
-                              </svg>
-                            </button>
-                            {!executedCollapsed && (
-                              <div className="flex flex-col gap-1.5">{executedSlots.map(renderSlot)}</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
             )}
             {orderedQueryNodes.length === 0 ? (
               <div className="rounded-2xl border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
@@ -563,13 +432,6 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                                       <polygon points="6,4 20,12 6,20" />
                                     </svg>
                                   )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleDashboardPin(a.id)}
-                                  className="shrink-0 text-[11px] text-muted-foreground"
-                                >
-                                  {state.dashboardNodeIds.includes(a.id) ? 'Unpin' : 'Pin'}
                                 </button>
                                 {!isDemoMode && (
                                   <button
@@ -768,24 +630,45 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
 
         {showDashboard && (
           <div className="flex flex-col gap-3 pb-2">
-            {pinned.length === 0 ? (
+            {orderedPinned.length === 0 ? (
               <div className="rounded-2xl border border-border bg-card px-4 py-6 text-sm text-muted-foreground">
                 <p className="font-medium text-foreground">{t('dashboard.emptyTitle')}</p>
                 <p className="mt-2 text-xs leading-relaxed">{t('dashboard.emptyDesc')}</p>
               </div>
             ) : (
-              pinned.map((n) => (
-                <div
-                  key={n.id}
-                  className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
-                >
-                  <DashboardWidget
-                    node={n}
-                    onUnpin={() => toggleDashboardPin(n.id)}
-                    compact
-                  />
-                </div>
-              ))
+              <>
+                {orderedPinned.length > 1 && (
+                  <p className="text-xs text-muted-foreground/60">{t('dashboard.dragReorder')}</p>
+                )}
+                {orderedPinned.map((n) => (
+                  <div
+                    key={n.id}
+                    data-dashboard-compact-widget-id={n.id}
+                    onPointerDown={handleCompactPointerDown(n.id)}
+                    className="overflow-hidden rounded-2xl"
+                    style={{
+                      opacity: dragging === n.id ? 0.4 : 1,
+                      outline:
+                        dragOver === n.id && dragging !== n.id
+                          ? '2px solid rgba(0,196,154,0.6)'
+                          : 'none',
+                      borderRadius: '16px',
+                      transition: 'opacity 0.15s, outline 0.1s',
+                    }}
+                  >
+                    <DashboardWidget
+                      node={n}
+                      onUnpin={() => toggleDashboardPin(n.id)}
+                      compact
+                      disableCompactHeightCap
+                      collapsed={collapsedWidgets[n.id] ?? false}
+                      onCollapsedChange={(next) =>
+                        setCollapsedWidgets((prev) => ({ ...prev, [n.id]: next }))
+                      }
+                    />
+                  </div>
+                ))}
+              </>
             )}
           </div>
         )}
