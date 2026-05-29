@@ -15,6 +15,19 @@ export async function GET() {
     return NextResponse.json({ entries });
   } catch (e) {
     console.error('[workspaces GET]', e);
-    return NextResponse.json({ error: 'store_error' }, { status: 500 });
+    const code =
+      e && typeof e === 'object' && 'code' in e && (e as { code?: string }).code === 'PGRST205'
+        ? 'schema_missing'
+        : 'store_error';
+    return NextResponse.json(
+      {
+        error: code,
+        hint:
+          code === 'schema_missing'
+            ? 'Run db/workspaces-migration.sql in the Supabase SQL editor (or pnpm db:apply-workspaces).'
+            : undefined,
+      },
+      { status: code === 'schema_missing' ? 503 : 500 }
+    );
   }
 }

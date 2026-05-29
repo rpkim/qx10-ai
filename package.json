@@ -6,7 +6,8 @@
     "dev": "next dev -p 3002",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "db:apply-workspaces": "node scripts/apply-workspaces-schema.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -40,9 +40,9 @@ export function SettingsClient() {
     try {
       const count = await migrateBrowserLocalStorageToServer();
       setLocalData(hasLocalWorkspaceData());
-      toast.success(t('settings.cloud.migrateDone', { count }));
+      toast.success(t('settings.storage.migrateDone', { count }));
     } catch {
-      toast.error(t('settings.cloud.migrateFail'));
+      toast.error(t('settings.storage.migrateFail'));
     } finally {
       setBusy(false);
     }
@@ -69,13 +69,13 @@ export function SettingsClient() {
         </div>
 
         <section className="rounded-2xl border border-border bg-card/80 p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-foreground">{t('settings.cloud.title')}</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t('settings.storage.title')}</h2>
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-            {t('settings.cloud.blurb')}
+            {t('settings.storage.blurb')}
           </p>
           {localData && (
             <div className="mt-4 flex flex-col gap-2">
-              <p className="text-xs text-muted-foreground">{t('settings.cloud.localFound')}</p>
+              <p className="text-xs text-muted-foreground">{t('settings.storage.localFound')}</p>
               <Button
                 type="button"
                 size="sm"
@@ -84,7 +84,7 @@ export function SettingsClient() {
                 onClick={() => void onMigrateLocal()}
               >
                 <CloudUpload className="mr-1.5 size-3.5" />
-                {t('settings.cloud.migrateButton')}
+                {t('settings.storage.migrateButton')}
               </Button>
             </div>
           )}
