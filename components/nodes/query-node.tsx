@@ -41,7 +41,6 @@ export function QueryNode({ node }: Props) {
     '';
   const modelLabel =
     aiCatalog?.options.find((o) => o.id === effectiveModelId)?.label ?? effectiveModelId;
-  const effectiveTool = node.toolChoice ?? 'auto';
 
   const handleRun = () => {
     if (!isRunning) {
@@ -56,8 +55,7 @@ export function QueryNode({ node }: Props) {
         customQ.trim(),
         node.id,
         node.position,
-        node.modelChoice ?? aiCatalog?.defaultChoice,
-        node.toolChoice ?? 'auto'
+        node.modelChoice ?? aiCatalog?.defaultChoice
       );
       setCustomQ('');
       setShowCustom(false);
@@ -150,42 +148,6 @@ export function QueryNode({ node }: Props) {
                   {opt.label}
                 </SelectItem>
               ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
-
-      {/* Tool routing */}
-      <div className="flex flex-col gap-1">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          Tool
-        </span>
-        {isRunning ? (
-          <span className="text-xs text-foreground/80">
-            {effectiveTool === 'market'
-              ? 'Stock'
-              : effectiveTool === 'web'
-                ? 'Web Search'
-                : 'Auto'}
-          </span>
-        ) : (
-          <Select
-            value={effectiveTool}
-            onValueChange={(id) =>
-              dispatch({
-                type: 'UPDATE_NODE',
-                id: node.id,
-                updates: { toolChoice: id as 'auto' | 'web' | 'market' },
-              })
-            }
-          >
-            <SelectTrigger size="sm" className="h-8 w-full max-w-full text-xs">
-              <SelectValue placeholder="Select tool" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto" className="text-xs">Auto</SelectItem>
-              <SelectItem value="web" className="text-xs">Web Search</SelectItem>
-              <SelectItem value="market" className="text-xs">Stock</SelectItem>
             </SelectContent>
           </Select>
         )}

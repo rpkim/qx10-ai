@@ -10,15 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useI18n } from '@/components/i18n-provider';
-import type { QueryToolChoice } from '@/lib/types';
 import {
   parseTemplateVariableKeys,
   upsertQuestionTemplate,
@@ -29,7 +21,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   initialPattern: string;
   initialName?: string;
-  initialToolChoice?: QueryToolChoice;
+  initialToolChoice?: import('@/lib/types').QueryToolChoice;
   initialFollowUpQuestions?: string[];
   /** When set, overwrites this saved template on save */
   templateId?: string | null;
@@ -41,7 +33,6 @@ export function QuestionTemplateDesignerDialog({
   onOpenChange,
   initialPattern,
   initialName = '',
-  initialToolChoice = 'auto',
   initialFollowUpQuestions = [],
   templateId = null,
   onSaved,
@@ -49,17 +40,15 @@ export function QuestionTemplateDesignerDialog({
   const { t } = useI18n();
   const [name, setName] = useState(initialName);
   const [pattern, setPattern] = useState(initialPattern);
-  const [toolChoice, setToolChoice] = useState<QueryToolChoice>(initialToolChoice);
   const [followUpText, setFollowUpText] = useState('');
 
   useEffect(() => {
     if (open) {
       setName(initialName);
       setPattern(initialPattern);
-      setToolChoice(initialToolChoice);
       setFollowUpText(initialFollowUpQuestions.join('\n'));
     }
-  }, [open, initialName, initialPattern, initialToolChoice, initialFollowUpQuestions]);
+  }, [open, initialName, initialPattern, initialFollowUpQuestions]);
 
   const vars = useMemo(() => parseTemplateVariableKeys(pattern), [pattern]);
 
@@ -72,7 +61,7 @@ export function QuestionTemplateDesignerDialog({
       id: templateId ?? undefined,
       name: name || initialName || 'Untitled',
       pattern,
-      toolChoice,
+      toolChoice: 'auto',
       followUpQuestions,
     });
     onSaved?.();
@@ -110,30 +99,6 @@ export function QuestionTemplateDesignerDialog({
             rows={5}
             className="border-input bg-background resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            {t('templates.designerToolLabel')}
-          </label>
-          <Select
-            value={toolChoice}
-            onValueChange={(v) => setToolChoice(v as QueryToolChoice)}
-          >
-            <SelectTrigger className="w-full text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="auto" className="text-xs">
-                Auto
-              </SelectItem>
-              <SelectItem value="web" className="text-xs">
-                Web Search
-              </SelectItem>
-              <SelectItem value="market" className="text-xs">
-                Stock
-              </SelectItem>
-            </SelectContent>
-          </Select>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-muted-foreground">
