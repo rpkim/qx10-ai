@@ -2,15 +2,15 @@
  * Supabase (Postgres) backed analytics store. Production target.
  *
  * Required env:
- *   - SUPABASE_URL
- *   - SUPABASE_SERVICE_ROLE_KEY  (server-only — never expose to the browser)
+ *   - NEXT_PUBLIC_SUPABASE_URL
+ *   - SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY)
  *
  * Apply `db/schema.sql` once to your project (Supabase SQL editor).
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
-  getSupabaseServiceRoleKey,
+  getSupabaseSecretKey,
   getSupabaseUrl,
   isSupabaseServerConfigured,
 } from '@/lib/supabase/config';
@@ -103,7 +103,7 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
 
   constructor() {
     const url = getSupabaseUrl()!;
-    const key = getSupabaseServiceRoleKey()!;
+    const key = getSupabaseSecretKey()!;
     this.client = createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { 'x-application': 'qx10-server' } },

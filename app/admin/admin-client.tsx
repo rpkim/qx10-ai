@@ -346,7 +346,9 @@ export function AdminClient({ currentEmail }: { currentEmail: string }) {
             development and self-hosting, but on serverless platforms (Vercel etc.)
             the filesystem is ephemeral. Apply{' '}
             <code>db/schema.sql</code> in your Supabase project and set{' '}
-            <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>{' '}
+            <code>NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
+            <code>SUPABASE_SECRET_KEY</code> (or legacy{' '}
+            <code>SUPABASE_SERVICE_ROLE_KEY</code>){' '}
             to switch to durable Postgres storage.
           </p>
         )}

@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
-  getSupabaseServiceRoleKey,
+  getSupabaseSecretKey,
   getSupabaseUrl,
   isSupabaseServerConfigured,
 } from '@/lib/supabase/config';
@@ -40,7 +40,7 @@ export class SupabaseWorkspaceStore implements WorkspaceStore {
   private client: SupabaseClient;
 
   constructor() {
-    this.client = createClient(getSupabaseUrl()!, getSupabaseServiceRoleKey()!, {
+    this.client = createClient(getSupabaseUrl()!, getSupabaseSecretKey()!, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: { headers: { 'x-application': 'qx10-workspaces' } },
     });
