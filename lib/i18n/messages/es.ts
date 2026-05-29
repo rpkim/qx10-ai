@@ -268,7 +268,7 @@ export const es: Messages = {
   'auth.revokeAccess': 'Revocar el acceso de Qx10 a tu cuenta de Google →',
   'auth.collectionTitle': 'Aviso de recopilación',
   'auth.collectionBody':
-    'Al iniciar sesión recopilamos identificadores (ID de Google, correo, nombre, foto), actividad de red (marcas de sign-in, palabras buscadas) y el contenido de los espacios que creas. Solo se usan para operar el Servicio.',
+    'Al iniciar sesión recopilamos identificadores (ID de Google, correo, nombre, foto), actividad de red (marcas de sign-in, palabras buscadas) y el contenido de los espacios que creas. Solo se usan para operar y mejorar el Servicio, incluidas estadísticas agregadas.',
   'auth.collectionNoSale':
     'No vendemos ni compartimos tu información personal con fines publicitarios. Puedes exportar o eliminar tus datos cuando quieras desde Ajustes.',
   'legal.privacyTitle': 'Política de privacidad',
