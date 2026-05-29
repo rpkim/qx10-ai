@@ -7,7 +7,7 @@ export const metadata = {
 
 export const dynamic = 'force-static';
 
-const PRIVACY_VERSION = 'v1.2';
+const PRIVACY_VERSION = 'v1.3';
 const EFFECTIVE_DATE = 'May 29, 2026';
 
 export default function PrivacyPage() {
@@ -155,14 +155,14 @@ export default function PrivacyPage() {
               request.
             </li>
             <li>
-              <span className="font-medium text-foreground">Workspace content (cloud).</span>{' '}
+              <span className="font-medium text-foreground">Workspace content (server database).</span>{' '}
               Kept for as long as your account exists. Deleted within 30 days
               of an account-deletion request.
             </li>
             <li>
-              <span className="font-medium text-foreground">Workspace content (local only).</span>{' '}
+              <span className="font-medium text-foreground">Workspace content (browser only, legacy).</span>{' '}
               Lives in your browser only until migrated — retained until you
-              clear site data or upload to cloud storage.
+              clear site data or upload to the server database from Settings.
             </li>
           </ul>
 
@@ -180,8 +180,8 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-1 pl-5">
             <li>You can sign out at any time from the user menu.</li>
             <li>
-              You can upload legacy browser-only workspaces to cloud storage
-              from the Settings page.
+              You can upload legacy browser-only workspaces to the server
+              database from the Settings page.
             </li>
             <li>
               You can clear all locally-stored workspaces by clearing your
@@ -218,10 +218,11 @@ export default function PrivacyPage() {
               Settings → Danger zone
             </Link>
             . This removes your user record, cascade-deletes all associated
-            server-side events, and deletes all cloud-stored workspaces and
-            preferences. Workspaces stored only locally in your browser are
-            not affected — clear your browser&apos;s site data for this domain
-            to remove those. Your Google account itself is untouched; you may
+            server-side events, and deletes all workspaces and preferences
+            stored in the server database. Workspaces stored only locally in
+            your browser are not affected — clear your browser&apos;s site data
+            for this domain to remove those. Your Google account itself is
+            untouched; you may
             additionally revoke this app&apos;s access at{' '}
             <a
               href="https://myaccount.google.com/permissions"
@@ -283,6 +284,11 @@ export default function PrivacyPage() {
               keywords you submit on the landing page, the goal you select.
             </li>
             <li>
+              <span className="font-medium text-foreground">User-generated content.</span>{' '}
+              Workspace questions, answers, notes, and dashboard layouts you
+              create while signed in.
+            </li>
+            <li>
               <span className="font-medium text-foreground">Inferences</span>{' '}
               (&sect; 1798.140(v)(1)(K)): aggregate counters (total sign-ins,
               total searches, last-seen timestamp) derived from the events
@@ -305,14 +311,14 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-1 pl-5">
             <li>
               <span className="font-medium text-foreground">Sources:</span>{' '}
-              directly from you (sign-in, keywords) and Google (identity
-              fields).
+              directly from you (sign-in, keywords, workspace content) and
+              Google (identity fields).
             </li>
             <li>
               <span className="font-medium text-foreground">Business purposes</span>{' '}
-              (&sect; 1798.140(e)): authentication, providing the AI features
-              you initiate, security/abuse detection, debugging, product
-              analytics in aggregate.
+              (&sect; 1798.140(e)): authentication, persisting your workspaces,
+              providing the AI features you initiate, security/abuse detection,
+              debugging, product analytics in aggregate.
             </li>
             <li>
               <span className="font-medium text-foreground">Recipients:</span>{' '}

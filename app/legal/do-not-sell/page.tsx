@@ -59,7 +59,7 @@ export default function DoNotSellPage() {
             <li>
               The only third parties that receive personal information are the
               service providers strictly necessary to operate the Service
-              (sign-in, AI, hosting, optional Drive backup), under written
+              (sign-in, AI, hosting, database storage), under written
               terms that prohibit further use. See the{' '}
               <Link
                 href="/legal/privacy"
