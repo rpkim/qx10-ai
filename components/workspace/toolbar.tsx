@@ -12,7 +12,6 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  CloudUpload,
   Download,
   FileImage,
   FileText,
@@ -51,10 +50,7 @@ import type { GoalType, Position, WorkspaceState, WorkspaceNode } from '@/lib/ty
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
 import {
   downloadWorkspaceJson,
-  listAllWorkspaceKeywordsInLocalStorage,
-  loadWorkspaceFromLocalStorage,
   parseWorkspaceSnapshotString,
-  serializeWorkspaceSnapshot,
 } from '@/lib/workspace-snapshot';
 import {
   exportCardsViewPdf,
@@ -62,7 +58,7 @@ import {
   exportWorkspaceTreePdf,
   exportWorkspaceTreePng,
 } from '@/lib/workspace-visual-export';
-import { listRecentWorkspaces, type WorkspaceIndexEntry } from '@/lib/workspace-index';
+import { listRecentWorkspacesAsync, type WorkspaceIndexEntry } from '@/lib/workspace-index';
 import { workspaceUrl } from '@/lib/workspace-url';
 import {
   Dialog,
@@ -73,12 +69,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { QuestionTemplateDesignerDialog } from '@/components/question-template-designer-dialog';
 import { WorkspaceNodeSearchBar } from '@/components/workspace/node-search-bar';
 import {
   deleteQuestionTemplate,
-  loadQuestionTemplates,
+  loadQuestionTemplatesAsync,
   type QuestionTemplate,
 } from '@/lib/question-templates';
 
@@ -126,25 +121,14 @@ export function Toolbar({
   const [summaryBusy, setSummaryBusy] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [driveConnected, setDriveConnected] = useState(false);
-  const [driveSelectOpen, setDriveSelectOpen] = useState(false);
-  const [driveSelectItems, setDriveSelectItems] = useState<WorkspaceIndexEntry[]>([]);
-  const [driveSelectKeys, setDriveSelectKeys] = useState<Set<string>>(new Set());
-  const [driveSelectBusy, setDriveSelectBusy] = useState(false);
+  const [recent, setRecent] = useState<WorkspaceIndexEntry[]>([]);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch('/api/integrations/google/drive/status', { credentials: 'include' })
-      .then((r) => r.json() as Promise<{ connected?: boolean }>)
-      .then((d) => {
-        if (!cancelled) setDriveConnected(!!d.connected);
-      })
-      .catch(() => {
-        if (!cancelled) setDriveConnected(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    void listRecentWorkspacesAsync(10).then(setRecent);
+  }, [state.keyword]);
+
+  useEffect(() => {
+    void loadQuestionTemplatesAsync().then(setTplList);
   }, []);
 
   useEffect(() => {
@@ -154,7 +138,9 @@ export function Toolbar({
     return () => window.removeEventListener('resize', apply);
   }, []);
 
-  const refreshTplList = () => setTplList(loadQuestionTemplates());
+  const refreshTplList = () => {
+    void loadQuestionTemplatesAsync().then(setTplList);
+  };
 
   const openTplDesignerNew = () => {
     setTplDesigner({
@@ -291,98 +277,7 @@ export function Toolbar({
       .catch(() => toast.error(t('toolbar.exportImageFail')));
   };
 
-  const backupToGoogleDrive = async () => {
-    try {
-      const snapshotJson = serializeWorkspaceSnapshot(state);
-      const res = await fetch('/api/integrations/google/drive/push', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ snapshotJson }),
-      });
-      if (!res.ok) {
-        toast.error(t('toolbar.backupToGoogleDriveFail'));
-        return;
-      }
-      toast.success(t('toolbar.backupToGoogleDriveDone'));
-    } catch {
-      toast.error(t('toolbar.backupToGoogleDriveFail'));
-    }
-  };
-
-  const backupAllLocalToGoogleDrive = async () => {
-    try {
-      const keywords = listAllWorkspaceKeywordsInLocalStorage();
-      if (keywords.length === 0) {
-        toast.message(t('toolbar.backupAllToGoogleDriveNone'));
-        return;
-      }
-      let pushed = 0;
-      for (const kw of keywords) {
-        const loaded = loadWorkspaceFromLocalStorage(kw);
-        if (!loaded.ok) continue;
-        const snapshotJson = serializeWorkspaceSnapshot(loaded.state);
-        const res = await fetch('/api/integrations/google/drive/push', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ snapshotJson }),
-        });
-        if (res.ok) pushed += 1;
-      }
-      if (pushed === 0) {
-        toast.error(t('toolbar.backupAllToGoogleDriveFail'));
-      } else {
-        toast.success(t('toolbar.backupAllToGoogleDriveDone', { count: pushed }));
-      }
-    } catch {
-      toast.error(t('toolbar.backupAllToGoogleDriveFail'));
-    }
-  };
-
-  const openDriveSelectDialog = () => {
-    const allKeywords = listAllWorkspaceKeywordsInLocalStorage();
-    const recentMap = new Map(listRecentWorkspaces(100).map((e) => [e.keyword, e]));
-    const items: WorkspaceIndexEntry[] = allKeywords.map((kw) =>
-      recentMap.get(kw) ?? { keyword: kw, goal: 'learn', updatedAt: '' }
-    );
-    setDriveSelectItems(items);
-    setDriveSelectKeys(new Set(allKeywords));
-    setDriveSelectOpen(true);
-  };
-
-  const backupSelectedToDrive = async () => {
-    if (driveSelectKeys.size === 0) return;
-    setDriveSelectBusy(true);
-    let pushed = 0;
-    for (const kw of driveSelectKeys) {
-      const loaded = loadWorkspaceFromLocalStorage(kw);
-      if (!loaded.ok) continue;
-      const snapshotJson = serializeWorkspaceSnapshot(loaded.state);
-      try {
-        const res = await fetch('/api/integrations/google/drive/push', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ snapshotJson }),
-        });
-        if (res.ok) pushed += 1;
-      } catch {
-        /* continue with remaining */
-      }
-    }
-    setDriveSelectBusy(false);
-    setDriveSelectOpen(false);
-    if (pushed === 0) {
-      toast.error(t('toolbar.backupSelectFail'));
-    } else {
-      toast.success(t('toolbar.backupSelectDone', { count: pushed }));
-    }
-  };
-
   const zoomPct = Math.round(viewport.zoom * 100);
-
-  const recent = listRecentWorkspaces(10);
   const queryNodes = useMemo(() => state.nodes.filter((n) => n.type === 'query'), [state.nodes]);
   const answerNodes = useMemo(() => state.nodes.filter((n) => n.type === 'answer'), [state.nodes]);
   const qaPairs = useMemo(() => {
@@ -891,38 +786,6 @@ export function Toolbar({
               <Upload className="mr-2 size-4" />
               {t('toolbar.loadJson')}
             </DropdownMenuItem>
-            {driveConnected && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    window.setTimeout(() => void backupToGoogleDrive(), 0);
-                  }}
-                >
-                  <CloudUpload className="mr-2 size-4" />
-                  {t('toolbar.backupToGoogleDrive')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    window.setTimeout(() => void backupAllLocalToGoogleDrive(), 0);
-                  }}
-                >
-                  <CloudUpload className="mr-2 size-4" />
-                  {t('toolbar.backupAllToGoogleDrive')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    window.setTimeout(() => openDriveSelectDialog(), 0);
-                  }}
-                >
-                  <CloudUpload className="mr-2 size-4" />
-                  {t('toolbar.backupSelectToGoogleDrive')}
-                </DropdownMenuItem>
-              </>
-            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -1107,94 +970,6 @@ export function Toolbar({
           </button>
         </div>
       </div>
-      {/* Google Drive — select workspaces dialog */}
-      <Dialog open={driveSelectOpen} onOpenChange={(o) => !driveSelectBusy && setDriveSelectOpen(o)}>
-        <DialogContent className="max-h-[80vh] w-[min(100vw-2rem,28rem)] overflow-hidden flex flex-col gap-0 p-0">
-          <DialogHeader className="px-5 pt-5 pb-3">
-            <DialogTitle>{t('toolbar.backupSelectDialog.title')}</DialogTitle>
-            <p className="text-sm text-muted-foreground">{t('toolbar.backupSelectDialog.desc')}</p>
-          </DialogHeader>
-
-          {driveSelectItems.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-muted-foreground">
-              {t('toolbar.backupSelectDialog.noWorkspaces')}
-            </p>
-          ) : (
-            <>
-              <div className="flex items-center gap-3 border-b border-border px-5 py-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => setDriveSelectKeys(new Set(driveSelectItems.map((e) => e.keyword)))}
-                >
-                  {t('toolbar.backupSelectDialog.selectAll')}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => setDriveSelectKeys(new Set())}
-                >
-                  {t('toolbar.backupSelectDialog.deselectAll')}
-                </Button>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-2">
-                <div className="flex flex-col gap-1">
-                  {driveSelectItems.map((item) => {
-                    const checked = driveSelectKeys.has(item.keyword);
-                    return (
-                      <label
-                        key={item.keyword}
-                        className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-secondary/60"
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(v) => {
-                            setDriveSelectKeys((prev) => {
-                              const next = new Set(prev);
-                              if (v) next.add(item.keyword);
-                              else next.delete(item.keyword);
-                              return next;
-                            });
-                          }}
-                          className="mt-0.5 shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">{item.keyword}</p>
-                          {item.goal && (
-                            <p className="text-xs text-muted-foreground">{item.goal}</p>
-                          )}
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
-
-          <DialogFooter className="border-t border-border px-5 py-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDriveSelectOpen(false)}
-              disabled={driveSelectBusy}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => void backupSelectedToDrive()}
-              disabled={driveSelectBusy || driveSelectKeys.size === 0}
-            >
-              {driveSelectBusy
-                ? '…'
-                : t('toolbar.backupSelectDialog.backup', { count: driveSelectKeys.size })}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </header>
   );
 }

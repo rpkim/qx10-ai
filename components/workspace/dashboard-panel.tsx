@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { useI18n } from '@/components/i18n-provider';
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
 import {
-  loadDashboardGrid,
+  loadDashboardGridAsync,
   saveDashboardGrid,
   mergeLayoutWithPins,
   type DashboardGridItem,
@@ -110,8 +110,14 @@ export function DashboardPanel({ onClose, expanded, onExpandedChange }: Props) {
 
   useEffect(() => {
     if (editingGrid) return;
-    const saved = loadDashboardGrid(keyword);
-    setGridLayout(mergeLayoutWithPins(saved, orderedIds));
+    let cancelled = false;
+    void loadDashboardGridAsync(keyword).then((saved) => {
+      if (cancelled) return;
+      setGridLayout(mergeLayoutWithPins(saved, orderedIds));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [keyword, orderedIdsKey, editingGrid]);
 
   useEffect(() => {

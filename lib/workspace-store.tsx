@@ -33,18 +33,10 @@ import { consumeWorkspaceQueryStream } from '@/lib/ai/consume-query-stream';
 import { NODE_CANVAS_TOOLBAR_HEIGHT_PX } from './canvas-node-chrome';
 import { tr } from '@/lib/i18n/runtime';
 import {
-  saveWorkspaceToLocalStorage,
   normalizeTemplateSlotGraph,
 } from './workspace-snapshot';
+import { saveWorkspaceToServer } from './workspace-api';
 import { findIncomingAncestorIds } from '@/lib/workspace-node-search';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { buildAnswerSystemPrompt } from '@/lib/ai/prompts';
-import {
-  clearGeminiKeyEncrypted,
-  hasEncryptedGeminiKey,
-  loadGeminiKeyEncrypted,
-  saveGeminiKeyEncrypted,
-} from '@/lib/byok-gemini';
 import { isLocale, type Locale } from '@/lib/i18n/constants';
 
 /* ─────────────────────────────────────────────
@@ -405,13 +397,6 @@ function dataNodeFromApiPayload(
 }
 
 const MAX_FOLLOWUP_QUERY_NODES = 8;
-const DEFAULT_BROWSER_GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-2.5-flash'];
-const BROWSER_SEED_SYSTEM = `You help design a knowledge-discovery canvas. Output JSON only.
-Shape: {"questions": string[]}
-Rules:
-- Exactly 5 strings in "questions".
-- Each is one short, specific first-step question.
-- No duplicates; cover different angles.`;
 
 function readLocaleForAi(): Locale {
   if (typeof window === 'undefined') return 'en';
@@ -795,13 +780,6 @@ interface WorkspaceContextValue {
   runTemplateSlot: (slotNodeId: string) => void;
   toggleDashboardPin: (nodeId: string) => void;
   deleteNode: (nodeId: string) => void;
-  hasBrowserGeminiKey: boolean;
-  isBrowserGeminiUnlocked: boolean;
-  saveBrowserGeminiKey: (apiKey: string, passphrase: string) => Promise<void>;
-  unlockBrowserGeminiKey: (passphrase: string) => Promise<void>;
-  lockBrowserGeminiKey: () => void;
-  clearBrowserGeminiKey: () => Promise<void>;
-  generateBrowserSeedQueries: (keyword: string, goal: GoalType, locale: Locale) => Promise<string[]>;
   /** Re-run metadata extraction (keywords, follow-ups, optional data widget) for a completed answer. */
   refreshAnswerMetadata: (answerId: string) => Promise<void>;
   isDemoMode: boolean;
@@ -879,8 +857,6 @@ export function WorkspaceProvider({
 }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [aiCatalog, setAiCatalog] = React.useState<AiModelCatalog | null>(null);
-  const [browserGeminiKey, setBrowserGeminiKey] = React.useState<string | null>(null);
-  const [hasBrowserGeminiKey, setHasBrowserGeminiKey] = React.useState(false);
   const autosaveTimerRef = React.useRef<number | null>(null);
   const demoResponsesRef = React.useRef<Record<string, DemoResponse>>({});
 
@@ -913,42 +889,6 @@ export function WorkspaceProvider({
     };
   }, []);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    hasEncryptedGeminiKey()
-      .then((yes) => {
-        if (!cancelled) setHasBrowserGeminiKey(yes);
-      })
-      .catch(() => {
-        if (!cancelled) setHasBrowserGeminiKey(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const saveBrowserGeminiKey = useCallback(async (apiKey: string, passphrase: string) => {
-    await saveGeminiKeyEncrypted(apiKey, passphrase);
-    setBrowserGeminiKey(apiKey.trim());
-    setHasBrowserGeminiKey(true);
-  }, []);
-
-  const unlockBrowserGeminiKey = useCallback(async (passphrase: string) => {
-    const key = await loadGeminiKeyEncrypted(passphrase);
-    setBrowserGeminiKey(key);
-    setHasBrowserGeminiKey(true);
-  }, []);
-
-  const lockBrowserGeminiKey = useCallback(() => {
-    setBrowserGeminiKey(null);
-  }, []);
-
-  const clearBrowserGeminiKey = useCallback(async () => {
-    await clearGeminiKeyEncrypted();
-    setBrowserGeminiKey(null);
-    setHasBrowserGeminiKey(false);
-  }, []);
-
   // Stable ref to always-current nodes, avoiding stale closure in runQuery
   const nodesRef = React.useRef(state.nodes);
   const edgesRef = React.useRef(state.edges);
@@ -972,9 +912,9 @@ export function WorkspaceProvider({
     if (autosaveTimerRef.current != null) {
       window.clearTimeout(autosaveTimerRef.current);
     }
-    // Default persistence until DB is added: autosave current workspace silently.
+    // Autosave workspace to server (debounced).
     autosaveTimerRef.current = window.setTimeout(() => {
-      saveWorkspaceToLocalStorage(state);
+      void saveWorkspaceToServer(state);
       autosaveTimerRef.current = null;
     }, 450);
     return () => {
@@ -983,64 +923,6 @@ export function WorkspaceProvider({
       }
     };
   }, [state]);
-
-  const effectiveAiCatalog = React.useMemo<AiModelCatalog | null>(() => {
-    if (!aiCatalog) return null;
-    if (!hasBrowserGeminiKey) return aiCatalog;
-    const options = [...aiCatalog.options];
-    for (const model of DEFAULT_BROWSER_GEMINI_MODELS) {
-      const id = `gemini:${model}`;
-      if (!options.some((o) => o.id === id)) {
-        options.push({
-          id,
-          provider: 'gemini',
-          model,
-          label: `Gemini · ${model} (BYOK)`,
-        });
-      }
-    }
-    const defaultChoice = aiCatalog.defaultChoice || options[0]?.id || '';
-    return { defaultChoice, options };
-  }, [aiCatalog, hasBrowserGeminiKey]);
-
-  const generateBrowserSeedQueries = useCallback(
-    async (keyword: string, goal: GoalType, locale: Locale): Promise<string[]> => {
-      if (!browserGeminiKey) return [];
-      try {
-        const geminiOption = effectiveAiCatalog?.options.find((o) => o.provider === 'gemini');
-        const modelName = geminiOption?.model || 'gemini-3.5-flash';
-        const genAI = new GoogleGenerativeAI(browserGeminiKey);
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: { responseMimeType: 'application/json' },
-        });
-        const lang =
-          locale === 'ko'
-            ? 'Korean (ko)'
-            : locale === 'ja'
-              ? 'Japanese (ja)'
-              : locale === 'es'
-                ? 'Spanish (es)'
-                : locale === 'zh'
-                  ? 'Simplified Chinese (zh-Hans)'
-                  : 'English (en)';
-        const contextLine = contextRef.current ? `\nContext: "${contextRef.current}"` : '';
-        const user = `Topic / keyword: "${keyword}"${contextLine}\nExploration mode: ${goal}\nDefault output language: ${lang}\nIf the topic explicitly asks for another language, follow that explicit request.`;
-        const r = await model.generateContent(`${BROWSER_SEED_SYSTEM}\n\n${user}`);
-        const raw = r.response.text();
-        if (!raw?.trim()) return [];
-        const parsed = JSON.parse(raw) as { questions?: unknown };
-        if (!Array.isArray(parsed.questions)) return [];
-        return parsed.questions
-          .map((x) => (typeof x === 'string' ? x.trim() : ''))
-          .filter(Boolean)
-          .slice(0, 6);
-      } catch {
-        return [];
-      }
-    },
-    [browserGeminiKey, effectiveAiCatalog]
-  );
 
   const initWorkspace = useCallback(
     (keyword: string, goal: GoalType, context?: string) => {
@@ -1207,14 +1089,6 @@ export function WorkspaceProvider({
     }
 
     const runLiveAi = async () => {
-      const modelId =
-        queryNode.modelChoice ??
-        effectiveAiCatalog?.defaultChoice ??
-        effectiveAiCatalog?.options[0]?.id ??
-        '';
-      const selected = effectiveAiCatalog?.options.find((o) => o.id === modelId) ?? null;
-      const shouldUseBrowserGemini =
-        selected?.provider === 'gemini' && !!browserGeminiKey && queryNode.toolChoice !== 'market';
       const contextPairs = buildAncestorContextPairs(nodesRef.current, queryId);
 
       let answerNodeCreated = false;
@@ -1266,58 +1140,89 @@ export function WorkspaceProvider({
         });
       };
 
-      if (shouldUseBrowserGemini) {
-        try {
-          ensureAnswerNode();
-          const genAI = new GoogleGenerativeAI(browserGeminiKey);
-          const model = genAI.getGenerativeModel({
-            model: selected?.model || modelId.replace(/^gemini:/, ''),
-            systemInstruction: buildAnswerSystemPrompt(goalRef.current, readLocaleForAi()),
+      let res: Response;
+      try {
+        res = await fetch('/api/workspace/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: queryNode.question,
+            keyword: keywordRef.current,
+            goal: goalRef.current,
+            context: contextRef.current ?? null,
+            contextPairs,
+            modelChoice: queryNode.modelChoice ?? null,
+            toolChoice: queryNode.toolChoice ?? 'auto',
+            locale: readLocaleForAi(),
+          }),
+        });
+      } catch {
+        toast.error(tr('ai.networkError'));
+        dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+        return;
+      }
+
+      if (res.status === 503) {
+        const errBody = (await res.json().catch(() => ({}))) as {
+          code?: string;
+          error?: string;
+        };
+        if (errBody.code === 'NO_API_KEY' || errBody.code === 'NO_AI_CONFIGURED') {
+          toast.info(tr('ai.demoMode'), {
+            duration: 6000,
           });
-          const contextText =
-            contextPairs.length > 0
-              ? [
-                  'Prior context in this workspace (oldest to latest):',
-                  ...contextPairs.map(
-                    (p, i) => `Context Q${i + 1}: ${p.question}\nContext A${i + 1}: ${p.answer}`
-                  ),
-                  '',
-                ].join('\n')
-              : '';
-          const contextSuffix = contextRef.current ? ` (context: "${contextRef.current}")` : '';
-          const userText = `Workspace root keyword/topic: "${keywordRef.current}"${contextSuffix}\nExploration goal: ${goalRef.current}\n\n${contextText}User query:\n${queryNode.question}`;
-          const streamResult = await model.generateContentStream(userText);
-          for await (const chunk of streamResult.stream) {
-            let text = '';
-            try {
-              text = chunk.text();
-            } catch {
-              text = '';
-            }
-            if (text) {
-              content += text;
-              dispatch({
-                type: 'UPDATE_NODE',
-                id: answerId,
-                updates: {
-                  content,
-                  streamedChars: content.length,
-                },
-              });
-            }
-          }
-          suggested = ['What should I explore next?', 'Can you compare alternatives?'];
-          doneReceived = true;
-          finalizeSuccess();
-        } catch (e) {
-          streamFailed = true;
-          const msg = e instanceof Error ? e.message : 'Gemini request failed';
-          toast.error(msg);
+          runMockFlow(getMockResponse(queryNode.question));
+          return;
+        }
+        toast.error(errBody.error || tr('ai.serviceUnavailable'));
+        dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+        return;
+      }
+
+      if (!res.ok) {
+        toast.error(tr('ai.requestFailed', { status: res.status }));
+        dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+        return;
+      }
+      if (!res.body) {
+        toast.error(tr('ai.emptyResponse'));
+        dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+        return;
+      }
+      ensureAnswerNode();
+
+      await consumeWorkspaceQueryStream(res, {
+        onToken: (text) => {
+          content += text;
           dispatch({
             type: 'UPDATE_NODE',
-            id: queryId,
-            updates: { status: 'suggested' },
+            id: answerId,
+            updates: {
+              content,
+              streamedChars: content.length,
+            },
           });
+        },
+        onMetadata: (m) => {
+          suggested = m.suggestedQueries;
+          dispatch({
+            type: 'UPDATE_NODE',
+            id: answerId,
+            updates: {
+              extractedKeywords: m.extractedKeywords,
+              suggestedQueries: m.suggestedQueries,
+            },
+          });
+          metaPayload = m.dataNode as Record<string, unknown> | null;
+        },
+        onDone: () => {
+          doneReceived = true;
+          finalizeSuccess();
+        },
+        onError: (msg) => {
+          streamFailed = true;
+          toast.error(msg);
+          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
           const fallback =
             content.trim().length > 0
               ? `${content.trim()}\n\n—\n${msg}`
@@ -1331,107 +1236,8 @@ export function WorkspaceProvider({
               streamedChars: fallback.length,
             },
           });
-        }
-      } else {
-        let res: Response;
-        try {
-          res = await fetch('/api/workspace/query', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              question: queryNode.question,
-              keyword: keywordRef.current,
-              goal: goalRef.current,
-              context: contextRef.current ?? null,
-              contextPairs,
-              modelChoice: queryNode.modelChoice ?? null,
-              toolChoice: queryNode.toolChoice ?? 'auto',
-              locale: readLocaleForAi(),
-            }),
-          });
-        } catch {
-          toast.error(tr('ai.networkError'));
-          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-          return;
-        }
-
-        if (res.status === 503) {
-          const errBody = (await res.json().catch(() => ({}))) as {
-            code?: string;
-            error?: string;
-          };
-          if (errBody.code === 'NO_API_KEY' || errBody.code === 'NO_AI_CONFIGURED') {
-            toast.info(tr('ai.demoMode'), {
-              duration: 6000,
-            });
-            runMockFlow(getMockResponse(queryNode.question));
-            return;
-          }
-          toast.error(errBody.error || tr('ai.serviceUnavailable'));
-          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-          return;
-        }
-
-        if (!res.ok) {
-          toast.error(tr('ai.requestFailed', { status: res.status }));
-          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-          return;
-        }
-        if (!res.body) {
-          toast.error(tr('ai.emptyResponse'));
-          dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-          return;
-        }
-        ensureAnswerNode();
-
-        await consumeWorkspaceQueryStream(res, {
-          onToken: (text) => {
-            content += text;
-            dispatch({
-              type: 'UPDATE_NODE',
-              id: answerId,
-              updates: {
-                content,
-                streamedChars: content.length,
-              },
-            });
-          },
-          onMetadata: (m) => {
-            suggested = m.suggestedQueries;
-            dispatch({
-              type: 'UPDATE_NODE',
-              id: answerId,
-              updates: {
-                extractedKeywords: m.extractedKeywords,
-                suggestedQueries: m.suggestedQueries,
-              },
-            });
-            metaPayload = m.dataNode as Record<string, unknown> | null;
-          },
-          onDone: () => {
-            doneReceived = true;
-            finalizeSuccess();
-          },
-          onError: (msg) => {
-            streamFailed = true;
-            toast.error(msg);
-            dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
-            const fallback =
-              content.trim().length > 0
-                ? `${content.trim()}\n\n—\n${msg}`
-                : `Something went wrong: ${msg}`;
-            dispatch({
-              type: 'UPDATE_NODE',
-              id: answerId,
-              updates: {
-                status: 'complete',
-                content: fallback,
-                streamedChars: fallback.length,
-              },
-            });
-          },
-        });
-      }
+        },
+      });
 
       if (!doneReceived && !streamFailed && content.length > 0) {
         finalizeSuccess();
@@ -1439,7 +1245,7 @@ export function WorkspaceProvider({
     };
 
     void runLiveAi();
-  }, [browserGeminiKey, effectiveAiCatalog]);
+  }, [aiCatalog]);
 
   const addQueryTemplateNode = useCallback(
     ({
@@ -1783,7 +1589,7 @@ export function WorkspaceProvider({
       value={{
         state,
         dispatch,
-        aiCatalog: effectiveAiCatalog,
+        aiCatalog,
         initWorkspace,
         runQuery,
         addCustomQuery,
@@ -1793,13 +1599,6 @@ export function WorkspaceProvider({
         runTemplateSlot,
         toggleDashboardPin,
         deleteNode,
-        hasBrowserGeminiKey,
-        isBrowserGeminiUnlocked: !!browserGeminiKey,
-        saveBrowserGeminiKey,
-        unlockBrowserGeminiKey,
-        lockBrowserGeminiKey,
-        clearBrowserGeminiKey,
-        generateBrowserSeedQueries,
         refreshAnswerMetadata,
         isDemoMode,
       }}

@@ -51,8 +51,7 @@ interface Props {
 
 export function RootNode({ node }: Props) {
   const { t, locale } = useI18n();
-  const { addCustomQuery, generateBrowserSeedQueries, isBrowserGeminiUnlocked, isDemoMode, state } =
-    useWorkspace();
+  const { addCustomQuery, isDemoMode, state } = useWorkspace();
   const introduceReveal = useIntroduceReveal();
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
@@ -133,62 +132,22 @@ export function RootNode({ node }: Props) {
           setIsLoadingSuggestions(false);
           return;
         }
-        if (!isBrowserGeminiUnlocked) {
-          const payload = { questions: fallback, status: 'fallback' as const };
-          seedSuggestionCache.set(cacheKey, payload);
-          writeSeedSuggestionsToStorage(cacheKey, payload);
-          setSeedSuggestions(fallback);
-          setSuggestionStatus('fallback');
-          setIsLoadingSuggestions(false);
-          return;
-        }
-        void generateBrowserSeedQueries(node.keyword, node.goal, locale).then((browserQs) => {
-          if (cancelled) return;
-          if (browserQs.length >= 3) {
-            const payload = { questions: browserQs, status: 'ai' as const };
-            seedSuggestionCache.set(cacheKey, payload);
-            writeSeedSuggestionsToStorage(cacheKey, payload);
-            setSeedSuggestions(browserQs);
-            setSuggestionStatus('ai');
-          } else {
-            const payload = { questions: fallback, status: 'fallback' as const };
-            seedSuggestionCache.set(cacheKey, payload);
-            writeSeedSuggestionsToStorage(cacheKey, payload);
-            setSeedSuggestions(fallback);
-            setSuggestionStatus('fallback');
-          }
-          setIsLoadingSuggestions(false);
-        });
+        const payload = { questions: fallback, status: 'fallback' as const };
+        seedSuggestionCache.set(cacheKey, payload);
+        writeSeedSuggestionsToStorage(cacheKey, payload);
+        setSeedSuggestions(fallback);
+        setSuggestionStatus('fallback');
+        setIsLoadingSuggestions(false);
       })
       .catch(() => {
         if (cancelled) return;
         const fallback = getSuggestedQueries(node.keyword).slice(0, 6);
-        if (!isBrowserGeminiUnlocked) {
-          const payload = { questions: fallback, status: 'fallback' as const };
-          seedSuggestionCache.set(cacheKey, payload);
-          writeSeedSuggestionsToStorage(cacheKey, payload);
-          setSeedSuggestions(fallback);
-          setSuggestionStatus('fallback');
-          setIsLoadingSuggestions(false);
-          return;
-        }
-        void generateBrowserSeedQueries(node.keyword, node.goal, locale).then((browserQs) => {
-          if (cancelled) return;
-          if (browserQs.length >= 3) {
-            const payload = { questions: browserQs, status: 'ai' as const };
-            seedSuggestionCache.set(cacheKey, payload);
-            writeSeedSuggestionsToStorage(cacheKey, payload);
-            setSeedSuggestions(browserQs);
-            setSuggestionStatus('ai');
-          } else {
-            const payload = { questions: fallback, status: 'fallback' as const };
-            seedSuggestionCache.set(cacheKey, payload);
-            writeSeedSuggestionsToStorage(cacheKey, payload);
-            setSeedSuggestions(fallback);
-            setSuggestionStatus('fallback');
-          }
-          setIsLoadingSuggestions(false);
-        });
+        const payload = { questions: fallback, status: 'fallback' as const };
+        seedSuggestionCache.set(cacheKey, payload);
+        writeSeedSuggestionsToStorage(cacheKey, payload);
+        setSeedSuggestions(fallback);
+        setSuggestionStatus('fallback');
+        setIsLoadingSuggestions(false);
       });
     return () => {
       cancelled = true;
@@ -201,8 +160,6 @@ export function RootNode({ node }: Props) {
     locale,
     introduceRevealActive,
     rootChildQueriesKey,
-    generateBrowserSeedQueries,
-    isBrowserGeminiUnlocked,
   ]);
 
   const handleSubmitCustom = (e: React.FormEvent) => {

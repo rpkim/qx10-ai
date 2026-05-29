@@ -130,7 +130,7 @@ export async function GET(req: Request) {
       await store.recordConsent({
         sub: profile.sub,
         email: profile.email,
-        version: 'v1.1',
+        version: 'v1.2',
         ts,
       });
     } catch (e) {

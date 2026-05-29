@@ -1,6 +1,6 @@
 /**
- * Expanded dashboard widget positions (percent of the board, 0–100).
- * Stored per keyword until a DB exists.
+ * Dashboard widget positions (percent of the board, 0–100).
+ * Persisted per user + keyword on the server; in-memory cache for sync reads in UI.
  */
 export type DashboardGridItem = {
   id: string;
@@ -10,63 +10,47 @@ export type DashboardGridItem = {
   h: number;
 };
 
-const PREFIX = 'qx10.dashboard.grid.v1:';
+const cache = new Map<string, DashboardGridItem[]>();
 
-function keyFor(keyword: string): string {
-  return `${PREFIX}${encodeURIComponent(keyword.trim())}`;
+function cacheKey(keyword: string): string {
+  return keyword.trim();
 }
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
+export function saveDashboardGridCache(keyword: string, items: DashboardGridItem[]): void {
+  if (!keyword.trim()) return;
+  cache.set(cacheKey(keyword), items);
+}
+
 export function loadDashboardGrid(keyword: string): DashboardGridItem[] | null {
-  if (typeof window === 'undefined' || !keyword.trim()) return null;
-  try {
-    const raw = localStorage.getItem(keyFor(keyword));
-    if (!raw) return null;
-    const data = JSON.parse(raw) as unknown;
-    if (!Array.isArray(data)) return null;
-    const out: DashboardGridItem[] = [];
-    for (const row of data) {
-      if (!row || typeof row !== 'object') continue;
-      const r = row as Record<string, unknown>;
-      if (typeof r.id !== 'string') continue;
-      const x = Number(r.x);
-      const y = Number(r.y);
-      const w = Number(r.w);
-      const h = Number(r.h);
-      if (![x, y, w, h].every((n) => Number.isFinite(n))) continue;
-      out.push({
-        id: r.id,
-        x: clamp(x, 0, 100),
-        y: clamp(y, 0, 100),
-        w: clamp(w, 12, 100),
-        h: clamp(h, 10, 100),
-      });
-    }
-    return out.length ? out : null;
-  } catch {
-    return null;
-  }
+  if (!keyword.trim()) return null;
+  const hit = cache.get(cacheKey(keyword));
+  return hit?.length ? hit : null;
+}
+
+export async function loadDashboardGridAsync(keyword: string): Promise<DashboardGridItem[] | null> {
+  const cached = loadDashboardGrid(keyword);
+  if (cached) return cached;
+  const { fetchDashboardLayoutFromServer } = await import('./workspace-api');
+  const layout = await fetchDashboardLayoutFromServer(keyword);
+  if (layout?.length) saveDashboardGridCache(keyword, layout);
+  return layout;
 }
 
 export function saveDashboardGrid(keyword: string, items: DashboardGridItem[]): void {
-  if (typeof window === 'undefined' || !keyword.trim()) return;
-  try {
-    localStorage.setItem(keyFor(keyword.trim()), JSON.stringify(items));
-  } catch {
-    /* ignore */
-  }
+  if (!keyword.trim()) return;
+  saveDashboardGridCache(keyword, items);
+  void import('./workspace-api').then(({ saveDashboardLayoutToServer }) =>
+    saveDashboardLayoutToServer(keyword, items)
+  );
 }
 
 export function removeDashboardGrid(keyword: string): void {
-  if (typeof window === 'undefined' || !keyword.trim()) return;
-  try {
-    localStorage.removeItem(keyFor(keyword.trim()));
-  } catch {
-    /* ignore */
-  }
+  if (!keyword.trim()) return;
+  cache.delete(cacheKey(keyword));
 }
 
 export function defaultGridLayout(pinnedIds: string[]): DashboardGridItem[] {
@@ -109,4 +93,13 @@ export function mergeLayoutWithPins(
       h,
     };
   });
+}
+
+/** Collect all cached dashboard layouts (for one-time local → server migration). */
+export function collectCachedDashboardLayouts(): Record<string, DashboardGridItem[]> {
+  const out: Record<string, DashboardGridItem[]> = {};
+  for (const [kw, layout] of cache) {
+    if (layout.length) out[kw] = layout;
+  }
+  return out;
 }

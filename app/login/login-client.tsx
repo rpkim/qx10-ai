@@ -7,7 +7,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { useI18n } from '@/components/i18n-provider';
 
-const CONSENT_VERSION = 'v1.1';
+const CONSENT_VERSION = 'v1.2';
 const CONSENT_LS_KEY = 'qx10:consent';
 
 function safeNext(raw: string | null): string {
