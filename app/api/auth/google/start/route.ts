@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 import { NextResponse } from 'next/server';
 import {
   assertGoogleClientConfigured,
-  getGoogleRedirectUri,
+  assertAppUrlConfigured,
 } from '@/lib/integrations/google-oauth-config';
 import {
   AUTH_OAUTH_NEXT_COOKIE,
@@ -17,13 +17,12 @@ export const dynamic = 'force-dynamic';
 const SIGN_IN_SCOPES = ['openid', 'email', 'profile'].join(' ');
 
 /**
- * Identity-only Google sign-in. Distinct from the existing Drive backup flow
- * (`/api/integrations/google/start`) which requests `drive.appdata`.
+ * Identity-only Google sign-in (openid, email, profile).
  */
 export async function GET(req: Request) {
   try {
     assertGoogleClientConfigured();
-    getGoogleRedirectUri();
+    assertAppUrlConfigured();
   } catch {
     return NextResponse.json(
       { error: 'Google sign-in is not configured on this server.' },

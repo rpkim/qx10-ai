@@ -7,8 +7,8 @@ export const metadata = {
 
 export const dynamic = 'force-static';
 
-const PRIVACY_VERSION = 'v1.1';
-const EFFECTIVE_DATE = 'May 7, 2026';
+const PRIVACY_VERSION = 'v1.2';
+const EFFECTIVE_DATE = 'May 29, 2026';
 
 export default function PrivacyPage() {
   return (
@@ -35,8 +35,7 @@ export default function PrivacyPage() {
           <p>
             Qx10.lol (&quot;the Service,&quot; &quot;we,&quot; &quot;us&quot;)
             is a discovery workspace. This policy explains what limited
-            information we collect, why, and how it is handled. The Service is
-            designed to keep most user content on the user&apos;s own device.
+            information we collect, why, and how it is handled.
           </p>
           <p>
             <strong className="text-foreground">Snapshot:</strong> we do{' '}
@@ -64,17 +63,15 @@ export default function PrivacyPage() {
             </li>
             <li>
               <span className="font-medium text-foreground">Workspace content.</span>{' '}
-              The questions, answers, and notes you create live in your
-              browser&apos;s local storage by default. They are uploaded to a
-              third party only if you explicitly enable Google Drive backup,
-              and are written to a hidden Drive app data folder owned by your
-              own Google account.
+              When you are signed in, the questions, answers, notes, and layout
+              you create are saved to our server (Supabase Postgres) and linked
+              to your account. You may also have older workspaces stored only in
+              this browser until you migrate them from Settings.
             </li>
             <li>
               <span className="font-medium text-foreground">Cookies.</span> We
               use first-party, http-only cookies to remember your sign-in
-              session and any optional Google Drive connection. We do not use
-              third-party advertising cookies.
+              session. We do not use third-party advertising cookies.
             </li>
             <li>
               <span className="font-medium text-foreground">Aggregated analytics.</span>{' '}
@@ -121,7 +118,7 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-1 pl-5">
             <li>
               <span className="font-medium text-foreground">Google.</span> For
-              sign-in (OpenID Connect) and optional Drive backup.
+              sign-in (OpenID Connect) only.
             </li>
             <li>
               <span className="font-medium text-foreground">AI providers.</span>{' '}
@@ -131,7 +128,7 @@ export default function PrivacyPage() {
             </li>
             <li>
               <span className="font-medium text-foreground">Hosting.</span>{' '}
-              Vercel (application hosting), Supabase (server-side analytics
+              Vercel (application hosting), Supabase (analytics and workspace
               storage when configured by the operator).
             </li>
             <li>
@@ -158,13 +155,14 @@ export default function PrivacyPage() {
               request.
             </li>
             <li>
-              <span className="font-medium text-foreground">Workspace content (local).</span>{' '}
-              Lives in your browser only — retained until you clear site data.
+              <span className="font-medium text-foreground">Workspace content (cloud).</span>{' '}
+              Kept for as long as your account exists. Deleted within 30 days
+              of an account-deletion request.
             </li>
             <li>
-              <span className="font-medium text-foreground">Workspace content (Google Drive).</span>{' '}
-              Retained in your own Google account&apos;s app-data folder until
-              you remove it; we do not have an additional copy.
+              <span className="font-medium text-foreground">Workspace content (local only).</span>{' '}
+              Lives in your browser only until migrated — retained until you
+              clear site data or upload to cloud storage.
             </li>
           </ul>
 
@@ -173,9 +171,7 @@ export default function PrivacyPage() {
           </h2>
           <p>
             Session cookies are sealed with AES-256-GCM and marked HttpOnly,
-            Secure, and SameSite=Lax. We never store Google passwords. If you
-            connect Google Drive, your refresh token is encrypted before being
-            stored in a cookie on your device.
+            Secure, and SameSite=Lax. We never store Google passwords.
           </p>
 
           <h2 className="pt-2 text-base font-semibold text-foreground">
@@ -184,7 +180,8 @@ export default function PrivacyPage() {
           <ul className="list-disc space-y-1 pl-5">
             <li>You can sign out at any time from the user menu.</li>
             <li>
-              You can disconnect Google Drive backup from the Settings page.
+              You can upload legacy browser-only workspaces to cloud storage
+              from the Settings page.
             </li>
             <li>
               You can clear all locally-stored workspaces by clearing your
@@ -220,8 +217,9 @@ export default function PrivacyPage() {
             >
               Settings → Danger zone
             </Link>
-            . This removes your user record and cascade-deletes all associated
-            server-side events. Workspaces stored locally in your browser are
+            . This removes your user record, cascade-deletes all associated
+            server-side events, and deletes all cloud-stored workspaces and
+            preferences. Workspaces stored only locally in your browser are
             not affected — clear your browser&apos;s site data for this domain
             to remove those. Your Google account itself is untouched; you may
             additionally revoke this app&apos;s access at{' '}

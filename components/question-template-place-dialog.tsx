@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useI18n } from '@/components/i18n-provider';
-import { loadQuestionTemplates, type QuestionTemplate } from '@/lib/question-templates';
+import { loadQuestionTemplatesAsync, type QuestionTemplate } from '@/lib/question-templates';
 
 interface Props {
   open: boolean;
@@ -33,11 +33,12 @@ export function QuestionTemplatePlaceDialog({ open, onOpenChange, onPick }: Prop
 
   useEffect(() => {
     if (!open) return;
-    const list = loadQuestionTemplates();
-    setTemplates(list);
-    setSelectedId((prev) => {
-      if (prev && list.some((x) => x.id === prev)) return prev;
-      return list[0]?.id ?? '';
+    void loadQuestionTemplatesAsync().then((list) => {
+      setTemplates(list);
+      setSelectedId((prev) => {
+        if (prev && list.some((x) => x.id === prev)) return prev;
+        return list[0]?.id ?? '';
+      });
     });
   }, [open]);
 

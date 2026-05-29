@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 const AUTH_SESSION_COOKIE = 'qx10_session';
-const DRIVE_TOKEN_COOKIE = 'qx10_gdrive';
 
 /**
  * Paths that should always be reachable without a sign-in session.
@@ -17,8 +16,6 @@ const PUBLIC_EXACT = new Set<string>([
 const PUBLIC_PREFIXES = [
   '/_next/',
   '/api/auth/',
-  '/api/integrations/google/start',
-  '/api/integrations/google/callback',
   '/service/introduce',
   '/legal/',
   '/assets/',
@@ -48,10 +45,7 @@ export function middleware(req: NextRequest) {
   if (isPublicPath(pathname)) return NextResponse.next();
   if (isStaticAsset(pathname)) return NextResponse.next();
 
-  // Either an explicit sign-in cookie OR a connected Drive cookie counts:
-  // both can only be set by completing a Google OAuth flow on this server.
-  const hasSession =
-    req.cookies.get(AUTH_SESSION_COOKIE)?.value || req.cookies.get(DRIVE_TOKEN_COOKIE)?.value;
+  const hasSession = req.cookies.get(AUTH_SESSION_COOKIE)?.value;
 
   if (hasSession) return NextResponse.next();
 

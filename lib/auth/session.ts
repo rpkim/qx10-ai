@@ -2,9 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypt
 import { cookies } from 'next/headers';
 
 /**
- * Sign-in session cookie. Independent from the optional Google Drive
- * connection cookie (`qx10_gdrive`): a session only certifies "this
- * browser is signed in as <email>", with no refresh token attached.
+ * Sign-in session cookie. Certifies that this browser is signed in as <email>.
  */
 export const AUTH_SESSION_COOKIE = 'qx10_session';
 export const AUTH_OAUTH_STATE_COOKIE = 'qx10_auth_st';

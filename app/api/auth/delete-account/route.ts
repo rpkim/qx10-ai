@@ -6,17 +6,15 @@ import {
   authCookieBase,
   getAuthSession,
 } from '@/lib/auth/session';
-import { GOOGLE_TOKEN_COOKIE } from '@/lib/integrations/google-oauth-config';
 import { getAnalyticsStore } from '@/lib/server/analytics/store';
+import { getWorkspaceStore } from '@/lib/server/workspaces/store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Hard-delete the signed-in user from analytics storage and clear all
- * session/Drive cookies. The user's Google account itself is untouched —
- * we don't have permission to delete that, and the response includes the
- * URL where the user can revoke this app's Google access if they wish.
+ * Hard-delete the signed-in user from analytics and workspace storage, then
+ * clear session cookies. The user's Google account itself is untouched.
  */
 export async function POST(req: Request) {
   const session = await getAuthSession();
@@ -43,6 +41,7 @@ export async function POST(req: Request) {
   let removed = false;
   try {
     removed = await getAnalyticsStore().deleteUser(session.sub);
+    await getWorkspaceStore().deleteAllForUser(session.sub);
   } catch (e) {
     console.error('[delete-account] store delete failed', e);
     return NextResponse.json({ error: 'store_error' }, { status: 500 });
@@ -53,12 +52,7 @@ export async function POST(req: Request) {
     removed,
     revokeUrl: 'https://myaccount.google.com/permissions',
   });
-  for (const name of [
-    AUTH_SESSION_COOKIE,
-    AUTH_OAUTH_STATE_COOKIE,
-    AUTH_OAUTH_NEXT_COOKIE,
-    GOOGLE_TOKEN_COOKIE,
-  ]) {
+  for (const name of [AUTH_SESSION_COOKIE, AUTH_OAUTH_STATE_COOKIE, AUTH_OAUTH_NEXT_COOKIE]) {
     res.cookies.set(name, '', { ...authCookieBase, maxAge: 0 });
   }
   return res;

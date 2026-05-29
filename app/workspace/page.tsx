@@ -11,7 +11,7 @@ import { DashboardPanel } from '@/components/workspace/dashboard-panel';
 import { MobileWorkspaceShell } from '@/components/workspace/mobile-workspace-shell';
 import { registerWorkspaceVisit } from '@/lib/workspace-index';
 import { useI18n } from '@/components/i18n-provider';
-import { loadWorkspaceFromLocalStorage } from '@/lib/workspace-snapshot';
+import { loadWorkspaceFromServer } from '@/lib/workspace-api';
 import { readWorkspaceLaunch } from '@/lib/workspace-launch';
 import { focusQueryNodeOnCanvas } from '@/lib/workspace-focus-query-node';
 
@@ -84,10 +84,18 @@ function WorkspaceInner() {
 
   useEffect(() => {
     const launch = readWorkspaceLaunch(searchParams);
-    if (launch) {
-      const saved = loadWorkspaceFromLocalStorage(launch.keyword);
+    if (!launch) {
+      router.replace('/');
+      return;
+    }
+    void (async () => {
+      const saved = await loadWorkspaceFromServer(launch.keyword);
       if (saved.ok) {
         dispatch({ type: 'LOAD_SNAPSHOT', snapshot: saved.state });
+        if (saved.dashboardLayout?.length) {
+          const { saveDashboardGridCache } = await import('@/lib/dashboard-layout-storage');
+          saveDashboardGridCache(launch.keyword, saved.dashboardLayout);
+        }
       } else {
         initWorkspace(launch.keyword, launch.goal, launch.context);
       }
@@ -96,10 +104,7 @@ function WorkspaceInner() {
         setDashboardExpanded(true);
       }
       setReady(true);
-    } else {
-      router.replace('/');
-    }
-    // Intentionally once per provider mount; `ws` key remounts when starting a new workspace.
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

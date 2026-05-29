@@ -11,18 +11,13 @@ import { UserMenu } from '@/components/auth/user-menu';
 import { useI18n } from '@/components/i18n-provider';
 import { workspaceUrl } from '@/lib/workspace-url';
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
-import { ExternalLink, HelpCircle, KeyRound, Lock, LockOpen, Settings } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { clearGeminiKeyEncrypted, hasEncryptedGeminiKey, saveGeminiKeyEncrypted } from '@/lib/byok-gemini';
+import { Settings } from 'lucide-react';
 import {
-  listRecentWorkspaces,
+  listRecentWorkspacesAsync,
   removeWorkspaceVisit,
   type WorkspaceIndexEntry,
 } from '@/lib/workspace-index';
 import { readWorkspaceLaunch } from '@/lib/workspace-launch';
-import { removeWorkspaceFromLocalStorage } from '@/lib/workspace-snapshot';
 import { removeDashboardGrid } from '@/lib/dashboard-layout-storage';
 import { trackSearch } from '@/lib/telemetry/client';
 
@@ -43,13 +38,6 @@ export default function LandingPage() {
   const [focused, setFocused] = useState(false);
   const [contextFocused, setContextFocused] = useState(false);
   const [recent, setRecent] = useState<WorkspaceIndexEntry[]>([]);
-  const [byokOpen, setByokOpen] = useState(false);
-  const [byokHowto, setByokHowto] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [passphraseInput, setPassphraseInput] = useState('');
-  const [byokBusy, setByokBusy] = useState(false);
-  const [hasByok, setHasByok] = useState(false);
-  const [byokUnlocked, setByokUnlocked] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startAnimPhase, setStartAnimPhase] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -72,10 +60,7 @@ export default function LandingPage() {
   };
 
   useEffect(() => {
-    setRecent(listRecentWorkspaces(6));
-    hasEncryptedGeminiKey()
-      .then((v) => setHasByok(v))
-      .catch(() => setHasByok(false));
+    void listRecentWorkspacesAsync(6).then(setRecent);
   }, []);
 
   useEffect(() => {
@@ -112,47 +97,11 @@ export default function LandingPage() {
 
   const deleteWorkspace = (entry: WorkspaceIndexEntry) => {
     if (!window.confirm(t('landing.deleteWorkspaceConfirm'))) return;
-    removeWorkspaceFromLocalStorage(entry.keyword);
-    removeDashboardGrid(entry.keyword);
-    removeWorkspaceVisit(entry.keyword);
-    setRecent((prev) => prev.filter((x) => x.keyword !== entry.keyword));
-    toast.success(t('landing.deleteWorkspaceDone'));
-  };
-
-  const saveByok = async () => {
-    if (!apiKeyInput.trim() || !passphraseInput.trim()) {
-      toast.error('API key and passphrase are required.');
-      return;
-    }
-    setByokBusy(true);
-    try {
-      await saveGeminiKeyEncrypted(apiKeyInput, passphraseInput);
-      setHasByok(true);
-      setByokUnlocked(true);
-      setApiKeyInput('');
-      setPassphraseInput('');
-      toast.success('Gemini key encrypted and stored in this browser.');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to save key');
-    } finally {
-      setByokBusy(false);
-    }
-  };
-
-  const clearByok = async () => {
-    setByokBusy(true);
-    try {
-      await clearGeminiKeyEncrypted();
-      setHasByok(false);
-      setByokUnlocked(false);
-      setApiKeyInput('');
-      setPassphraseInput('');
-      toast.success('Stored Gemini key deleted.');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to delete key');
-    } finally {
-      setByokBusy(false);
-    }
+    void removeWorkspaceVisit(entry.keyword).then(() => {
+      removeDashboardGrid(entry.keyword);
+      setRecent((prev) => prev.filter((x) => x.keyword !== entry.keyword));
+      toast.success(t('landing.deleteWorkspaceDone'));
+    });
   };
 
   const recentSection = (
@@ -247,116 +196,10 @@ export default function LandingPage() {
           <Settings className="size-4 shrink-0" />
           <span className="hidden sm:inline">{t('landing.settings')}</span>
         </Link>
-        <button
-          onClick={() => setByokOpen(true)}
-          className="flex items-center gap-1.5 rounded-xl border border-border bg-card/90 px-2.5 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground sm:gap-2 sm:px-3"
-          title="Gemini API Key (Browser Only)"
-        >
-          <KeyRound className="size-4 shrink-0" />
-          {byokUnlocked ? (
-            <LockOpen className="size-3.5 shrink-0 text-emerald-500" />
-          ) : (
-            <Lock className="size-3.5 shrink-0" />
-          )}
-          <span className="hidden sm:inline">BYOK</span>
-        </button>
         <LanguageSwitcher />
         <ThemeToggle />
         <UserMenu />
       </div>
-      <Dialog open={byokOpen} onOpenChange={setByokOpen}>
-        <DialogContent className="border-border sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Gemini BYOK (Browser Only)</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 py-2">
-            <div className="flex items-start justify-between gap-2">
-              <div className="text-xs text-muted-foreground">
-                All data stays local in your browser. Gemini key is encrypted in IndexedDB (Web Crypto).
-              </div>
-              <button
-                type="button"
-                onClick={() => setByokHowto((v) => !v)}
-                aria-expanded={byokHowto}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-              >
-                <HelpCircle className="size-3.5" aria-hidden />
-                How-To
-              </button>
-            </div>
-            {byokHowto && (
-              <div className="rounded-xl border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
-                <div className="mb-2 font-semibold text-foreground">How to get a Gemini API key</div>
-                <ol className="list-decimal space-y-1 pl-4">
-                  <li>
-                    Open{' '}
-                    <a
-                      href="https://aistudio.google.com/apikey"
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
-                    >
-                      Google AI Studio
-                      <ExternalLink className="size-3" aria-hidden />
-                    </a>{' '}
-                    and sign in with your Google account.
-                  </li>
-                  <li>
-                    Click <span className="font-medium text-foreground">Create API key</span>, then pick a Google Cloud project (or accept the default).
-                  </li>
-                  <li>
-                    Copy the key (starts with <code className="rounded bg-background px-1 py-0.5 text-[10.5px]">AIza…</code>) and paste it below.
-                  </li>
-                  <li>
-                    Choose any passphrase — it stays in this browser and is used to encrypt the key locally.
-                  </li>
-                </ol>
-                <div className="mt-2 text-[11px] text-muted-foreground/80">
-                  The free tier is enough to try the app. The key is never sent to our servers.
-                </div>
-                <a
-                  href="https://aistudio.google.com/apikey"
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/15"
-                >
-                  Open AI Studio
-                  <ExternalLink className="size-3" aria-hidden />
-                </a>
-              </div>
-            )}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">Gemini API Key</span>
-              <Input
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="AIza..."
-                type="password"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-muted-foreground">Passphrase</span>
-              <Input
-                value={passphraseInput}
-                onChange={(e) => setPassphraseInput(e.target.value)}
-                placeholder="Enter passphrase"
-                type="password"
-              />
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Stored: {hasByok ? 'Yes' : 'No'} / Unlocked: {byokUnlocked ? 'Yes' : 'No'}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={clearByok} disabled={byokBusy}>
-              Delete
-            </Button>
-            <Button type="button" onClick={saveByok} disabled={byokBusy}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       {/* Grid background */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.035]"
