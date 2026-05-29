@@ -18,7 +18,7 @@ interface Props {
 
 export function AnswerNode({ node }: Props) {
   const { t, locale } = useI18n();
-  const { addCustomQuery, toggleDashboardPin, state, aiCatalog, isDemoMode, refreshAnswerMetadata } =
+  const { addCustomQuery, state, aiCatalog, isDemoMode, refreshAnswerMetadata } =
     useWorkspace();
   const introduceReveal = useIntroduceReveal();
   const [showAllKeywords, setShowAllKeywords] = useState(false);
@@ -26,7 +26,6 @@ export function AnswerNode({ node }: Props) {
   const [customQ, setCustomQ] = useState('');
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const [metaRefreshing, setMetaRefreshing] = useState(false);
-  const isPinned = state.dashboardNodeIds.includes(node.id);
   const browserUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -168,11 +167,9 @@ export function AnswerNode({ node }: Props) {
     <div
       className="flex min-w-0 max-w-full flex-col gap-3 rounded-2xl border p-4 transition-all duration-300"
       style={{
-        borderColor: isPinned ? 'rgba(0,196,154,0.5)' : 'rgba(163,230,53,0.25)',
+        borderColor: 'rgba(163,230,53,0.25)',
         background: 'rgba(163,230,53,0.03)',
-        boxShadow: isPinned
-          ? '0 0 20px rgba(0,196,154,0.15), 0 4px 16px rgba(0,0,0,0.35)'
-          : '0 4px 16px rgba(0,0,0,0.35)',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
         backdropFilter: 'blur(8px)',
         maxWidth: 340,
         minWidth: 280,
@@ -192,7 +189,7 @@ export function AnswerNode({ node }: Props) {
           </span>
         </div>
 
-        {/* Pin to dashboard */}
+        {/* Actions */}
         {!isStreaming && (
           <div className="flex flex-wrap items-center justify-end gap-1">
             {!isDemoMode && (
@@ -236,28 +233,6 @@ export function AnswerNode({ node }: Props) {
                 </svg>
               )}
               <span>{ttsPlaying ? t('nodes.ttsStop') : t('nodes.ttsPlay')}</span>
-            </button>
-            <button
-              onClick={() => toggleDashboardPin(node.id)}
-              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors"
-              style={
-                isPinned
-                  ? { background: 'rgba(0,196,154,0.15)', color: '#00C49A' }
-                  : { color: 'var(--muted-foreground)' }
-              }
-              title={isPinned ? t('nodes.unpin') : t('nodes.pin')}
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill={isPinned ? 'currentColor' : 'none'}
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-              </svg>
-              {isPinned ? t('nodes.pinnedAction') : t('nodes.pinAction')}
             </button>
           </div>
         )}

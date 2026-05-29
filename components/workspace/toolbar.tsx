@@ -1,63 +1,33 @@
 'use client';
 
 import {
-  Fragment,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  Download,
-  FileImage,
   FileText,
-  FolderOpen,
+  Home,
   LayoutGrid,
-  LayoutTemplate,
-  Pencil,
-  Trash2,
-  Upload,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { useI18n } from '@/components/i18n-provider';
 import { useWorkspace } from '@/lib/workspace-store';
-import { SNAPSHOT_ERROR_I18N_KEY } from '@/lib/i18n/snapshot-errors';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuGroup,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { GoalType, Position, WorkspaceState, WorkspaceNode } from '@/lib/types';
+import type { GoalType, WorkspaceNode } from '@/lib/types';
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
-import {
-  downloadWorkspaceJson,
-  parseWorkspaceSnapshotString,
-} from '@/lib/workspace-snapshot';
-import {
-  exportCardsViewPdf,
-  exportCardsViewPng,
-  exportWorkspaceTreePdf,
-  exportWorkspaceTreePng,
-} from '@/lib/workspace-visual-export';
 import { listRecentWorkspacesAsync, type WorkspaceIndexEntry } from '@/lib/workspace-index';
 import { workspaceUrl } from '@/lib/workspace-url';
 import {
@@ -69,13 +39,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { QuestionTemplateDesignerDialog } from '@/components/question-template-designer-dialog';
 import { WorkspaceNodeSearchBar } from '@/components/workspace/node-search-bar';
-import {
-  deleteQuestionTemplate,
-  loadQuestionTemplatesAsync,
-  type QuestionTemplate,
-} from '@/lib/question-templates';
 
 const NEW_WORKSPACE_GOALS: GoalType[] = ['learn', 'research', 'build', 'analyze', 'strategize'];
 
@@ -93,29 +57,14 @@ export function Toolbar({
   onDesktopViewModeChange,
 }: ToolbarProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { t } = useI18n();
-  const {
-    state,
-    dispatch,
-    addQueryTemplateNode,
-  } = useWorkspace();
+  const { state, dispatch, autoLayout } = useWorkspace();
   const { keyword, goal, viewport, dashboardNodeIds } = state;
-  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
-  const pendingSnapshotRef = useRef<WorkspaceState | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
   const [newKeyword, setNewKeyword] = useState('');
   const [newContext, setNewContext] = useState('');
   const [newGoal, setNewGoal] = useState<GoalType>('learn');
   const [recentOpen, setRecentOpen] = useState(false);
-  const [tplList, setTplList] = useState<QuestionTemplate[]>([]);
-  const [tplDesigner, setTplDesigner] = useState<{
-    open: boolean;
-    templateId: string | null;
-    seed: QuestionTemplate | null;
-  }>({ open: false, templateId: null, seed: null });
-  const [deleteTplId, setDeleteTplId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryBusy, setSummaryBusy] = useState(false);
@@ -128,69 +77,11 @@ export function Toolbar({
   }, [state.keyword]);
 
   useEffect(() => {
-    void loadQuestionTemplatesAsync().then(setTplList);
-  }, []);
-
-  useEffect(() => {
     const apply = () => setIsMobile(window.innerWidth < 768);
     apply();
     window.addEventListener('resize', apply);
     return () => window.removeEventListener('resize', apply);
   }, []);
-
-  const refreshTplList = () => {
-    void loadQuestionTemplatesAsync().then(setTplList);
-  };
-
-  const openTplDesignerNew = () => {
-    setTplDesigner({
-      open: true,
-      templateId: null,
-      seed: {
-        id: `draft-${Date.now()}`,
-        name: '',
-        pattern: '',
-        toolChoice: 'auto',
-        followUpQuestions: [],
-      },
-    });
-  };
-
-  const openTplDesignerEdit = (tpl: QuestionTemplate) => {
-    setTplDesigner({
-      open: true,
-      templateId: tpl.id,
-      seed: { ...tpl },
-    });
-  };
-
-  const confirmDeleteTemplate = () => {
-    if (deleteTplId) {
-      deleteQuestionTemplate(deleteTplId);
-      refreshTplList();
-    }
-    setDeleteTplId(null);
-  };
-
-  const positionForNewTemplateNode = (nodes: WorkspaceNode[]): Position => {
-    const root = nodes.find((n) => n.type === 'root');
-    if (root) {
-      const rw = root.width ?? 260;
-      return { x: root.position.x + rw + 140, y: root.position.y };
-    }
-    return { x: 400, y: 200 };
-  };
-
-  const placeTemplateOnCanvas = (tpl: QuestionTemplate) => {
-    addQueryTemplateNode({
-      displayName: tpl.name,
-      pattern: tpl.pattern,
-      position: positionForNewTemplateNode(state.nodes),
-      toolChoice: tpl.toolChoice,
-      followUpQuestions: tpl.followUpQuestions,
-    });
-    toast.success(t('toolbar.templatePlaced'));
-  };
 
   const zoomIn = () =>
     dispatch({ type: 'SET_VIEWPORT', viewport: { zoom: Math.min(viewport.zoom + 0.1, 2) } });
@@ -199,25 +90,8 @@ export function Toolbar({
   const fitView = () =>
     dispatch({ type: 'SET_VIEWPORT', viewport: { x: 120, y: 80, zoom: 0.72 } });
   
-  const autoLayout = () => {
-    dispatch({ type: 'AUTO_LAYOUT' });
-  };
-
-  const applyLoadedSnapshot = () => {
-    const snap = pendingSnapshotRef.current;
-    if (!snap) return;
-    dispatch({ type: 'LOAD_SNAPSHOT', snapshot: snap });
-    const ws = searchParams.get('ws') ?? 'default';
-    router.replace(
-      workspaceUrl({
-        keyword: snap.keyword,
-        goal: snap.goal,
-        ws,
-      })
-    );
-    pendingSnapshotRef.current = null;
-    setLoadDialogOpen(false);
-    toast.success(t('toolbar.loaded'));
+  const autoLayoutCanvas = () => {
+    autoLayout();
   };
 
   const openNewWorkspaceDialog = () => {
@@ -240,41 +114,6 @@ export function Toolbar({
   const goToRecent = (entry: { keyword: string; goal: GoalType; context?: string }) => {
     setRecentOpen(false);
     router.push(workspaceUrl({ keyword: entry.keyword, goal: entry.goal, context: entry.context }));
-  };
-
-  const onPickJsonFile: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    void file.text().then((text) => {
-      const r = parseWorkspaceSnapshotString(text);
-      if (!r.ok) {
-        toast.error(t(SNAPSHOT_ERROR_I18N_KEY[r.code]));
-        return;
-      }
-      pendingSnapshotRef.current = r.state;
-      setLoadDialogOpen(true);
-    });
-  };
-
-  const useCardsCapture = desktopViewMode === 'cards' || isMobile;
-
-  const exportPng = () => {
-    const fn = useCardsCapture
-      ? exportCardsViewPng(state.keyword)
-      : exportWorkspaceTreePng(state.keyword);
-    void fn
-      .then(() => toast.success(t('toolbar.exportPngDone')))
-      .catch(() => toast.error(t('toolbar.exportImageFail')));
-  };
-
-  const exportPdf = () => {
-    const fn = useCardsCapture
-      ? exportCardsViewPdf(state.keyword)
-      : exportWorkspaceTreePdf(state.keyword);
-    void fn
-      .then(() => toast.success(t('toolbar.exportPdfDone')))
-      .catch(() => toast.error(t('toolbar.exportImageFail')));
   };
 
   const zoomPct = Math.round(viewport.zoom * 100);
@@ -480,37 +319,6 @@ export function Toolbar({
         </DialogContent>
       </Dialog>
 
-      <QuestionTemplateDesignerDialog
-        open={tplDesigner.open}
-        onOpenChange={(open) => {
-          if (!open) setTplDesigner({ open: false, templateId: null, seed: null });
-        }}
-        templateId={tplDesigner.templateId}
-        initialPattern={tplDesigner.seed?.pattern ?? ''}
-        initialName={tplDesigner.seed?.name ?? ''}
-        initialToolChoice={tplDesigner.seed?.toolChoice ?? 'auto'}
-        initialFollowUpQuestions={tplDesigner.seed?.followUpQuestions ?? []}
-        onSaved={refreshTplList}
-      />
-
-      <AlertDialog open={deleteTplId != null} onOpenChange={(o) => !o && setDeleteTplId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('toolbar.templateDeleteTitle')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('toolbar.templateDeleteDesc')}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDeleteTemplate}
-            >
-              {t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {isMobile && (
         <div className="pointer-events-auto w-full max-w-[100vw] rounded-2xl border border-border bg-card/95 px-2 py-2 backdrop-blur-sm">
           <div className="flex min-w-0 items-center gap-2">
@@ -520,7 +328,7 @@ export function Toolbar({
               className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               title="Home"
             >
-              <FolderOpen className="size-4" />
+              <Home className="size-4" />
             </button>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-foreground">{keyword}</div>
@@ -538,73 +346,6 @@ export function Toolbar({
                 <FileText className="size-4" />
               </button>
             )}
-            <DropdownMenu onOpenChange={(o) => o && refreshTplList()}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                  title={t('toolbar.templatesMenu')}
-                  aria-label={t('toolbar.templatesMenu')}
-                >
-                  <LayoutTemplate className="size-4 text-amber-600 dark:text-amber-400" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="max-h-[min(70vh,420px)] w-[min(100vw-2rem,16rem)] overflow-y-auto"
-              >
-                <DropdownMenuItem
-                  onSelect={() => {
-                    window.setTimeout(() => openTplDesignerNew(), 0);
-                  }}
-                >
-                  {t('toolbar.templateNew')}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {tplList.length === 0 ? (
-                  <div className="px-2 py-2 text-xs text-muted-foreground">{t('templates.emptyList')}</div>
-                ) : (
-                  tplList.map((tpl, idx) => (
-                    <Fragment key={tpl.id}>
-                      {idx > 0 && <DropdownMenuSeparator />}
-                      <DropdownMenuGroup>
-                        <DropdownMenuLabel className="max-w-[240px] truncate text-xs font-medium text-muted-foreground">
-                          {tpl.name}
-                        </DropdownMenuLabel>
-                        <DropdownMenuItem
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            window.setTimeout(() => placeTemplateOnCanvas(tpl), 0);
-                          }}
-                        >
-                          <LayoutTemplate className="mr-2 size-4 text-amber-600 dark:text-amber-400" />
-                          {t('toolbar.templateAddToCanvas')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            window.setTimeout(() => openTplDesignerEdit(tpl), 0);
-                          }}
-                        >
-                          <Pencil className="mr-2 size-4" />
-                          {t('toolbar.templateEdit')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            window.setTimeout(() => setDeleteTplId(tpl.id), 0);
-                          }}
-                        >
-                          <Trash2 className="mr-2 size-4" />
-                          {t('toolbar.templateDelete')}
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </Fragment>
-                  ))
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
             <button
               type="button"
               onClick={onToggleDashboard}
@@ -711,148 +452,8 @@ export function Toolbar({
         <WorkspaceNodeSearchBar />
       </div>
 
-      {/* Right: Theme + save/load + dashboard + zoom */}
+      {/* Right: dashboard + zoom */}
       <div className={["pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2", isMobile ? "hidden sm:flex" : ""].join(' ')}>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          aria-hidden
-          onChange={onPickJsonFile}
-        />
-        <AlertDialog
-          open={loadDialogOpen}
-          onOpenChange={(open) => {
-            setLoadDialogOpen(open);
-            if (!open) pendingSnapshotRef.current = null;
-          }}
-        >
-          <AlertDialogContent className="border-border sm:max-w-md">
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t('toolbar.loadSnapshotTitle')}</AlertDialogTitle>
-              <AlertDialogDescription>{t('toolbar.loadSnapshotDesc')}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={applyLoadedSnapshot}
-              >
-                {t('toolbar.loadConfirm')}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="relative flex items-center gap-2 rounded-xl border border-border bg-card/90 px-4 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
-            >
-              <FolderOpen className="size-4" />
-              {t('toolbar.saveLoad')}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[min(100vw-2rem,16rem)] sm:w-64">
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-              {t('toolbar.saveLoadHint')}
-            </DropdownMenuLabel>
-            <DropdownMenuItem onSelect={exportPng}>
-              <FileImage className="mr-2 size-4" />
-              {t('toolbar.exportPng')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={exportPdf}>
-              <FileText className="mr-2 size-4" />
-              {t('toolbar.exportPdf')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => {
-                downloadWorkspaceJson(state);
-                toast.success(t('toolbar.jsonExported'));
-              }}
-            >
-              <Download className="mr-2 size-4" />
-              {t('toolbar.saveJson')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
-                window.setTimeout(() => fileInputRef.current?.click(), 0);
-              }}
-            >
-              <Upload className="mr-2 size-4" />
-              {t('toolbar.loadJson')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu onOpenChange={(o) => o && refreshTplList()}>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
-            >
-              <LayoutTemplate className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              {t('toolbar.templatesMenu')}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="max-h-[min(70vh,420px)] w-56 overflow-y-auto">
-            <DropdownMenuItem
-              onSelect={() => {
-                window.setTimeout(() => openTplDesignerNew(), 0);
-              }}
-            >
-              {t('toolbar.templateNew')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {tplList.length === 0 ? (
-              <div className="text-muted-foreground px-2 py-2 text-xs">{t('templates.emptyList')}</div>
-            ) : (
-              tplList.map((tpl, idx) => (
-                <Fragment key={tpl.id}>
-                  {idx > 0 && <DropdownMenuSeparator />}
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel className="text-muted-foreground max-w-[240px] truncate text-xs font-medium">
-                      {tpl.name}
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        window.setTimeout(() => placeTemplateOnCanvas(tpl), 0);
-                      }}
-                    >
-                      <LayoutTemplate className="size-4 text-amber-600 dark:text-amber-400" />
-                      {t('toolbar.templateAddToCanvas')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        window.setTimeout(() => openTplDesignerEdit(tpl), 0);
-                      }}
-                    >
-                      <Pencil className="size-4" />
-                      {t('toolbar.templateEdit')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        window.setTimeout(() => setDeleteTplId(tpl.id), 0);
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                      {t('toolbar.templateDelete')}
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </Fragment>
-              ))
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         <LanguageSwitcher />
         <ThemeToggle />
         {canUseSummary && (
@@ -924,7 +525,7 @@ export function Toolbar({
         {/* Auto layout — canvas only (irrelevant in Cards / mobile card view) */}
         {desktopViewMode === 'canvas' && (
           <button
-            onClick={autoLayout}
+            onClick={autoLayoutCanvas}
             className="hidden items-center gap-2 rounded-xl border border-border bg-card/90 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground sm:flex"
             title={t('toolbar.layoutAutoHint')}
           >
@@ -935,7 +536,8 @@ export function Toolbar({
           </button>
         )}
 
-        {/* Zoom controls */}
+        {/* Zoom controls — canvas only */}
+        {desktopViewMode === 'canvas' && !isMobile && (
         <div className="hidden items-center gap-1 rounded-xl border border-border bg-card/90 p-1 backdrop-blur-sm sm:flex">
           <button
             onClick={zoomOut}
@@ -969,6 +571,7 @@ export function Toolbar({
             </svg>
           </button>
         </div>
+        )}
       </div>
     </header>
   );
