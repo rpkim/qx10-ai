@@ -759,9 +759,9 @@ export function Toolbar({
             Qx10
           </span>
           <div className="mx-1 h-4 w-px bg-border" />
-          <span className="text-sm font-medium text-foreground">{keyword}</span>
+          <span className="min-w-0 max-w-[120px] truncate text-sm font-semibold text-foreground sm:max-w-[180px]">{keyword}</span>
           <span
-            className="rounded-full px-2 py-0.5 text-xs font-medium"
+            className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold sm:text-sm"
             style={{ background: 'rgba(0,196,154,0.15)', color: '#00C49A' }}
           >
             {t(GOAL_LABEL_KEYS[goal])}
@@ -770,10 +770,11 @@ export function Toolbar({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-lg border border-border bg-secondary/60 px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-secondary/60 px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:px-2.5 sm:text-sm"
+                title={t('toolbar.workspaces')}
               >
-                <LayoutGrid className="size-3.5" />
-                {t('toolbar.workspaces')}
+                <LayoutGrid className="size-3.5 sm:size-4" />
+                <span className="hidden sm:inline">{t('toolbar.workspaces')}</span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64">
