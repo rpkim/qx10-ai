@@ -208,7 +208,7 @@ function WorkspaceInner() {
       <div
         className={`absolute bottom-4 left-4 z-10 flex flex-col gap-1.5 rounded-xl border border-border bg-card/90 px-3 py-3 backdrop-blur-sm transition-opacity ${canvasObscured ? 'pointer-events-none opacity-0' : ''}`}
         aria-label={t('workspace.legendTitle')}
-        style={{ display: isMobile ? 'none' : undefined }}
+        style={{ display: useCardMode ? 'none' : undefined }}
       >
         <span className="mb-0.5 text-xs font-medium text-muted-foreground">{t('workspace.legendTitle')}</span>
         {[
