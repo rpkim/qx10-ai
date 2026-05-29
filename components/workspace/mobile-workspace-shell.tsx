@@ -529,25 +529,6 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                               {modelLabel(q)}
                             </span>
                           )}
-                          <Select
-                            value={q.toolChoice ?? 'auto'}
-                            onValueChange={(id) =>
-                              dispatch({
-                                type: 'UPDATE_NODE',
-                                id: q.id,
-                                updates: { toolChoice: id as 'auto' | 'web' | 'market' } as Partial<WorkspaceNode>,
-                              })
-                            }
-                          >
-                            <SelectTrigger size="sm" className="h-7 w-[110px] text-[11px]">
-                              <SelectValue placeholder="Tool" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="auto" className="text-[11px]">Auto</SelectItem>
-                              <SelectItem value="web" className="text-[11px]">Web Search</SelectItem>
-                              <SelectItem value="market" className="text-[11px]">Stock</SelectItem>
-                            </SelectContent>
-                          </Select>
                         </div>
 
                         {a && (

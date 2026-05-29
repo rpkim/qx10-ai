@@ -133,7 +133,6 @@ export function QueryTemplateNode({ node }: Props) {
     aiCatalog?.defaultChoice ??
     aiCatalog?.options[0]?.id ??
     '';
-  const effectiveTool = node.toolChoice ?? 'auto';
 
   return (
     <div
@@ -212,37 +211,6 @@ export function QueryTemplateNode({ node }: Props) {
             </SelectContent>
           </Select>
         )}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          Tool
-        </span>
-        <Select
-          value={effectiveTool}
-          onValueChange={(id) =>
-            dispatch({
-              type: 'UPDATE_NODE',
-              id: node.id,
-              updates: { toolChoice: id as 'auto' | 'web' | 'market' } as Partial<QueryTemplateNodeData>,
-            })
-          }
-        >
-          <SelectTrigger size="sm" className="h-8 w-full text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="auto" className="text-xs">
-              Auto
-            </SelectItem>
-            <SelectItem value="web" className="text-xs">
-              Web Search
-            </SelectItem>
-            <SelectItem value="market" className="text-xs">
-              Stock
-            </SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {keys.length > 0 && (
