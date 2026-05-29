@@ -103,56 +103,58 @@ export function LoginClient() {
   };
 
   return (
-    <main className="fixed inset-0 overflow-y-auto overscroll-y-contain bg-background [-webkit-overflow-scrolling:touch]">
-      <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2">
+    <main className="fixed inset-0 flex flex-col overflow-hidden bg-background">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-[0.035]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, #00C49A 1px, transparent 1px), linear-gradient(to bottom, #00C49A 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+          }}
+        />
+        <div
+          className="absolute left-1/2 top-1/2 size-[min(600px,100dvh)] -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(0,196,154,0.06) 0%, transparent 70%)',
+          }}
+        />
+      </div>
+
+      <header className="relative z-20 flex shrink-0 items-center justify-end gap-1 px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] sm:gap-2 sm:px-4">
         <LanguageSwitcher />
         <ThemeToggle />
-      </div>
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.035]"
-        style={{
-          backgroundImage:
-            'linear-gradient(to right, #00C49A 1px, transparent 1px), linear-gradient(to bottom, #00C49A 1px, transparent 1px)',
-          backgroundSize: '48px 48px',
-        }}
-      />
-      <div
-        className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{
-          width: 600,
-          height: 600,
-          background:
-            'radial-gradient(circle, rgba(0,196,154,0.06) 0%, transparent 70%)',
-        }}
-      />
+      </header>
 
-      <div className="relative z-10 mx-auto flex min-h-full w-full max-w-md flex-col items-center justify-center gap-8 px-6 py-16">
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex items-center gap-2">
-            <QX10Logo />
-            <span
-              className="text-3xl font-bold tracking-tight text-foreground"
-              style={{ fontFamily: 'var(--font-space-grotesk)' }}
-            >
-              Qx<span style={{ color: '#00C49A' }}>10</span>.lol
-            </span>
+      <div className="relative z-10 min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+        <div className="mx-auto flex w-full min-w-0 max-w-md flex-col items-center gap-4 px-4 py-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:gap-6 sm:px-6 sm:py-6 md:min-h-full md:justify-center md:gap-8 md:py-12">
+          <div className="flex w-full min-w-0 flex-col items-center gap-2 sm:gap-3">
+            <div className="flex max-w-full items-center gap-2">
+              <QX10Logo />
+              <span
+                className="truncate text-2xl font-bold tracking-tight text-foreground sm:text-3xl"
+                style={{ fontFamily: 'var(--font-space-grotesk)' }}
+              >
+                Qx<span style={{ color: '#00C49A' }}>10</span>.lol
+              </span>
+            </div>
+            <p className="max-w-full text-balance text-center text-xs leading-snug text-muted-foreground sm:text-sm">
+              {t('auth.tagline')}
+            </p>
           </div>
-          <p className="text-center text-sm text-muted-foreground">
-            {t('auth.tagline')}
-          </p>
-        </div>
 
-        <div className="flex w-full flex-col gap-3 rounded-2xl border border-border bg-card/85 p-5 backdrop-blur-sm">
-          <h1 className="text-base font-semibold text-foreground">{t('auth.signInTitle')}</h1>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {t('auth.signInBlurb')}
-          </p>
+          <div className="flex w-full min-w-0 max-w-full flex-col gap-2.5 rounded-2xl border border-border bg-card/85 p-4 backdrop-blur-sm sm:gap-3 sm:p-5">
+            <h1 className="text-base font-semibold text-foreground">{t('auth.signInTitle')}</h1>
+            <p className="text-balance text-xs leading-relaxed text-muted-foreground">
+              {t('auth.signInBlurb')}
+            </p>
 
-          <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-            <div className="font-semibold text-foreground">{t('auth.collectionTitle')}</div>
-            <p className="mt-1">{t('auth.collectionBody')}</p>
-            <p className="mt-1">{t('auth.collectionNoSale')}</p>
-          </div>
+            <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground break-words">
+              <div className="font-semibold text-foreground">{t('auth.collectionTitle')}</div>
+              <p className="mt-1">{t('auth.collectionBody')}</p>
+              <p className="mt-1">{t('auth.collectionNoSale')}</p>
+            </div>
 
           {error && (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -179,14 +181,14 @@ export function LoginClient() {
             </div>
           )}
 
-          <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-xl border border-border bg-background/60 px-3 py-2.5 text-xs leading-relaxed">
+          <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-xl border border-border bg-background/60 px-3 py-2.5 text-xs leading-relaxed break-words">
             <input
               type="checkbox"
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
-              className="mt-0.5 size-3.5 rounded border-border text-primary"
+              className="mt-0.5 size-3.5 shrink-0 rounded border-border text-primary"
             />
-            <span className="text-muted-foreground">
+            <span className="min-w-0 text-muted-foreground">
               {t('auth.consentAgree')}{' '}
               <Link
                 href="/legal/privacy"
@@ -234,30 +236,35 @@ export function LoginClient() {
           )}
         </div>
 
-        <p className="px-2 text-center text-[11px] leading-relaxed text-muted-foreground/70">
-          {t('auth.privacyNote')}
-        </p>
+          <p className="max-w-full text-balance px-1 text-center text-[11px] leading-relaxed text-muted-foreground/70">
+            {t('auth.privacyNote')}
+          </p>
 
-        <Link
-          href="/service/introduce"
-          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        >
-          {t('auth.tryDemo')}
-        </Link>
+          <Link
+            href="/service/introduce"
+            className="inline-flex w-full items-center justify-center rounded-xl border border-primary/40 bg-primary/10 px-4 py-2.5 text-center text-sm font-semibold text-primary transition-colors hover:border-primary/60 hover:bg-primary/15 sm:w-auto"
+          >
+            {t('auth.tryDemo')}
+          </Link>
 
-        <nav className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80">
-          <Link href="/legal/privacy" className="hover:text-foreground hover:underline">
-            {t('legal.privacyTitle')}
-          </Link>
-          <span aria-hidden>·</span>
-          <Link href="/legal/terms" className="hover:text-foreground hover:underline">
-            {t('legal.termsTitle')}
-          </Link>
-          <span aria-hidden>·</span>
-          <Link href="/legal/do-not-sell" className="hover:text-foreground hover:underline">
-            {t('legal.doNotSellTitle')}
-          </Link>
-        </nav>
+          <nav className="flex w-full min-w-0 max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] leading-snug text-muted-foreground/80 sm:gap-x-3 sm:text-[11px]">
+            <Link href="/legal/privacy" className="hover:text-foreground hover:underline">
+              {t('legal.privacyTitle')}
+            </Link>
+            <span aria-hidden className="hidden sm:inline">
+              ·
+            </span>
+            <Link href="/legal/terms" className="hover:text-foreground hover:underline">
+              {t('legal.termsTitle')}
+            </Link>
+            <span aria-hidden className="hidden sm:inline">
+              ·
+            </span>
+            <Link href="/legal/do-not-sell" className="hover:text-foreground hover:underline">
+              {t('legal.doNotSellTitle')}
+            </Link>
+          </nav>
+        </div>
       </div>
     </main>
   );

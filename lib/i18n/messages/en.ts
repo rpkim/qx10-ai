@@ -265,7 +265,7 @@ export const en: Messages = {
   'auth.revokeAccess': "Revoke Qx10's access to your Google account →",
   'auth.collectionTitle': 'Notice at collection',
   'auth.collectionBody':
-    'When you sign in we collect identifiers (Google id, email, name, profile picture), internet activity (sign-in timestamps, search keywords you submit), and the workspace content you create. Used only to operate the Service.',
+    'When you sign in we collect identifiers (Google id, email, name, profile picture), internet activity (sign-in timestamps, search keywords you submit), and the workspace content you create. Used only to operate and improve the Service, including aggregate statistics.',
   'auth.collectionNoSale':
     'We do not sell or share your personal information for advertising. You can export or delete your data any time from Settings.',
   'legal.privacyTitle': 'Privacy Policy',

@@ -261,7 +261,7 @@ export const zh: Messages = {
   'auth.revokeAccess': '在 Google 账户中撤销 Qx10 的访问权限 →',
   'auth.collectionTitle': '信息收集说明',
   'auth.collectionBody':
-    '登录时我们会收集标识符（Google ID、邮箱、姓名、头像）、网络活动（登录时间、搜索关键词）以及您创建的工作区内容。仅用于服务运营。',
+    '登录时我们会收集标识符（Google ID、邮箱、姓名、头像）、网络活动（登录时间、搜索关键词）以及您创建的工作区内容。仅用于服务运营与改进（含聚合统计）。',
   'auth.collectionNoSale':
     '我们不会出于广告目的出售或共享您的个人信息。您可以随时在“设置”中导出或删除数据。',
   'legal.privacyTitle': '隐私政策',
