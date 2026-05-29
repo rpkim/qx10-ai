@@ -36,6 +36,7 @@ const rootNodeSchema = z.object({
   type: z.literal('root'),
   keyword: z.string(),
   goal: goalSchema,
+  context: z.string().optional(),
 });
 
 const queryNodeSchema = z.object({
@@ -125,6 +126,7 @@ const workspaceSnapshotSchema = z.object({
   savedAt: z.string().optional(),
   keyword: z.string(),
   goal: goalSchema,
+  context: z.string().optional(),
   nodes: z.array(workspaceNodeSchema),
   edges: z.array(
     z.object({
@@ -288,6 +290,7 @@ export function workspaceToSnapshotPayload(state: WorkspaceState): WorkspaceSnap
     savedAt: new Date().toISOString(),
     keyword: state.keyword,
     goal: state.goal,
+    ...(state.context ? { context: state.context } : {}),
     nodes: state.nodes as WorkspaceSnapshotFile['nodes'],
     edges: state.edges,
     viewport: state.viewport,
@@ -315,6 +318,7 @@ export function parseWorkspaceSnapshot(raw: unknown): SnapshotOk | SnapshotErr {
   const state: WorkspaceState = {
     keyword: d.keyword,
     goal: d.goal,
+    ...(d.context ? { context: d.context } : {}),
     nodes,
     edges,
     viewport: d.viewport,
