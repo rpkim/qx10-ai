@@ -1008,7 +1008,7 @@ export function WorkspaceProvider({
       if (!browserGeminiKey) return [];
       try {
         const geminiOption = effectiveAiCatalog?.options.find((o) => o.provider === 'gemini');
-        const modelName = geminiOption?.model || 'gemini-2.0-flash';
+        const modelName = geminiOption?.model || 'gemini-3.5-flash';
         const genAI = new GoogleGenerativeAI(browserGeminiKey);
         const model = genAI.getGenerativeModel({
           model: modelName,
