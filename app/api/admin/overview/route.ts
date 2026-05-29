@@ -66,7 +66,7 @@ export async function GET() {
         hint:
           backend === 'supabase'
             ? 'If this is the first deploy with Supabase, apply db/schema.sql in your Supabase SQL editor.'
-            : 'On Vercel/serverless, the local file backend is not durable. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in production.',
+            : 'On Vercel/serverless, the local file backend is not durable. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) in production.',
       },
       { status: 500 }
     );
