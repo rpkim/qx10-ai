@@ -104,7 +104,7 @@ export default function LandingPage() {
   });
 
   const goWorkspace = (entry: WorkspaceIndexEntry) => {
-    router.push(workspaceUrl({ keyword: entry.keyword, goal: entry.goal }));
+    router.push(workspaceUrl({ keyword: entry.keyword, goal: entry.goal, context: entry.context }));
   };
 
   const goDashboardOnly = (entry: WorkspaceIndexEntry) => {
@@ -112,6 +112,7 @@ export default function LandingPage() {
       workspaceUrl({
         keyword: entry.keyword,
         goal: entry.goal,
+        context: entry.context,
         view: 'dashboard',
       })
     );
@@ -504,6 +505,11 @@ export default function LandingPage() {
                       className="min-w-0 flex-1 text-left"
                     >
                       <div className="truncate text-sm font-semibold text-foreground">{entry.keyword}</div>
+                      {entry.context && (
+                        <div className="mt-0.5 truncate text-xs text-muted-foreground/70 italic">
+                          in &ldquo;{entry.context}&rdquo;
+                        </div>
+                      )}
                       <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
                           {t(GOAL_LABEL_KEYS[entry.goal])}

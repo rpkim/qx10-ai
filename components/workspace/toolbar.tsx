@@ -251,9 +251,9 @@ export function Toolbar({
     router.push(workspaceUrl({ keyword: k, goal: newGoal, context: newContext.trim() || undefined }));
   };
 
-  const goToRecent = (entry: { keyword: string; goal: GoalType }) => {
+  const goToRecent = (entry: { keyword: string; goal: GoalType; context?: string }) => {
     setRecentOpen(false);
-    router.push(workspaceUrl({ keyword: entry.keyword, goal: entry.goal }));
+    router.push(workspaceUrl({ keyword: entry.keyword, goal: entry.goal, context: entry.context }));
   };
 
   const onPickJsonFile: React.ChangeEventHandler<HTMLInputElement> = (e) => {
@@ -801,6 +801,11 @@ export function Toolbar({
                     className="flex flex-col items-start gap-0.5"
                   >
                     <span className="font-medium text-foreground">{e.keyword}</span>
+                    {e.context && (
+                      <span className="truncate text-[11px] italic text-muted-foreground/70">
+                        in &ldquo;{e.context}&rdquo;
+                      </span>
+                    )}
                     <span className="text-xs text-muted-foreground">{t(GOAL_LABEL_KEYS[e.goal])}</span>
                   </DropdownMenuItem>
                 ))
