@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, CircleHelp } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { WorkspaceProvider, useWorkspace } from '@/lib/workspace-store';
 import { Canvas } from '@/components/workspace/canvas';
 import { MiniMap } from '@/components/workspace/minimap';
@@ -145,14 +145,6 @@ function IntroduceChrome({ initialState }: { initialState: WorkspaceState }) {
             </span>
           </Link>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <Link
-              href="/"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card/90 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              title={t('introduce.home')}
-              aria-label={t('introduce.home')}
-            >
-              <CircleHelp className="size-4" />
-            </Link>
             <LanguageSwitcher />
             <ThemeToggle />
             <Button
