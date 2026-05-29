@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth/session';
+import { ensureUserRecordForSession } from '@/lib/server/ensure-user-record';
 import { getWorkspaceStore } from '@/lib/server/workspaces/store';
 
 export const runtime = 'nodejs';
@@ -34,6 +35,7 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'invalid_prefs' }, { status: 400 });
   }
   try {
+    await ensureUserRecordForSession(session);
     await getWorkspaceStore().saveUserPrefs(session.sub, body.prefs);
     return NextResponse.json({ ok: true });
   } catch (e) {

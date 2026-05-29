@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth/session';
+import { ensureUserRecordForSession } from '@/lib/server/ensure-user-record';
 import { getWorkspaceStore } from '@/lib/server/workspaces/store';
 import { parseWorkspaceSnapshotString } from '@/lib/workspace-snapshot';
 
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
   const store = getWorkspaceStore();
   let migrated = 0;
   try {
+    await ensureUserRecordForSession(session);
     for (const json of body.snapshots ?? []) {
       if (typeof json !== 'string') continue;
       const parsed = parseWorkspaceSnapshotString(json);

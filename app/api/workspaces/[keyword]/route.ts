@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth/session';
+import { ensureUserRecordForSession } from '@/lib/server/ensure-user-record';
 import { getWorkspaceStore } from '@/lib/server/workspaces/store';
 import {
   parseWorkspaceSnapshot,
@@ -70,6 +71,7 @@ export async function PUT(req: Request, ctx: RouteContext) {
   }
   const snapshot: WorkspaceSnapshotFile = workspaceToSnapshotPayload(parsed.state);
   try {
+    await ensureUserRecordForSession(session);
     const store = getWorkspaceStore();
     await store.upsertSnapshot(session.sub, snapshot);
     if (body.dashboardLayout && Array.isArray(body.dashboardLayout)) {
