@@ -8,6 +8,7 @@ const AUTH_SESSION_COOKIE = 'qx10_session';
  */
 const PUBLIC_EXACT = new Set<string>([
   '/login',
+  '/waitlist',
   '/favicon.ico',
   '/robots.txt',
   '/sitemap.xml',

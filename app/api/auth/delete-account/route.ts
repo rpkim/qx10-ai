@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import {
+  AUTH_OAUTH_INVITE_COOKIE,
   AUTH_OAUTH_NEXT_COOKIE,
   AUTH_OAUTH_STATE_COOKIE,
   AUTH_SESSION_COOKIE,
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
     removed,
     revokeUrl: 'https://myaccount.google.com/permissions',
   });
-  for (const name of [AUTH_SESSION_COOKIE, AUTH_OAUTH_STATE_COOKIE, AUTH_OAUTH_NEXT_COOKIE]) {
+  for (const name of [AUTH_SESSION_COOKIE, AUTH_OAUTH_STATE_COOKIE, AUTH_OAUTH_NEXT_COOKIE, AUTH_OAUTH_INVITE_COOKIE]) {
     res.cookies.set(name, '', { ...authCookieBase, maxAge: 0 });
   }
   return res;

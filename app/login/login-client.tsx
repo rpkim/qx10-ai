@@ -57,6 +57,7 @@ export function LoginClient() {
   const { t } = useI18n();
   const params = useSearchParams();
   const next = useMemo(() => safeNext(params.get('next')), [params]);
+  const invite = useMemo(() => params.get('invite')?.trim() ?? '', [params]);
   const error = params.get('error');
   const deleted = params.get('deleted') === '1';
   const revokeUrl = params.get('revoke');
@@ -86,7 +87,9 @@ export function LoginClient() {
     };
   }, []);
 
-  const signInHref = `/api/auth/google/start?next=${encodeURIComponent(next)}`;
+  const signInHref = invite
+    ? `/api/auth/google/start?next=${encodeURIComponent(next)}&invite=${encodeURIComponent(invite)}`
+    : `/api/auth/google/start?next=${encodeURIComponent(next)}`;
   const canSubmit = consent && !submitting;
 
   const handleSignInClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -149,6 +152,12 @@ export function LoginClient() {
             <p className="text-balance text-xs leading-relaxed text-muted-foreground">
               {t('auth.signInBlurb')}
             </p>
+
+            {invite ? (
+              <p className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+                {t('auth.inviteBanner')}
+              </p>
+            ) : null}
 
             <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground break-words">
               <div className="font-semibold text-foreground">{t('auth.collectionTitle')}</div>

@@ -97,6 +97,9 @@ export interface AnalyticsStore {
   /** Total distinct users. */
   countUsers(): Promise<number>;
 
+  /** Users whose created_at >= since (epoch ms). */
+  countUsersCreatedSince(since: number): Promise<number>;
+
   /** Distinct users seen since `since` (epoch ms). */
   countActiveUsers(since: number): Promise<number>;
 

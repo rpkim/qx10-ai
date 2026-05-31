@@ -210,6 +210,13 @@ export const en: Messages = {
   'landing.recentTitle': 'Continue recent workspaces',
   'landing.recentEmpty': 'No saved workspace history yet.',
   'landing.recentLoading': 'Loading recent workspaces…',
+  'waitlist.title': "You're on the waitlist",
+  'waitlist.lead':
+    "Thanks for your interest in Qx10. We've saved your email and will notify you when a spot opens.",
+  'waitlist.leadFull':
+    "Today's sign-up limit has been reached. You're on the waitlist — we'll email you an invite when an admin approves access.",
+  'waitlist.note': 'If you receive an invite email, open the link and sign in with the same Google account.',
+  'waitlist.backHome': 'Back to home',
   'landing.continue': 'Continue',
   'landing.viewDashboard': 'Dashboard',
   'landing.deleteWorkspace': 'Delete',
@@ -308,6 +315,7 @@ export const en: Messages = {
   'auth.signInTitle': 'Sign in to continue',
   'auth.signInBlurb':
     'Use your Google account to access your workspaces. They are saved to our server database, linked to your account.',
+  'auth.inviteBanner': 'You have an invite link — sign in with the same Google email to join.',
   'auth.continueWithGoogle': 'Continue with Google',
   'auth.alreadySignedIn': "You're already signed in — continue",
   'auth.privacyNote':

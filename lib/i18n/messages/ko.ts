@@ -210,6 +210,12 @@ export const ko: Messages = {
   'landing.recentTitle': '최근 워크스페이스 이어하기',
   'landing.recentEmpty': '아직 저장된 워크스페이스 내역이 없습니다.',
   'landing.recentLoading': '최근 워크스페이스 불러오는 중…',
+  'waitlist.title': '대기 목록에 등록되었습니다',
+  'waitlist.lead': 'Qx10에 관심 가져 주셔서 감사합니다. 자리가 나면 이메일로 안내드릴게요.',
+  'waitlist.leadFull':
+    '오늘 가입 한도에 도달했습니다. 대기 목록에 등록되었으며, Admin이 승인하면 초대 메일을 보내드립니다.',
+  'waitlist.note': '초대 메일의 링크로 들어와 같은 Google 계정으로 로그인해 주세요.',
+  'waitlist.backHome': '홈으로',
   'landing.continue': '이어하기',
   'landing.viewDashboard': '대시보드',
   'landing.deleteWorkspace': '삭제',
@@ -308,6 +314,7 @@ export const ko: Messages = {
   'auth.signInTitle': '계속하려면 로그인하세요',
   'auth.signInBlurb':
     'Google 계정으로 로그인하면 워크스페이스를 이용할 수 있어요. 워크스페이스는 계정과 연결되어 서버 데이터베이스에 저장됩니다.',
+  'auth.inviteBanner': '초대 링크로 들어오셨어요 — 같은 Google 이메일로 로그인해 주세요.',
   'auth.continueWithGoogle': 'Google로 계속하기',
   'auth.alreadySignedIn': '이미 로그인되어 있어요 — 계속하기',
   'auth.privacyNote':
