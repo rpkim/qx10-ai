@@ -14,20 +14,10 @@ import { useI18n } from '@/components/i18n-provider';
 import { loadWorkspaceFromServer } from '@/lib/workspace-api';
 import { readWorkspaceLaunch } from '@/lib/workspace-launch';
 import { focusQueryNodeOnCanvas } from '@/lib/workspace-focus-query-node';
+import { WorkspaceLoadingScreen } from '@/components/workspace/workspace-loading-screen';
 
 function WorkspacePageFallback() {
-  const { t } = useI18n();
-  return (
-    <div className="flex h-screen w-screen items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-4">
-        <div
-          className="h-10 w-10 rounded-full border-2"
-          style={{ borderColor: '#00C49A', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }}
-        />
-        <span className="text-sm text-muted-foreground">{t('workspace.loading')}</span>
-      </div>
-    </div>
-  );
+  return <WorkspaceLoadingScreen />;
 }
 
 export default function WorkspacePage() {
@@ -58,6 +48,7 @@ function WorkspaceInner() {
   const [dashboardExpanded, setDashboardExpanded] = useState(false);
   const [desktopViewMode, setDesktopViewMode] = useState<'canvas' | 'cards'>('cards');
   const [ready, setReady] = useState(false);
+  const [loadingKeyword, setLoadingKeyword] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const initialView = searchParams.get('view');
   const prevDesktopViewRef = useRef<'canvas' | 'cards' | null>(null);
@@ -88,6 +79,7 @@ function WorkspaceInner() {
       router.replace('/');
       return;
     }
+    setLoadingKeyword(launch.keyword);
     void (async () => {
       const saved = await loadWorkspaceFromServer(launch.keyword);
       if (saved.ok) {
@@ -141,15 +133,10 @@ function WorkspaceInner() {
 
   if (!ready || !state.keyword) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div
-            className="h-10 w-10 rounded-full border-2"
-            style={{ borderColor: '#00C49A', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }}
-          />
-          <span className="text-sm text-muted-foreground">{t('workspace.initializing')}</span>
-        </div>
-      </div>
+      <WorkspaceLoadingScreen
+        keyword={loadingKeyword}
+        variant={loadingKeyword ? 'loading' : 'initializing'}
+      />
     );
   }
 

@@ -20,6 +20,7 @@ import {
 import { readWorkspaceLaunch } from '@/lib/workspace-launch';
 import { removeDashboardGrid } from '@/lib/dashboard-layout-storage';
 import { trackSearch } from '@/lib/telemetry/client';
+import { Spinner } from '@/components/ui/spinner';
 
 const EXAMPLE_KEYWORDS = [
   'Quant Trading',
@@ -38,6 +39,7 @@ export default function LandingPage() {
   const [focused, setFocused] = useState(false);
   const [contextFocused, setContextFocused] = useState(false);
   const [recent, setRecent] = useState<WorkspaceIndexEntry[]>([]);
+  const [recentLoading, setRecentLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [startAnimPhase, setStartAnimPhase] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -60,7 +62,10 @@ export default function LandingPage() {
   };
 
   useEffect(() => {
-    void listRecentWorkspacesAsync(6).then(setRecent);
+    setRecentLoading(true);
+    void listRecentWorkspacesAsync(6)
+      .then(setRecent)
+      .finally(() => setRecentLoading(false));
   }, []);
 
   useEffect(() => {
@@ -110,7 +115,17 @@ export default function LandingPage() {
         {t('landing.recentTitle')}
       </span>
       <div className="rounded-2xl border border-border bg-card/85 p-2 backdrop-blur-sm">
-        {recent.length === 0 ? (
+        {recentLoading ? (
+          <div className="flex flex-col items-center gap-3 px-3 py-6">
+            <Spinner className="size-6 text-primary" />
+            <span className="text-sm text-muted-foreground">{t('landing.recentLoading')}</span>
+            <div className="flex w-full flex-col gap-1.5 pt-1">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/50" />
+              ))}
+            </div>
+          </div>
+        ) : recent.length === 0 ? (
           <div className="px-3 py-4 text-sm text-muted-foreground">{t('landing.recentEmpty')}</div>
         ) : (
           <div className="flex flex-col gap-1.5">
