@@ -7,6 +7,7 @@ import { cookies } from 'next/headers';
 export const AUTH_SESSION_COOKIE = 'qx10_session';
 export const AUTH_OAUTH_STATE_COOKIE = 'qx10_auth_st';
 export const AUTH_OAUTH_NEXT_COOKIE = 'qx10_auth_next';
+export const AUTH_OAUTH_INVITE_COOKIE = 'qx10_auth_invite';
 
 /** 30 days. */
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;

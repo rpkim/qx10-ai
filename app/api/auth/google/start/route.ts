@@ -5,6 +5,7 @@ import {
   assertAppUrlConfigured,
 } from '@/lib/integrations/google-oauth-config';
 import {
+  AUTH_OAUTH_INVITE_COOKIE,
   AUTH_OAUTH_NEXT_COOKIE,
   AUTH_OAUTH_STATE_COOKIE,
   authCookieBase,
@@ -32,6 +33,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const next = safeOAuthNextPath(url.searchParams.get('next')) || '/';
+  const invite = url.searchParams.get('invite')?.trim().slice(0, 256) || '';
   const state = randomBytes(24).toString('hex');
 
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -47,6 +49,9 @@ export async function GET(req: Request) {
   const res = NextResponse.redirect(authUrl.toString());
   res.cookies.set(AUTH_OAUTH_STATE_COOKIE, state, { ...authCookieBase, maxAge: 600 });
   res.cookies.set(AUTH_OAUTH_NEXT_COOKIE, next, { ...authCookieBase, maxAge: 600 });
+  if (invite) {
+    res.cookies.set(AUTH_OAUTH_INVITE_COOKIE, invite, { ...authCookieBase, maxAge: 600 });
+  }
   return res;
 }
 

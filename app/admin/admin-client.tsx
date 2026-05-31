@@ -25,10 +25,26 @@ type UserQueryUsageStats = {
   avgDaily30d: number;
 };
 
+type WaitlistRow = {
+  id: number;
+  email: string;
+  name?: string;
+  status: 'pending' | 'invited' | 'joined';
+  createdAt: number;
+  invitedAt?: number;
+};
+
 type Overview = {
   backend: 'supabase' | 'file' | null;
   freeTierDailyLimit?: number;
   premiumTierDailyLimit?: number;
+  signupStats?: {
+    signupsToday: number;
+    maxPerDay: number;
+    remaining: number;
+    waitlistPending: number;
+    waitlistInvited: number;
+  };
   queryUsage?: {
     queries7d: number;
     queries30d: number;
@@ -103,6 +119,8 @@ export function AdminClient({ currentEmail }: { currentEmail: string }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [queryStats, setQueryStats] = useState<Record<string, UserQueryUsageStats>>({});
+  const [waitlist, setWaitlist] = useState<WaitlistRow[]>([]);
+  const [invitingId, setInvitingId] = useState<number | null>(null);
   const [userSort, setUserSort] = useState<UserSort>('lastSeen');
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [eventType, setEventType] = useState<EventTypeFilter>('all');
@@ -127,27 +145,31 @@ export function AdminClient({ currentEmail }: { currentEmail: string }) {
     };
 
     try {
-      const [ovRes, usersRes, evRes] = await Promise.all([
+      const [ovRes, usersRes, evRes, wlRes] = await Promise.all([
         fetch('/api/admin/overview', { credentials: 'include' }),
         fetch(`/api/admin/users?sort=${userSort}&limit=200`, { credentials: 'include' }),
         fetch(
           `/api/admin/events?limit=200${eventType !== 'all' ? `&type=${eventType}` : ''}`,
           { credentials: 'include' }
         ),
+        fetch('/api/admin/waitlist', { credentials: 'include' }),
       ]);
       if (!ovRes.ok) await explain('overview', ovRes);
       if (!usersRes.ok) await explain('users', usersRes);
       if (!evRes.ok) await explain('events', evRes);
+      if (!wlRes.ok) await explain('waitlist', wlRes);
       const ov = (await ovRes.json()) as Overview;
       const u = (await usersRes.json()) as {
         users: UserRecord[];
         queryStats?: Record<string, UserQueryUsageStats>;
       };
       const ev = (await evRes.json()) as { events: ActivityEvent[] };
+      const wl = (await wlRes.json()) as { entries: WaitlistRow[] };
       setOverview(ov);
       setUsers(u.users);
       setQueryStats(u.queryStats ?? {});
       setEvents(ev.events);
+      setWaitlist(wl.entries ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load admin data');
     } finally {
@@ -165,11 +187,31 @@ export function AdminClient({ currentEmail }: { currentEmail: string }) {
 
   const totals = overview?.totals;
   const queryUsage = overview?.queryUsage;
+  const signupStats = overview?.signupStats;
   const freeTierLimit = overview?.freeTierDailyLimit ?? 80;
   const premiumTierLimit = overview?.premiumTierDailyLimit ?? 200;
 
   const topKeywords = useMemo(() => overview?.topKeywords ?? [], [overview]);
   const liveTimes = mounted;
+
+  const inviteWaitlist = async (id: number) => {
+    setInvitingId(id);
+    try {
+      const res = await fetch(`/api/admin/waitlist/${id}/invite`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      await refreshAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Invite failed');
+    } finally {
+      setInvitingId(null);
+    }
+  };
 
   return (
     <main className="fixed inset-0 overflow-y-auto overscroll-y-contain bg-background [-webkit-overflow-scrolling:touch]">
@@ -250,6 +292,12 @@ export function AdminClient({ currentEmail }: { currentEmail: string }) {
           <StatCard label="AI queries 30d" value={totals?.queries30d ?? queryUsage?.queries30d} accent />
           <StatCard label="Avg queries/day (7d)" value={queryUsage?.avgDaily7d} />
           <StatCard label="Avg queries/user (7d)" value={queryUsage?.avgPerActiveUser7d} accent />
+          <StatCard label="Signups today" value={signupStats?.signupsToday} />
+          <StatCard
+            label="Signup cap (today)"
+            value={signupStats ? signupStats.maxPerDay : undefined}
+          />
+          <StatCard label="Waitlist pending" value={signupStats?.waitlistPending} accent />
         </section>
 
         <p className="text-xs text-muted-foreground">
@@ -397,6 +445,67 @@ export function AdminClient({ currentEmail }: { currentEmail: string }) {
                   <tr>
                     <td colSpan={9} className="px-2 py-6 text-center text-sm text-muted-foreground">
                       No users yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card/80 p-5 shadow-sm">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold text-foreground">
+              Waitlist ({waitlist.filter((w) => w.status !== 'joined').length})
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Daily signup cap: {signupStats?.signupsToday ?? '—'} / {signupStats?.maxPerDay ?? '—'} today.
+              Invite sends a Resend email with a sign-in link (bypasses the daily cap).
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead className="text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2">Email</th>
+                  <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2">Added</th>
+                  <th className="px-2 py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {waitlist
+                  .filter((w) => w.status !== 'joined')
+                  .map((w) => (
+                    <tr key={w.id} className="border-t border-border align-top">
+                      <td className="px-2 py-2">
+                        <div className="font-medium text-foreground">{w.name || w.email}</div>
+                        <div className="text-xs text-muted-foreground">{w.email}</div>
+                      </td>
+                      <td className="px-2 py-2 text-xs capitalize">{w.status}</td>
+                      <td className="px-2 py-2 text-xs text-muted-foreground" title={fmtDate(w.createdAt)}>
+                        {timeAgo(w.createdAt, liveTimes)}
+                      </td>
+                      <td className="px-2 py-2">
+                        {w.status === 'pending' ? (
+                          <button
+                            type="button"
+                            disabled={invitingId === w.id}
+                            onClick={() => void inviteWaitlist(w.id)}
+                            className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                          >
+                            {invitingId === w.id ? 'Sending…' : 'Invite'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Invited</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                {waitlist.filter((w) => w.status !== 'joined').length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-2 py-6 text-center text-sm text-muted-foreground">
+                      No one on the waitlist.
                     </td>
                   </tr>
                 )}

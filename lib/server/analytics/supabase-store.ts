@@ -261,6 +261,15 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
     return count ?? 0;
   }
 
+  async countUsersCreatedSince(since: number): Promise<number> {
+    const { count, error } = await this.client
+      .from('users')
+      .select('*', { head: true, count: 'exact' })
+      .gte('created_at', since);
+    if (error) throw new Error(`countUsersCreatedSince: ${error.message}`);
+    return count ?? 0;
+  }
+
   async countActiveUsers(since: number): Promise<number> {
     const { count, error } = await this.client
       .from('users')

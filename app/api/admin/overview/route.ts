@@ -5,6 +5,7 @@ import { getAnalyticsStore, getAnalyticsStoreKind } from '@/lib/server/analytics
 import {
   summarizeGlobalQueryUsage,
 } from '@/lib/server/analytics/query-usage-stats';
+import { getSignupStats } from '@/lib/server/signup/gate';
 import {
   getDefaultDailyQueryLimit,
   getPremiumTierDailyQueryLimit,
@@ -57,12 +58,14 @@ export async function GET() {
     const queryUsage = summarizeGlobalQueryUsage(
       await store.getQueryUsageStatsForUsers(allUsers)
     );
+    const signupStats = await getSignupStats(now);
 
     return NextResponse.json({
       backend,
       freeTierDailyLimit: getDefaultDailyQueryLimit(),
       premiumTierDailyLimit: getPremiumTierDailyQueryLimit(),
       queryUsage,
+      signupStats,
       totals: {
         users: totalUsers,
         activeUsers24h,

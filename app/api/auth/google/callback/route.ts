@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { assertGoogleClientConfigured } from '@/lib/integrations/google-oauth-config';
 import {
+  AUTH_OAUTH_INVITE_COOKIE,
   AUTH_OAUTH_NEXT_COOKIE,
   AUTH_OAUTH_STATE_COOKIE,
   AUTH_SESSION_COOKIE,
@@ -11,6 +12,7 @@ import {
 } from '@/lib/auth/session';
 import { safeOAuthNextPath } from '@/lib/integrations/safe-oauth-redirect';
 import { getAnalyticsStore } from '@/lib/server/analytics/store';
+import { completeSignupAfterAllow, evaluateNewSignup } from '@/lib/server/signup/gate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -70,6 +72,7 @@ async function fetchProfile(accessToken: string): Promise<{
 function clearOAuthCookies(res: NextResponse) {
   res.cookies.set(AUTH_OAUTH_STATE_COOKIE, '', { ...authCookieBase, maxAge: 0 });
   res.cookies.set(AUTH_OAUTH_NEXT_COOKIE, '', { ...authCookieBase, maxAge: 0 });
+  res.cookies.set(AUTH_OAUTH_INVITE_COOKIE, '', { ...authCookieBase, maxAge: 0 });
 }
 
 export async function GET(req: Request) {
@@ -82,6 +85,7 @@ export async function GET(req: Request) {
   const jar = await cookies();
   const expectedState = jar.get(AUTH_OAUTH_STATE_COOKIE)?.value;
   const nextRaw = jar.get(AUTH_OAUTH_NEXT_COOKIE)?.value;
+  const inviteRaw = jar.get(AUTH_OAUTH_INVITE_COOKIE)?.value;
   const nextPath = safeOAuthNextPath(nextRaw ?? null) || '/';
 
   const redirectLogin = (search: Record<string, string>) => {
@@ -108,6 +112,24 @@ export async function GET(req: Request) {
       return redirectLogin({ error: 'no_profile' });
     }
 
+    const ts = Date.now();
+    const gate = await evaluateNewSignup({
+      sub: profile.sub,
+      email: profile.email,
+      name: profile.name,
+      picture: profile.picture,
+      inviteToken: inviteRaw ?? null,
+      ts,
+    });
+
+    if (!gate.allowed) {
+      const waitUrl = new URL('/waitlist', origin);
+      if (gate.reason === 'daily_cap') waitUrl.searchParams.set('full', '1');
+      const res = NextResponse.redirect(waitUrl);
+      clearOAuthCookies(res);
+      return res;
+    }
+
     const sealed = sealAuthSession({
       sub: profile.sub,
       email: profile.email,
@@ -116,7 +138,6 @@ export async function GET(req: Request) {
     });
 
     try {
-      const ts = Date.now();
       const store = getAnalyticsStore();
       await store.upsertUserOnSignIn({
         sub: profile.sub,
@@ -125,8 +146,9 @@ export async function GET(req: Request) {
         picture: profile.picture,
         ts,
       });
-      // Sign-in is gated by the consent checkbox on /login, so we record the
-      // user's consent here as well. Version is kept in sync with the login UI.
+      if (gate.reason !== 'existing_user') {
+        await completeSignupAfterAllow({ email: profile.email, ts });
+      }
       await store.recordConsent({
         sub: profile.sub,
         email: profile.email,

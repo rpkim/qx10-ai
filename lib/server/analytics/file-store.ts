@@ -246,6 +246,11 @@ export class FileAnalyticsStore implements AnalyticsStore {
     return Object.keys(s.users).length;
   }
 
+  async countUsersCreatedSince(since: number): Promise<number> {
+    const s = await this.readState();
+    return Object.values(s.users).filter((u) => u.createdAt >= since).length;
+  }
+
   async countActiveUsers(since: number): Promise<number> {
     const s = await this.readState();
     return Object.values(s.users).filter((u) => u.lastSeenAt >= since).length;
