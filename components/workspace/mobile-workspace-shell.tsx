@@ -17,6 +17,10 @@ import {
 import { useI18n } from '@/components/i18n-provider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RootNode } from '@/components/nodes/root-node';
+import {
+  useDemoFollowUpTourOptional,
+  useDemoWorkspaceTourOptional,
+} from '@/components/demo/demo-workspace-tour';
 import { DashboardWidget } from '@/components/workspace/dashboard-panel';
 import { useDashboardWidgetReorder } from '@/lib/use-dashboard-widget-reorder';
 import { getClientTtsProvider } from '@/lib/tts/config';
@@ -219,6 +223,8 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
   );
 
   const introduceReveal = useIntroduceReveal();
+  const workspaceTour = useDemoWorkspaceTourOptional();
+  const followUpTour = useDemoFollowUpTourOptional();
   const cardQueryRows = useMemo(() => {
     if (!introduceReveal) return visibleOrderedQueryNodes;
     return visibleOrderedQueryNodes.filter((q) =>
@@ -277,7 +283,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
         embedded
           ? 'top-0 pb-8 pt-1'
           : isMobile
-            ? 'top-[calc(env(safe-area-inset-top)+6.75rem)] pb-[max(6rem,env(safe-area-inset-bottom))]'
+            ? 'top-[calc(env(safe-area-inset-top)+8.75rem)] pb-[max(6rem,env(safe-area-inset-bottom))]'
             : 'top-36 pb-6',
       ].join(' ')}
     >
@@ -285,13 +291,13 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
         id="workspace-cards-content"
         className={[
           'mx-auto flex w-full flex-col gap-3 px-3 py-3',
-          isMobile ? 'max-w-xl' : 'max-w-5xl',
+          isMobile ? 'max-w-xl pt-1' : 'max-w-5xl',
         ].join(' ')}
       >
         {!showDashboard && (
           <div className="flex flex-col gap-2">
             {rootNode && (
-              <div className="mb-1 flex justify-center">
+              <div ref={workspaceTour?.rootTargetRef} className="mb-1 flex justify-center">
                 <RootNode node={rootNode} />
               </div>
             )}
@@ -474,10 +480,22 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                               )}
                             </div>
                             {a.suggestedQueries.length > 0 && a.status === 'complete' && (
-                              <div className="mt-2 flex flex-col gap-1.5">
+                              <div
+                                ref={
+                                  followUpTour?.spotlightAnswerId === a.id
+                                    ? followUpTour.followUpTargetRef
+                                    : undefined
+                                }
+                                className="mt-2 flex flex-col gap-1.5"
+                              >
                                 {a.suggestedQueries.slice(0, 2).map((sq, sqIdx) => {
                                   const introFollowGlow =
                                     introduceReveal?.spotlightAnswerId === a.id && sqIdx === 0;
+                                  const followUpTourGlow =
+                                    followUpTour?.active &&
+                                    followUpTour.spotlightAnswerId === a.id &&
+                                    sqIdx === 0;
+                                  const followUpGlow = introFollowGlow || followUpTourGlow;
                                   const followUpByIndex = answerFollowUpChildren[sqIdx];
                                   return (
                                     <button
@@ -485,6 +503,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                                       type="button"
                                       onClick={() => {
                                         if (introduceReveal) {
+                                          followUpTour?.dismiss();
                                           if (followUpByIndex) {
                                             introduceReveal.revealAndRunQuery(followUpByIndex.id);
                                             scrollToQueryCard(followUpByIndex.id, 160);
@@ -513,8 +532,8 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                                       }}
                                       className={[
                                         'rounded-lg border px-2 py-1 text-left text-[12px] transition-colors',
-                                        introFollowGlow
-                                          ? 'border-primary/60 bg-primary/10 text-foreground shadow-sm'
+                                        followUpGlow
+                                          ? 'demo-run-glow relative z-[102] border-primary/70 bg-primary/10 text-foreground ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-[0_0_16px_rgba(0,196,154,0.35)]'
                                           : 'border-border text-muted-foreground',
                                       ].join(' ')}
                                     >

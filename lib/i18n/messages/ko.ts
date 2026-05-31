@@ -214,10 +214,62 @@ export const ko: Messages = {
   'introduce.headline1': '끝없이 질문하세요.',
   'introduce.headline2': '깊이 발견하세요.',
   'introduce.subtitle':
-    '질문이 답변·데이터·후속 질문으로 어떻게 이어지는지 살펴보세요. 실제 제품과 같은 워크스페이스를 저장된 세션으로 불러옵니다.',
+    '홈 화면처럼 주제를 입력한 뒤, 질문이 답변과 후속 질문으로 이어지는 저장된 워크스페이스를 체험해 보세요.',
   'introduce.cta': '시작하기',
   'introduce.viewCanvas': '캔버스',
   'introduce.viewCards': '카드',
+  'introduce.demoHowTitle': 'Qx10 사용법',
+  'introduce.demoHowLead':
+    '키워드 하나로 시작하면 Qx10이 살아 있는 질문 트리를 만듭니다. 답변마다 더 깊은 질문, 데이터, 인사이트가 이어집니다.',
+  'introduce.demoStep1Title': '주제 선택',
+  'introduce.demoStep1Body': '탐색하고 싶은 키워드나 문구를 입력하세요. 워크스페이스의 뿌리가 됩니다.',
+  'introduce.demoStep2Title': '맥락 추가',
+  'introduce.demoStep2Body': '선택 사항 — “in …”으로 분야나 관점을 좁히면 답변이 더 집중됩니다.',
+  'introduce.demoStep3Title': '목표 선택',
+  'introduce.demoStep3Body': '학습, 리서치, 만들기 등 — 목표에 따라 질문과 답변의 톤이 달라집니다.',
+  'introduce.demoHintKeyword': '홈 화면과 같은 첫 단계입니다.',
+  'introduce.demoHintContext': '선택 사항 — 후속 질문의 방향을 잡는 데 도움이 됩니다.',
+  'introduce.demoHintGoal': '탐색 방식을 고르세요. 실제 서비스에서는 언제든 바꿀 수 있습니다.',
+  'introduce.demoGoalLabel': '탐색 목표',
+  'introduce.demoRun': '데모 실행',
+  'introduce.demoStarting': '불러오는 중…',
+  'introduce.demoTourLabel': '단계별 가이드',
+  'introduce.demoTourStep1Title': '주제로 시작',
+  'introduce.demoTourStep1Body':
+    '워크스페이스의 뿌리가 되는 키워드입니다. 예시가 채워져 있으니 그대로 두거나 수정해도 됩니다.',
+  'introduce.demoTourStep2Title': '맥락 추가 (선택)',
+  'introduce.demoTourStep2Body':
+    '“in …”으로 분야나 관점을 좁힐 수 있습니다. 후속 질문이 더 집중된 방향으로 이어집니다.',
+  'introduce.demoTourStep3Title': 'Run demo를 눌러주세요',
+  'introduce.demoTourStep3Body':
+    '준비 완료! Run demo 버튼을 눌러 예시 워크스페이스를 열고 질문이 답변으로 이어지는 모습을 확인해 보세요.',
+  'introduce.demoTourNext': '다음',
+  'introduce.demoTourBack': '이전',
+  'introduce.demoTourSkip': '가이드 건너뛰기',
+  'introduce.demoTourDone': '알겠어요',
+  'introduce.demoWsTourStep1Title': 'AI가 질문을 생성 중입니다',
+  'introduce.demoWsTourStep1Body':
+    'Qx10이 주제를 분석해 시작 질문을 만듭니다. ROOT 카드의 생성 표시를 확인한 뒤 Next를 누르면 질문이 나타납니다.',
+  'introduce.demoWsTourStep2Title': '질문을 하나 선택하세요',
+  'introduce.demoWsTourStep2Body':
+    '강조된 추천 질문을 눌러 질문 카드를 열고, 트리 탐색을 시작해 보세요.',
+  'introduce.demoFollowUpTourTitle': '후속 질문으로 더 깊이',
+  'introduce.demoFollowUpTourBody':
+    '답변마다 다음 질문이 추천됩니다. glow가 켜진 후속 질문을 눌러 트리를 이어가 보세요.',
+  'introduce.demoCanvasTourTitle': 'Canvas 뷰를 써 보세요',
+  'introduce.demoCanvasTourBody':
+    '답변과 Data 카드가 생겼습니다. Canvas로 전환하면 연결된 그래프로 볼 수 있어요. 이동·확대하며 전체 트리를 탐색해 보세요.',
+  'introduce.demoDashboardTourTitle': 'Dashboard를 열어 보세요',
+  'introduce.demoDashboardTourBody':
+    '답변에서 생성된 차트·표가 자동으로 Dashboard에 모입니다. Dashboard를 눌러 핵심 시각 자료를 한곳에서 확인해 보세요.',
+  'introduce.demoTrySample': '예시 주제 불러오기',
+  'introduce.demoSampleNote':
+    '이 미리보기는 미리 만들어 둔 예시를 사용합니다. 예시를 불러오면 답변과 후속 질문이 있는 전체 워크스페이스를 볼 수 있습니다.',
+  'introduce.demoBackSetup': '주제 변경',
+  'introduce.demoWorkspaceGuideTitle': '워크스페이스 체험',
+  'introduce.demoWorkspaceTip1': '카드를 스크롤하며 주제에서 첫 질문들이 어떻게 갈라지는지 살펴보세요.',
+  'introduce.demoWorkspaceTip2': '강조된 후속 질문을 눌러 트리의 다음 단계를 열어 보세요.',
+  'introduce.demoWorkspaceTip3': '캔버스로 전환하면 전체 그래프를 이동·확대할 수 있습니다.',
   'introduce.demoWorkspaceHint':
     '아래는 Large Language Models 키워드로 보여주는 데모입니다. 실제 서비스에서는 직접 원하는 키워드를 입력하고 질문을 반복하면서 새로운 것을 배우고 깊게 이해할 수 있습니다.',
   'introduce.demoLoadError': '데모 스냅샷을 불러올 수 없습니다.',

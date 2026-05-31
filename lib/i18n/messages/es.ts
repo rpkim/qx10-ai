@@ -217,10 +217,62 @@ export const es: Messages = {
   'introduce.headline1': 'Pregunta sin fin.',
   'introduce.headline2': 'Descubre en profundidad.',
   'introduce.subtitle':
-    'Explora cómo las preguntas ramifican en respuestas, datos y seguimientos: el mismo espacio de trabajo que en el producto, cargado desde una sesión guardada.',
+    'Introduce un tema como en la página principal y explora un espacio guardado donde las preguntas ramifican en respuestas y seguimientos.',
   'introduce.cta': 'Empezar',
   'introduce.viewCanvas': 'Canvas',
   'introduce.viewCards': 'Tarjetas',
+  'introduce.demoHowTitle': 'Cómo funciona Qx10',
+  'introduce.demoHowLead':
+    'Empieza con una palabra clave. Qx10 crea un árbol vivo de preguntas — cada respuesta puede abrir preguntas, datos e ideas más profundas.',
+  'introduce.demoStep1Title': 'Elige un tema',
+  'introduce.demoStep1Body': 'Escribe una palabra clave o frase que quieras explorar — la raíz de tu espacio.',
+  'introduce.demoStep2Title': 'Añade contexto',
+  'introduce.demoStep2Body': 'Opcional — «in …» acota el enfoque para que las respuestas sigan tu ángulo.',
+  'introduce.demoStep3Title': 'Elige un objetivo',
+  'introduce.demoStep3Body': 'Aprender, investigar, construir… el objetivo orienta cómo se formulan preguntas y respuestas.',
+  'introduce.demoHintKeyword': 'Es el mismo primer paso que en la página principal.',
+  'introduce.demoHintContext': 'Opcional — ayuda a mantener el rumbo de los seguimientos.',
+  'introduce.demoHintGoal': 'Elige cómo explorar; en el producto puedes cambiarlo cuando quieras.',
+  'introduce.demoGoalLabel': 'Objetivo de exploración',
+  'introduce.demoRun': 'Ejecutar demo',
+  'introduce.demoStarting': 'Cargando…',
+  'introduce.demoTourLabel': 'Guía paso a paso',
+  'introduce.demoTourStep1Title': 'Empieza con un tema',
+  'introduce.demoTourStep1Body':
+    'Esta es tu palabra clave — la raíz del espacio. Hemos puesto un ejemplo; puedes editarlo o dejarlo.',
+  'introduce.demoTourStep2Title': 'Añade contexto (opcional)',
+  'introduce.demoTourStep2Body':
+    'El contexto acota con «in …» para que las preguntas sigan tu ángulo o campo.',
+  'introduce.demoTourStep3Title': 'Pulsa Run demo',
+  'introduce.demoTourStep3Body':
+    '¡Listo! Pulsa Run demo para cargar el espacio de ejemplo y ver cómo ramifican las preguntas.',
+  'introduce.demoTourNext': 'Siguiente',
+  'introduce.demoTourBack': 'Atrás',
+  'introduce.demoTourSkip': 'Saltar guía',
+  'introduce.demoTourDone': 'Entendido',
+  'introduce.demoWsTourStep1Title': 'La IA está generando preguntas',
+  'introduce.demoWsTourStep1Body':
+    'Qx10 analiza tu tema y redacta preguntas iniciales. Mira la tarjeta ROOT y pulsa Siguiente para verlas.',
+  'introduce.demoWsTourStep2Title': 'Elige una pregunta',
+  'introduce.demoWsTourStep2Body':
+    'Toca una sugerencia resaltada para abrirla como tarjeta y empezar a explorar el árbol.',
+  'introduce.demoFollowUpTourTitle': 'Profundiza con seguimientos',
+  'introduce.demoFollowUpTourBody':
+    'Cada respuesta sugiere las siguientes preguntas. Toca un seguimiento resaltado para ramificar el árbol.',
+  'introduce.demoCanvasTourTitle': 'Prueba la vista Canvas',
+  'introduce.demoCanvasTourBody':
+    'Ya tienes respuestas y tarjetas de datos. Cambia a Canvas para verlas como un grafo conectado — mueve y amplía para explorar el árbol completo.',
+  'introduce.demoDashboardTourTitle': 'Abre el Dashboard',
+  'introduce.demoDashboardTourBody':
+    'Los gráficos y tablas de tus respuestas se fijan aquí automáticamente. Toca Dashboard para revisar las visualizaciones clave en un solo lugar.',
+  'introduce.demoTrySample': 'Cargar tema de ejemplo',
+  'introduce.demoSampleNote':
+    'Esta vista previa usa un ejemplo preconstruido. Carga el ejemplo para ver un espacio completo con respuestas y seguimientos.',
+  'introduce.demoBackSetup': 'Cambiar tema',
+  'introduce.demoWorkspaceGuideTitle': 'Prueba el espacio',
+  'introduce.demoWorkspaceTip1': 'Desplázate por las tarjetas para ver cómo las primeras preguntas salen de tu tema.',
+  'introduce.demoWorkspaceTip2': 'Toca una pregunta de seguimiento resaltada para revelar la siguiente capa del árbol.',
+  'introduce.demoWorkspaceTip3': 'Cambia a Canvas para mover y ampliar el grafo completo.',
   'introduce.demoWorkspaceHint':
     'La demo de abajo usa la palabra clave «Large Language Models». En el servicio completo, puedes escribir la palabra clave que quieras y seguir preguntando para aprender cosas nuevas y entenderlas en profundidad.',
   'introduce.demoLoadError': 'No se pudo cargar la instantánea de demostración.',

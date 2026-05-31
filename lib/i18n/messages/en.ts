@@ -214,10 +214,62 @@ export const en: Messages = {
   'introduce.headline1': 'Ask endlessly.',
   'introduce.headline2': 'Discover deeply.',
   'introduce.subtitle':
-    'Explore how questions branch into answers, data, and follow-ups — the same workspace you use in the product, loaded from a saved session.',
+    'Enter a topic like you would on the home page, then explore a saved workspace where questions branch into answers and follow-ups.',
   'introduce.cta': "Let's Start",
   'introduce.viewCanvas': 'Canvas',
   'introduce.viewCards': 'Cards',
+  'introduce.demoHowTitle': 'How Qx10 works',
+  'introduce.demoHowLead':
+    'Start with any keyword. Qx10 turns your topic into a living question tree — each answer can spawn deeper questions, data, and insights.',
+  'introduce.demoStep1Title': 'Pick a topic',
+  'introduce.demoStep1Body': 'Type a keyword or phrase you want to explore — the root of your workspace.',
+  'introduce.demoStep2Title': 'Add context',
+  'introduce.demoStep2Body': 'Optionally narrow the lens with “in …” so answers stay focused on your field or angle.',
+  'introduce.demoStep3Title': 'Choose a goal',
+  'introduce.demoStep3Body': 'Learn, research, build, and more — the goal shapes how questions and answers are framed.',
+  'introduce.demoHintKeyword': 'This is the same first step as the home page.',
+  'introduce.demoHintContext': 'Optional — helps keep follow-up questions on track.',
+  'introduce.demoHintGoal': 'Pick how you want to explore; you can change this anytime in the product.',
+  'introduce.demoGoalLabel': 'Exploration goal',
+  'introduce.demoRun': 'Run demo',
+  'introduce.demoStarting': 'Loading…',
+  'introduce.demoTourLabel': 'Step-by-step guide',
+  'introduce.demoTourStep1Title': 'Start with a topic',
+  'introduce.demoTourStep1Body':
+    'This is your keyword — the root of your workspace. We filled in an example; you can edit it or keep it as is.',
+  'introduce.demoTourStep2Title': 'Add context (optional)',
+  'introduce.demoTourStep2Body':
+    'Context narrows the lens with “in …”. It keeps follow-up questions focused on your field or angle.',
+  'introduce.demoTourStep3Title': 'Press Run demo',
+  'introduce.demoTourStep3Body':
+    'Ready! Press Run demo to load the sample workspace and see how questions branch into answers.',
+  'introduce.demoTourNext': 'Next',
+  'introduce.demoTourBack': 'Back',
+  'introduce.demoTourSkip': 'Skip guide',
+  'introduce.demoTourDone': 'Got it',
+  'introduce.demoWsTourStep1Title': 'AI is generating questions',
+  'introduce.demoWsTourStep1Body':
+    'Qx10 reads your topic and drafts starter questions. Watch the ROOT card — suggestions appear when you press Next.',
+  'introduce.demoWsTourStep2Title': 'Pick a question',
+  'introduce.demoWsTourStep2Body':
+    'Tap a highlighted suggestion to open it as a question card and start exploring the tree.',
+  'introduce.demoFollowUpTourTitle': 'Go deeper with follow-ups',
+  'introduce.demoFollowUpTourBody':
+    'Each answer suggests the next questions. Tap a glowing follow-up to branch the tree and keep exploring.',
+  'introduce.demoCanvasTourTitle': 'Try the Canvas view',
+  'introduce.demoCanvasTourBody':
+    'You now have answers and data cards. Switch to Canvas to see them as a connected graph — pan and zoom to explore the full tree.',
+  'introduce.demoDashboardTourTitle': 'Open the Dashboard',
+  'introduce.demoDashboardTourBody':
+    'Charts and tables from your answers are pinned here automatically. Tap Dashboard to review key visuals in one place.',
+  'introduce.demoTrySample': 'Load sample topic',
+  'introduce.demoSampleNote':
+    'This preview uses a pre-built example. Load the sample to see a full workspace with answers and follow-ups.',
+  'introduce.demoBackSetup': 'Change topic',
+  'introduce.demoWorkspaceGuideTitle': 'Try the workspace',
+  'introduce.demoWorkspaceTip1': 'Scroll through cards to see how the first questions branch from your topic.',
+  'introduce.demoWorkspaceTip2': 'Tap a highlighted follow-up question to reveal the next layer of the tree.',
+  'introduce.demoWorkspaceTip3': 'Switch to Canvas to pan and zoom the full graph.',
   'introduce.demoWorkspaceHint':
     'The demo below uses the keyword “Large Language Models.” In the full product, you can enter any keyword you like and keep asking questions to learn something new and understand it in depth.',
   'introduce.demoLoadError': 'Demo snapshot could not be loaded.',

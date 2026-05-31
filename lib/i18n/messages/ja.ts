@@ -214,10 +214,62 @@ export const ja: Messages = {
   'introduce.headline1': '尽きない問いを。',
   'introduce.headline2': '深く発見を。',
   'introduce.subtitle':
-    '質問が回答・データ・フォローアップへどう分岐するかを体験できます。製品と同じワークスペースを保存済みセッションから読み込みます。',
+    'ホームと同じようにトピックを入力し、質問が回答とフォローアップへ分岐する保存済みワークスペースを体験できます。',
   'introduce.cta': 'はじめる',
   'introduce.viewCanvas': 'キャンバス',
   'introduce.viewCards': 'カード',
+  'introduce.demoHowTitle': 'Qx10の使い方',
+  'introduce.demoHowLead':
+    'キーワードから始めると、Qx10が生きた質問ツリーを作ります。各回答からより深い質問・データ・洞察へと広がります。',
+  'introduce.demoStep1Title': 'トピックを選ぶ',
+  'introduce.demoStep1Body': '探索したいキーワードやフレーズを入力 — ワークスペースの根になります。',
+  'introduce.demoStep2Title': 'コンテキストを追加',
+  'introduce.demoStep2Body': '任意 — 「in …」で分野や視点を絞ると、回答がより集中します。',
+  'introduce.demoStep3Title': 'ゴールを選ぶ',
+  'introduce.demoStep3Body': '学習、調査、構築など — ゴールで質問と回答のトーンが変わります。',
+  'introduce.demoHintKeyword': 'ホーム画面と同じ最初のステップです。',
+  'introduce.demoHintContext': '任意 — フォローアップの方向を保つのに役立ちます。',
+  'introduce.demoHintGoal': '探索の仕方を選びます。本番ではいつでも変更できます。',
+  'introduce.demoGoalLabel': '探索ゴール',
+  'introduce.demoRun': 'デモを実行',
+  'introduce.demoStarting': '読み込み中…',
+  'introduce.demoTourLabel': 'ステップガイド',
+  'introduce.demoTourStep1Title': 'トピックから始める',
+  'introduce.demoTourStep1Body':
+    'ワークスペースの根になるキーワードです。例が入っていますが、編集してもそのままでもOKです。',
+  'introduce.demoTourStep2Title': 'コンテキストを追加（任意）',
+  'introduce.demoTourStep2Body':
+    '「in …」で分野や視点を絞れます。フォローアップの質問がより集中した方向に進みます。',
+  'introduce.demoTourStep3Title': 'Run demo を押してください',
+  'introduce.demoTourStep3Body':
+    '準備完了！Run demo を押してサンプルワークスペースを開き、質問が回答へ分岐する様子を見てください。',
+  'introduce.demoTourNext': '次へ',
+  'introduce.demoTourBack': '戻る',
+  'introduce.demoTourSkip': 'ガイドをスキップ',
+  'introduce.demoTourDone': '了解',
+  'introduce.demoWsTourStep1Title': 'AIが質問を生成中',
+  'introduce.demoWsTourStep1Body':
+    'Qx10がトピックを読み取り、最初の質問を作成します。ROOTカードを見て、Nextを押すと質問が表示されます。',
+  'introduce.demoWsTourStep2Title': '質問を選んでください',
+  'introduce.demoWsTourStep2Body':
+    'ハイライトされた候補をタップして質問カードを開き、ツリーの探索を始めましょう。',
+  'introduce.demoFollowUpTourTitle': 'フォローアップでさらに深く',
+  'introduce.demoFollowUpTourBody':
+    '各回答から次の質問が提案されます。光るフォローアップをタップしてツリーを伸ばしましょう。',
+  'introduce.demoCanvasTourTitle': 'Canvas ビューを試す',
+  'introduce.demoCanvasTourBody':
+    '回答と Data カードが揃いました。Canvas に切り替えるとグラフとしてつながりが見えます。パン・ズームでツリー全体を探索してください。',
+  'introduce.demoDashboardTourTitle': 'Dashboard を開く',
+  'introduce.demoDashboardTourBody':
+    '回答から生成されたチャートや表は Dashboard に自動で集まります。Dashboard をタップして、重要なビジュアルを一か所で確認しましょう。',
+  'introduce.demoTrySample': 'サンプルトピックを読み込む',
+  'introduce.demoSampleNote':
+    'このプレビューは事前構築の例を使います。サンプルを読み込むと、回答とフォローアップがあるワークスペース全体を見られます。',
+  'introduce.demoBackSetup': 'トピックを変更',
+  'introduce.demoWorkspaceGuideTitle': 'ワークスペースを試す',
+  'introduce.demoWorkspaceTip1': 'カードをスクロールして、トピックから最初の質問がどう分岐するか見てください。',
+  'introduce.demoWorkspaceTip2': 'ハイライトされたフォローアップをタップして、ツリーの次の層を開きます。',
+  'introduce.demoWorkspaceTip3': 'キャンバスに切り替えると、グラフ全体をパン・ズームできます。',
   'introduce.demoWorkspaceHint':
     '以下は「Large Language Models」というキーワードで見せるデモです。本番では、お好きなキーワードを入力し、質問を繰り返しながら新しいことを学び、深く理解できます。',
   'introduce.demoLoadError': 'デモのスナップショットを読み込めませんでした。',

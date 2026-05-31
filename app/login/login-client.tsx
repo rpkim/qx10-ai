@@ -241,7 +241,7 @@ export function LoginClient() {
           </p>
 
           <Link
-            href="/service/introduce"
+            href="/demo"
             className="inline-flex w-full items-center justify-center rounded-xl border border-primary/40 bg-primary/10 px-4 py-2.5 text-center text-sm font-semibold text-primary transition-colors hover:border-primary/60 hover:bg-primary/15 sm:w-auto"
           >
             {t('auth.tryDemo')}
