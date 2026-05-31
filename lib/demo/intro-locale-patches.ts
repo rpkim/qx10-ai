@@ -5,8 +5,9 @@ import koIntroContentNodes from '@/lib/demo/intro-locale-ko-nodes.json';
 /** Korean UI strings for the service introduce demo snapshot (same graph as EN). */
 const koIntroPatch: IntroLocalePatch = {
   keyword: '대규모 언어 모델',
+  context: '인공지능 및 기계학습',
   nodes: {
-    root: { keyword: '대규모 언어 모델' },
+    root: { keyword: '대규모 언어 모델', context: '인공지능 및 기계학습' },
     'q-custom-1774628253903': {
       question:
         '대규모 언어 모델(LLM)은 정확히 무엇을 의미하며, 다른 AI 모델과 어떻게 다른가요?',

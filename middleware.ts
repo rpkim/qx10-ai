@@ -16,6 +16,7 @@ const PUBLIC_EXACT = new Set<string>([
 const PUBLIC_PREFIXES = [
   '/_next/',
   '/api/auth/',
+  '/demo',
   '/service/introduce',
   '/legal/',
   '/assets/',

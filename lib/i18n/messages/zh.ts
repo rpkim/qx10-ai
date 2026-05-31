@@ -210,10 +210,62 @@ export const zh: Messages = {
   'introduce.headline1': '无尽提问。',
   'introduce.headline2': '深入发现。',
   'introduce.subtitle':
-    '看看问题如何分支为答案、数据和后续追问——与产品中相同的工作区，由已保存会话加载。',
+    '像首页一样输入主题，然后探索一个已保存的工作区——问题会分支成答案和后续追问。',
   'introduce.cta': '开始',
   'introduce.viewCanvas': '画布',
   'introduce.viewCards': '卡片',
+  'introduce.demoHowTitle': 'Qx10 怎么用',
+  'introduce.demoHowLead':
+    '从一个关键词开始，Qx10 会生成活的提问树——每个答案都可以引出更深层的问题、数据和洞见。',
+  'introduce.demoStep1Title': '选择主题',
+  'introduce.demoStep1Body': '输入想探索的关键词或短语——这是工作区的根。',
+  'introduce.demoStep2Title': '添加上下文',
+  'introduce.demoStep2Body': '可选 — 用「in …」缩小范围，让回答更聚焦。',
+  'introduce.demoStep3Title': '选择目标',
+  'introduce.demoStep3Body': '学习、研究、构建等 — 目标会影响提问与回答的方式。',
+  'introduce.demoHintKeyword': '与首页相同的第一步。',
+  'introduce.demoHintContext': '可选 — 有助于保持后续提问的方向。',
+  'introduce.demoHintGoal': '选择探索方式；在正式产品中可随时更改。',
+  'introduce.demoGoalLabel': '探索目标',
+  'introduce.demoRun': '运行演示',
+  'introduce.demoStarting': '加载中…',
+  'introduce.demoTourLabel': '分步指南',
+  'introduce.demoTourStep1Title': '从主题开始',
+  'introduce.demoTourStep1Body':
+    '这是工作区的根关键词。我们已填入示例，您可以编辑或保持不变。',
+  'introduce.demoTourStep2Title': '添加上下文（可选）',
+  'introduce.demoTourStep2Body':
+    '用「in …」缩小范围，让后续提问更聚焦。',
+  'introduce.demoTourStep3Title': '请点击 Run demo',
+  'introduce.demoTourStep3Body':
+    '准备好了！点击 Run demo 加载示例工作区，查看问题如何分支成答案。',
+  'introduce.demoTourNext': '下一步',
+  'introduce.demoTourBack': '上一步',
+  'introduce.demoTourSkip': '跳过指南',
+  'introduce.demoTourDone': '知道了',
+  'introduce.demoWsTourStep1Title': 'AI 正在生成问题',
+  'introduce.demoWsTourStep1Body':
+    'Qx10 会阅读您的主题并起草起始问题。请看 ROOT 卡片，按“下一步”后问题会出现。',
+  'introduce.demoWsTourStep2Title': '请选择一个问题',
+  'introduce.demoWsTourStep2Body':
+    '点击高亮的推荐问题，将其打开为问题卡片并开始探索树。',
+  'introduce.demoFollowUpTourTitle': '用后续问题深入',
+  'introduce.demoFollowUpTourBody':
+    '每个答案都会推荐下一步问题。点击发光的后续问题，继续扩展知识树。',
+  'introduce.demoCanvasTourTitle': '试试 Canvas 视图',
+  'introduce.demoCanvasTourBody':
+    '您已有答案和数据卡片。切换到 Canvas 可看到连接图谱——平移和缩放以探索完整树。',
+  'introduce.demoDashboardTourTitle': '打开 Dashboard',
+  'introduce.demoDashboardTourBody':
+    '回答中生成的图表和表格会自动固定到 Dashboard。点击 Dashboard，在一处查看关键可视化内容。',
+  'introduce.demoTrySample': '加载示例主题',
+  'introduce.demoSampleNote':
+    '此预览使用预构建示例。加载示例可查看包含答案与后续提问的完整工作区。',
+  'introduce.demoBackSetup': '更改主题',
+  'introduce.demoWorkspaceGuideTitle': '体验工作区',
+  'introduce.demoWorkspaceTip1': '滚动卡片，查看主题如何分出第一批问题。',
+  'introduce.demoWorkspaceTip2': '点击高亮的后续问题，展开树的下一层。',
+  'introduce.demoWorkspaceTip3': '切换到画布可平移和缩放完整图谱。',
   'introduce.demoWorkspaceHint':
     '以下展示的是以「Large Language Models」为关键词的演示。在实际服务中，您可以输入任意关键词，通过反复提问来学习新内容并深入理解。',
   'introduce.demoLoadError': '无法加载演示快照。',

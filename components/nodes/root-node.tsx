@@ -9,6 +9,7 @@ import {
   useIntroduceReveal,
 } from '@/lib/introduce-reveal-context';
 import { useI18n } from '@/components/i18n-provider';
+import { useDemoWorkspaceTourOptional } from '@/components/demo/demo-workspace-tour';
 import { getSuggestedQueries } from '@/lib/mock-data';
 
 const seedSuggestionCache = new Map<string, { questions: string[]; status: 'ai' | 'fallback' }>();
@@ -53,6 +54,8 @@ export function RootNode({ node }: Props) {
   const { t, locale } = useI18n();
   const { addCustomQuery, isDemoMode, state } = useWorkspace();
   const introduceReveal = useIntroduceReveal();
+  const workspaceTour = useDemoWorkspaceTourOptional();
+  const tourAwaitingQuestions = workspaceTour?.active && !workspaceTour.showQuestions;
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
   const [seedSuggestions, setSeedSuggestions] = useState<string[]>([]);
@@ -75,6 +78,12 @@ export function RootNode({ node }: Props) {
     const cacheKey = `${node.keyword}::${node.context ?? ''}::${node.goal}::${locale}`;
 
     if (introduceRevealActive) {
+      if (tourAwaitingQuestions) {
+        setSeedSuggestions([]);
+        setSuggestionStatus('ai');
+        setIsLoadingSuggestions(true);
+        return;
+      }
       const fromGraphQs = sortedRootChildQueries.map((q) => q.question.trim()).filter(Boolean);
       if (fromGraphQs.length > 0) {
         setSeedSuggestions(fromGraphQs);
@@ -160,6 +169,7 @@ export function RootNode({ node }: Props) {
     locale,
     introduceRevealActive,
     rootChildQueriesKey,
+    tourAwaitingQuestions,
   ]);
 
   const handleSubmitCustom = (e: React.FormEvent) => {
@@ -239,7 +249,8 @@ export function RootNode({ node }: Props) {
               const introSecondSeedCue =
                 !!introduceReveal &&
                 introduceReveal.revealedQueryIds.size === 0 &&
-                idx === 1;
+                idx === 1 &&
+                (!workspaceTour?.active || workspaceTour.showQuestions);
               return (
               <button
                 key={`${node.id}-seed-${idx}`}
@@ -247,6 +258,7 @@ export function RootNode({ node }: Props) {
                 onClick={() => {
                   if (!clickable) return;
                   if (introduceReveal) {
+                    workspaceTour?.dismiss();
                     const target = sortedRootChildQueries[idx];
                     if (target) {
                       introduceReveal.revealAndRunQuery(target.id);
@@ -267,7 +279,7 @@ export function RootNode({ node }: Props) {
                     ? [
                         'border-primary/50 text-foreground shadow-[0_0_12px_rgba(0,196,154,0.25)] hover:bg-secondary',
                         introSecondSeedCue
-                          ? 'border-primary/70 bg-primary/10 shadow-[0_0_16px_rgba(0,196,154,0.35)]'
+                          ? 'demo-run-glow border-primary/70 bg-primary/10 shadow-[0_0_16px_rgba(0,196,154,0.35)]'
                           : '',
                       ].join(' ')
                     : 'border-border text-muted-foreground opacity-45',

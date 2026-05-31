@@ -173,7 +173,7 @@ export default function LandingPage() {
             className={[
               'absolute flex items-center gap-2 transition-all duration-500 ease-in-out',
               startAnimPhase
-                ? 'left-5 top-5 translate-x-0 translate-y-0 scale-75 opacity-100'
+                ? 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 scale-95 opacity-0 md:left-5 md:top-5 md:translate-x-0 md:translate-y-0 md:scale-75 md:opacity-100'
                 : 'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 scale-110 opacity-95',
             ].join(' ')}
           >

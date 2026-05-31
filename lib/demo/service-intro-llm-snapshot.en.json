@@ -3,12 +3,14 @@
   "savedAt": "2026-03-27T16:22:02.034Z",
   "keyword": "Large Language Models",
   "goal": "learn",
+  "context": "AI & Machine Learning",
   "nodes": [
     {
       "id": "root",
       "type": "root",
       "keyword": "Large Language Models",
       "goal": "learn",
+      "context": "AI & Machine Learning",
       "position": {
         "x": 1628.9619777071287,
         "y": -533.9374159356996

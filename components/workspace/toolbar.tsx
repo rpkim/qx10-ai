@@ -335,7 +335,7 @@ export function Toolbar({
               <div className="truncate text-xs text-muted-foreground">{t(GOAL_LABEL_KEYS[goal])}</div>
             </div>
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/60 pt-2">
+          <div className="mt-2 flex flex-nowrap items-center justify-end gap-1.5 overflow-x-auto border-t border-border/60 pt-2 [scrollbar-width:none]">
             {canUseSummary && (
               <button
                 type="button"

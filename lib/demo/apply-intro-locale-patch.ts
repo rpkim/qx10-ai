@@ -5,6 +5,7 @@
 export type IntroLocalePatch = {
   keyword?: string;
   goal?: string;
+  context?: string;
   nodes?: Record<string, Record<string, unknown>>;
 };
 
@@ -16,10 +17,12 @@ export function applyIntroLocalePatch(
   const state = structuredClone(base) as {
     keyword: string;
     goal: string;
+    context?: string;
     nodes: Array<Record<string, unknown> & { id: string }>;
   };
   if (patch.keyword !== undefined) state.keyword = patch.keyword;
   if (patch.goal !== undefined) state.goal = patch.goal;
+  if (patch.context !== undefined) state.context = patch.context;
   const patches = patch.nodes;
   if (!patches) return state;
   for (const node of state.nodes) {

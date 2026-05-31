@@ -120,7 +120,7 @@ export function buildModelCatalog(): AiModelCatalog {
   }
 
   if (geminiKey) {
-    const models = parseCommaList(process.env.GEMINI_MODELS, ['gemini-3.5-flash']);
+    const models = parseCommaList(process.env.GEMINI_MODELS, ['gemini-2.5-flash']);
     const uniq = [...new Set(models)];
     for (const m of uniq) {
       options.push({
