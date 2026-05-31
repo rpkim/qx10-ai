@@ -6,9 +6,19 @@ import {
   resolveModelSelection,
 } from '@/lib/ai/model-config';
 import { createWorkspaceQueryReadableStream } from '@/lib/ai/workspace-query-stream';
+import { getAuthSession } from '@/lib/auth/session';
+import { ensureUserRecordForSession } from '@/lib/server/ensure-user-record';
+import { getAnalyticsStore } from '@/lib/server/analytics/store';
+import { nextUtcDayStartMs } from '@/lib/server/quota/config';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
+
+const BYOK_HEADER = 'x-qx10-gemini-api-key';
+
+function isValidGeminiKey(key: string): boolean {
+  return /^AIza[0-9A-Za-z_-]{20,}$/.test(key);
+}
 
 export async function POST(req: Request) {
   let body: {
@@ -18,7 +28,6 @@ export async function POST(req: Request) {
     context?: string | null;
     contextPairs?: Array<{ question?: string; answer?: string }>;
     locale?: string;
-    /** Catalog id e.g. `openai:gpt-4o-mini` */
     modelChoice?: string | null;
     toolChoice?: QueryToolChoice | null;
   };
@@ -95,8 +104,92 @@ export async function POST(req: Request) {
     });
   }
 
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
-  const geminiKey = readGeminiApiKey();
+  const session = await getAuthSession();
+  const authDisabled = process.env.AUTH_DISABLED === 'true';
+  if (!session && !authDisabled) {
+    return new Response(JSON.stringify({ error: 'unauthenticated', code: 'UNAUTHENTICATED' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const userGeminiKey = req.headers.get(BYOK_HEADER)?.trim() ?? '';
+  const usingByok = userGeminiKey.length > 0;
+
+  if (usingByok) {
+    if (selection.provider !== 'gemini') {
+      return new Response(
+        JSON.stringify({
+          error: 'Personal Gemini API keys only work with Gemini models.',
+          code: 'BYOK_GEMINI_ONLY',
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    if (!isValidGeminiKey(userGeminiKey)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid Gemini API key format.', code: 'BYOK_INVALID_KEY' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+  }
+
+  if (session && !usingByok) {
+    await ensureUserRecordForSession(session);
+    const consumed = await getAnalyticsStore().tryConsumeDailyQuery({
+      sub: session.sub,
+      email: session.email,
+      keyword,
+      goal,
+      model: selection.model,
+      ts: Date.now(),
+    });
+    if (!consumed.ok) {
+      const status = consumed.code === 'SUSPENDED' ? 403 : 429;
+      return new Response(
+        JSON.stringify({
+          error:
+            consumed.code === 'SUSPENDED'
+              ? 'Your account is temporarily suspended.'
+              : 'Daily AI query limit reached.',
+          code: consumed.code,
+          quota: consumed.quota,
+          dailyLimit: consumed.quota.dailyLimit,
+          dailyCount: consumed.quota.dailyCount,
+          remaining: consumed.quota.remaining,
+          resetsAt: consumed.quota.resetsAt ?? nextUtcDayStartMs(),
+          tier: consumed.quota.tier,
+          freeTierLimit: consumed.quota.freeTierLimit,
+          premiumTierLimit: consumed.quota.premiumTierLimit,
+          byokHint: true,
+        }),
+        { status, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+  }
+
+  let openaiKey = process.env.OPENAI_API_KEY?.trim();
+  let geminiKey = readGeminiApiKey();
+
+  if (usingByok) {
+    geminiKey = userGeminiKey;
+  }
+
+  if (selection.provider === 'gemini' && !geminiKey) {
+    return new Response(
+      JSON.stringify({
+        error: 'Gemini API key missing. Add your key in Settings or contact support.',
+        code: 'NO_API_KEY',
+      }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+  if (selection.provider === 'openai' && !openaiKey) {
+    return new Response(
+      JSON.stringify({ error: 'OpenAI API key missing.', code: 'NO_API_KEY' }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
 
   const stream = createWorkspaceQueryReadableStream(
     selection,

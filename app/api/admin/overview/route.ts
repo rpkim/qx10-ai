@@ -2,6 +2,14 @@ import { NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth/require-admin';
 import { getAnalyticsStore, getAnalyticsStoreKind } from '@/lib/server/analytics/store';
 
+import {
+  summarizeGlobalQueryUsage,
+} from '@/lib/server/analytics/query-usage-stats';
+import {
+  getDefaultDailyQueryLimit,
+  getPremiumTierDailyQueryLimit,
+} from '@/lib/server/quota/config';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -25,8 +33,11 @@ export async function GET() {
       signins24h,
       searchesAllTime,
       searches24h,
+      queriesAllTime,
+      queries24h,
       consents,
       topKeywords,
+      allUsers,
     ] = await Promise.all([
       store.countUsers(),
       store.countActiveUsers(now - DAY),
@@ -36,12 +47,22 @@ export async function GET() {
       store.countEvents('signin', now - DAY),
       store.countEvents('search'),
       store.countEvents('search', now - DAY),
+      store.countEvents('query'),
+      store.countEvents('query', now - DAY),
       store.countEvents('consent'),
       store.topKeywords(20),
+      store.listUsers({ limit: 500 }),
     ]);
+
+    const queryUsage = summarizeGlobalQueryUsage(
+      await store.getQueryUsageStatsForUsers(allUsers)
+    );
 
     return NextResponse.json({
       backend,
+      freeTierDailyLimit: getDefaultDailyQueryLimit(),
+      premiumTierDailyLimit: getPremiumTierDailyQueryLimit(),
+      queryUsage,
       totals: {
         users: totalUsers,
         activeUsers24h,
@@ -51,6 +72,10 @@ export async function GET() {
         signins24h,
         searchesAllTime,
         searches24h,
+        queriesAllTime,
+        queries24h,
+        queries7d: queryUsage.queries7d,
+        queries30d: queryUsage.queries30d,
         consents,
       },
       topKeywords,

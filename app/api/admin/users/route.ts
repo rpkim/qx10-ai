@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdminApi } from '@/lib/auth/require-admin';
 import { getAnalyticsStore, getAnalyticsStoreKind } from '@/lib/server/analytics/store';
+import { ensureAdminTierForUser } from '@/lib/server/quota/sync-admin-tier';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,8 +17,11 @@ export async function GET(req: Request) {
     sortRaw === 'createdAt' || sortRaw === 'searchCount' ? sortRaw : 'lastSeen';
 
   try {
-    const users = await getAnalyticsStore().listUsers({ limit, sort });
-    return NextResponse.json({ users });
+    const store = getAnalyticsStore();
+    let users = await store.listUsers({ limit, sort });
+    users = await Promise.all(users.map((u) => ensureAdminTierForUser(store, u)));
+    const queryStats = await store.getQueryUsageStatsForUsers(users);
+    return NextResponse.json({ users, queryStats });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error('[admin/users] failed', { message, error: e });

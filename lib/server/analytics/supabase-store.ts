@@ -19,6 +19,12 @@ import type {
   AnalyticsStore,
   UserRecord,
 } from './types';
+import { getDefaultDailyQueryLimit, getPremiumTierDailyQueryLimit } from '@/lib/server/quota/config';
+import { buildQueryQuotaSnapshot, tryConsumeDailyQueryOnUser } from '@/lib/server/quota/user-quota';
+import type { ConsumeQueryResult, QueryQuotaSnapshot } from '@/lib/server/quota/types';
+import { parseUserTier, type UserTier } from '@/lib/server/quota/tiers';
+import { tierForEmailOnSignIn } from '@/lib/server/quota/sync-admin-tier';
+import { buildUserQueryUsageStats } from '@/lib/server/analytics/query-usage-stats';
 import { decryptField, decryptFieldOr, encryptField } from './pii-encrypt';
 
 type DbUserRow = {
@@ -32,11 +38,16 @@ type DbUserRow = {
   search_count: number;
   consent_at: number | null;
   consent_version: string | null;
+  daily_query_count: number | null;
+  query_quota_day: string | null;
+  daily_query_limit: number | null;
+  tier: string | null;
+  status: string | null;
 };
 
 type DbEventRow = {
   id: number;
-  type: 'signin' | 'search' | 'consent';
+  type: 'signin' | 'search' | 'consent' | 'query';
   sub: string;
   email: string;
   ts: number;
@@ -60,13 +71,18 @@ function rowToUser(r: DbUserRow): UserRecord {
     searchCount: r.search_count,
     consentAt: r.consent_at == null ? undefined : Number(r.consent_at),
     consentVersion: r.consent_version ?? undefined,
+    dailyQueryCount: r.daily_query_count ?? 0,
+    queryQuotaDay: r.query_quota_day ?? undefined,
+    dailyQueryLimit: r.daily_query_limit,
+    tier: parseUserTier(r.tier),
+    status: r.status === 'suspended' ? 'suspended' : 'active',
   };
 }
 
 function rowToEvent(r: DbEventRow): ActivityEvent {
-  if (r.type === 'search') {
+  if (r.type === 'search' || r.type === 'query') {
     return {
-      type: 'search',
+      type: r.type,
       sub: r.sub,
       email: decryptFieldOr(r.email, r.email),
       ts: Number(r.ts),
@@ -138,6 +154,7 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
           picture: encPicture ?? existing.picture,
           last_seen_at: ts,
           sign_in_count: (existing.sign_in_count ?? 0) + 1,
+          tier: tierForEmailOnSignIn(email, parseUserTier(existing.tier)),
         }
       : {
           sub,
@@ -148,6 +165,7 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
           last_seen_at: ts,
           sign_in_count: 1,
           search_count: 0,
+          tier: tierForEmailOnSignIn(email),
         };
 
     const { data: upserted, error: upErr } = await this.client
@@ -221,7 +239,7 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
       email: encryptField(e.email),
       ts: e.ts,
     };
-    if (e.type === 'search') {
+    if (e.type === 'search' || e.type === 'query') {
       row.keyword = encryptField(e.keyword);
       row.goal = e.goal;
       row.surface = e.surface ?? null;
@@ -315,6 +333,130 @@ export class SupabaseAnalyticsStore implements AnalyticsStore {
       .limit(limit);
     if (error) throw new Error(`topKeywords: ${error.message}`);
     return (data ?? []).map((r) => ({ keyword: r.keyword as string, count: r.count as number }));
+  }
+
+  async getQueryUsageStatsForUsers(users: UserRecord[]): Promise<Record<string, import('./query-usage-stats').UserQueryUsageStats>> {
+    if (users.length === 0) return {};
+    const subs = users.map((u) => u.sub);
+    const { data, error } = await this.client
+      .from('events')
+      .select('sub, ts')
+      .eq('type', 'query')
+      .in('sub', subs);
+    if (error) throw new Error(`getQueryUsageStatsForUsers: ${error.message}`);
+    const events = (data ?? []).map((r) => ({ sub: r.sub as string, ts: Number(r.ts) }));
+    return buildUserQueryUsageStats(users, events);
+  }
+
+  async getUserQueryQuota(sub: string): Promise<QueryQuotaSnapshot | null> {
+    const user = await this.getUser(sub);
+    if (!user) return null;
+    return buildQueryQuotaSnapshot(user);
+  }
+
+  async tryConsumeDailyQuery(input: {
+    sub: string;
+    email: string;
+    keyword: string;
+    goal: string;
+    model?: string;
+    ts: number;
+  }): Promise<ConsumeQueryResult> {
+    const { data, error } = await this.client.rpc('fn_try_consume_daily_query', {
+      p_sub: input.sub,
+      p_email: encryptField(input.email),
+      p_keyword: encryptField(input.keyword),
+      p_goal: input.goal,
+      p_model: input.model ?? null,
+      p_ts: input.ts,
+      p_default_limit: getDefaultDailyQueryLimit(),
+      p_premium_limit: getPremiumTierDailyQueryLimit(),
+    });
+
+    if (!error && data && typeof data === 'object') {
+      const row = data as {
+        allowed?: boolean;
+        code?: string;
+        daily_count?: number;
+        daily_limit?: number;
+      };
+      const user = await this.getUser(input.sub);
+      const quota =
+        user != null
+          ? buildQueryQuotaSnapshot(user, input.ts)
+          : {
+              dailyCount: row.daily_count ?? 0,
+              dailyLimit: row.daily_limit ?? getDefaultDailyQueryLimit(),
+              remaining: 0,
+              resetsAt: Date.now(),
+              status: 'active' as const,
+              tier: 'free' as const,
+              freeTierLimit: getDefaultDailyQueryLimit(),
+              premiumTierLimit: getPremiumTierDailyQueryLimit(),
+            };
+      if (row.allowed) {
+        return { ok: true, quota };
+      }
+      const code =
+        row.code === 'SUSPENDED'
+          ? 'SUSPENDED'
+          : row.code === 'USER_NOT_FOUND'
+            ? 'USER_NOT_FOUND'
+            : 'DAILY_QUOTA_EXCEEDED';
+      return { ok: false, code, quota };
+    }
+
+    // Fallback when migration not applied yet
+    const user = await this.getUser(input.sub);
+    if (!user) {
+      return {
+        ok: false,
+        code: 'USER_NOT_FOUND',
+        quota: {
+          dailyCount: 0,
+          dailyLimit: getDefaultDailyQueryLimit(),
+          remaining: 0,
+          resetsAt: Date.now(),
+          status: 'active',
+          tier: 'free',
+          freeTierLimit: getDefaultDailyQueryLimit(),
+          premiumTierLimit: getPremiumTierDailyQueryLimit(),
+        },
+      };
+    }
+    const { user: nextUser, result } = tryConsumeDailyQueryOnUser(user, input);
+    if (!result.ok) return result;
+    const { error: updateError } = await this.client
+      .from('users')
+      .update({
+        daily_query_count: nextUser.dailyQueryCount,
+        query_quota_day: nextUser.queryQuotaDay,
+        last_seen_at: nextUser.lastSeenAt,
+      })
+      .eq('sub', input.sub);
+    if (updateError) throw new Error(`tryConsumeDailyQuery: ${updateError.message}`);
+    await this.appendEvent({
+      type: 'query',
+      sub: input.sub,
+      email: input.email,
+      keyword: input.keyword,
+      goal: input.goal,
+      surface: input.model,
+      ts: input.ts,
+    });
+    return result;
+  }
+
+  async updateUserTier(sub: string, tier: UserTier): Promise<UserRecord> {
+    const { data, error } = await this.client
+      .from('users')
+      .update({ tier })
+      .eq('sub', sub)
+      .select('*')
+      .maybeSingle<DbUserRow>();
+    if (error) throw new Error(`updateUserTier: ${error.message}`);
+    if (!data) throw new Error('User not found');
+    return rowToUser(data);
   }
 
   async deleteUser(sub: string): Promise<boolean> {

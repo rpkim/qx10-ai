@@ -1,5 +1,6 @@
 import type { AuthSession } from '@/lib/auth/session';
 import { getAnalyticsStore } from '@/lib/server/analytics/store';
+import { ensureAdminTierForUser } from '@/lib/server/quota/sync-admin-tier';
 
 /**
  * Workspaces (and user_prefs) reference public.users(sub). Users are normally
@@ -18,4 +19,6 @@ export async function ensureUserRecordForSession(session: AuthSession): Promise<
     picture: session.picture,
     ts: Date.now(),
   });
+  const created = await store.getUser(session.sub);
+  if (created) await ensureAdminTierForUser(store, created);
 }

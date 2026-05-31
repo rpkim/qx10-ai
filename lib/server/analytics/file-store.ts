@@ -11,6 +11,12 @@ import type {
   AnalyticsStore,
   UserRecord,
 } from './types';
+import { getDefaultDailyQueryLimit, getPremiumTierDailyQueryLimit } from '@/lib/server/quota/config';
+import { buildQueryQuotaSnapshot, tryConsumeDailyQueryOnUser } from '@/lib/server/quota/user-quota';
+import type { ConsumeQueryResult, QueryQuotaSnapshot } from '@/lib/server/quota/types';
+import type { UserTier } from '@/lib/server/quota/tiers';
+import { tierForEmailOnSignIn } from '@/lib/server/quota/sync-admin-tier';
+import { buildUserQueryUsageStats } from '@/lib/server/analytics/query-usage-stats';
 import { decryptField, decryptFieldOr, encryptField } from './pii-encrypt';
 
 type FileShape = {
@@ -40,7 +46,7 @@ function decryptUserRecord(u: UserRecord): UserRecord {
 }
 
 function encryptEvent(e: ActivityEvent): ActivityEvent {
-  if (e.type === 'search') {
+  if (e.type === 'search' || e.type === 'query') {
     return { ...e, email: encryptField(e.email), keyword: encryptField(e.keyword) };
   }
   if (e.type === 'signin') {
@@ -55,7 +61,7 @@ function encryptEvent(e: ActivityEvent): ActivityEvent {
 }
 
 function decryptEvent(e: ActivityEvent): ActivityEvent {
-  if (e.type === 'search') {
+  if (e.type === 'search' || e.type === 'query') {
     return {
       ...e,
       email: decryptFieldOr(e.email, e.email),
@@ -141,6 +147,7 @@ export class FileAnalyticsStore implements AnalyticsStore {
             picture: input.picture ?? existing.picture,
             lastSeenAt: input.ts,
             signInCount: (existing.signInCount ?? 0) + 1,
+            tier: tierForEmailOnSignIn(input.email, existing.tier),
           }
         : {
             sub: input.sub,
@@ -151,6 +158,7 @@ export class FileAnalyticsStore implements AnalyticsStore {
             lastSeenAt: input.ts,
             signInCount: 1,
             searchCount: 0,
+            tier: tierForEmailOnSignIn(input.email),
           };
       s.users[input.sub] = next;
       await this.writeState(s);
@@ -293,6 +301,87 @@ export class FileAnalyticsStore implements AnalyticsStore {
       .map(([keyword, count]) => ({ keyword, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, limit);
+  }
+
+  getQueryUsageStatsForUsers(users: UserRecord[]): Promise<Record<string, import('./query-usage-stats').UserQueryUsageStats>> {
+    return this.run(async () => {
+      const s = await this.readState();
+      const subs = new Set(users.map((u) => u.sub));
+      const events = s.events
+        .filter((e) => e.type === 'query' && subs.has(e.sub))
+        .map((e) => ({ sub: e.sub, ts: e.ts }));
+      return buildUserQueryUsageStats(users, events);
+    });
+  }
+
+  getUserQueryQuota(sub: string): Promise<QueryQuotaSnapshot | null> {
+    return this.run(async () => {
+      const s = await this.readState();
+      const user = s.users[sub];
+      if (!user) return null;
+      return buildQueryQuotaSnapshot(user);
+    });
+  }
+
+  tryConsumeDailyQuery(input: {
+    sub: string;
+    email: string;
+    keyword: string;
+    goal: string;
+    model?: string;
+    ts: number;
+  }): Promise<ConsumeQueryResult> {
+    return this.run(async () => {
+      const s = await this.readState();
+      const user = s.users[input.sub];
+      if (!user) {
+        return {
+          ok: false,
+          code: 'USER_NOT_FOUND',
+          quota: {
+            dailyCount: 0,
+            dailyLimit: getDefaultDailyQueryLimit(),
+            remaining: 0,
+            resetsAt: Date.now(),
+            status: 'active',
+            tier: 'free',
+            freeTierLimit: getDefaultDailyQueryLimit(),
+            premiumTierLimit: getPremiumTierDailyQueryLimit(),
+          },
+        };
+      }
+      const { user: nextUser, result } = tryConsumeDailyQueryOnUser(user, input);
+      if (!result.ok) {
+        return result;
+      }
+      s.users[input.sub] = nextUser;
+      s.events.push({
+        type: 'query',
+        sub: input.sub,
+        email: input.email,
+        keyword: input.keyword,
+        goal: input.goal,
+        surface: input.model,
+        ts: input.ts,
+      });
+      if (s.events.length > MAX_EVENTS) {
+        s.events.splice(0, s.events.length - MAX_EVENTS);
+      }
+      await this.writeState(s);
+      return result;
+    });
+  }
+
+  updateUserTier(sub: string, tier: UserTier): Promise<UserRecord> {
+    return this.run(async () => {
+      const s = await this.readState();
+      const user = s.users[sub];
+      if (!user) throw new Error('User not found');
+      const next: UserRecord = { ...user, tier };
+      s.users[sub] = next;
+      await this.writeState(s);
+      return next;
+    });
   }
 
   deleteUser(sub: string): Promise<boolean> {
