@@ -1,3 +1,8 @@
+import type { ConsumeQueryResult, QueryQuotaSnapshot, UserAccountStatus } from '@/lib/server/quota/types';
+import type { UserTier } from '@/lib/server/quota/tiers';
+
+export type { UserAccountStatus };
+
 export type UserRecord = {
   sub: string;
   email: string;
@@ -9,6 +14,12 @@ export type UserRecord = {
   searchCount: number;
   consentAt?: number;
   consentVersion?: string;
+  dailyQueryCount?: number;
+  queryQuotaDay?: string;
+  /** @deprecated Per-user numeric overrides replaced by tier. */
+  dailyQueryLimit?: number | null;
+  tier?: UserTier;
+  status?: UserAccountStatus;
 };
 
 export type SignInEventPayload = {
@@ -40,7 +51,21 @@ export type ConsentEventPayload = {
   ts: number;
 };
 
-export type ActivityEvent = SignInEventPayload | SearchEventPayload | ConsentEventPayload;
+export type QueryEventPayload = {
+  type: 'query';
+  sub: string;
+  email: string;
+  keyword: string;
+  goal: string;
+  surface?: string;
+  ts: number;
+};
+
+export type ActivityEvent =
+  | SignInEventPayload
+  | SearchEventPayload
+  | ConsentEventPayload
+  | QueryEventPayload;
 
 export interface AnalyticsStore {
   upsertUserOnSignIn(input: {
@@ -92,6 +117,22 @@ export interface AnalyticsStore {
   }): Promise<ActivityEvent[]>;
 
   topKeywords(limit?: number): Promise<{ keyword: string; count: number }[]>;
+
+  /** Per-user AI query counts (today from quota fields, windows from query events). */
+  getQueryUsageStatsForUsers(users: UserRecord[]): Promise<Record<string, import('./query-usage-stats').UserQueryUsageStats>>;
+
+  getUserQueryQuota(sub: string): Promise<QueryQuotaSnapshot | null>;
+
+  tryConsumeDailyQuery(input: {
+    sub: string;
+    email: string;
+    keyword: string;
+    goal: string;
+    model?: string;
+    ts: number;
+  }): Promise<ConsumeQueryResult>;
+
+  updateUserTier(sub: string, tier: UserTier): Promise<UserRecord>;
 
   /** Hard-delete a user and all their events. Returns true if a row was removed. */
   deleteUser(sub: string): Promise<boolean>;

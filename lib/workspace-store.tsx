@@ -28,6 +28,7 @@ import {
   substituteTemplate,
 } from '@/lib/question-templates';
 import { toast } from 'sonner';
+import { GEMINI_BYOK_HEADER, loadGeminiApiKey } from '@/lib/byok/gemini-key-vault';
 import { buildInitialWorkspace, getMockResponse } from './mock-data';
 import { consumeWorkspaceQueryStream } from '@/lib/ai/consume-query-stream';
 import { NODE_CANVAS_TOOLBAR_HEIGHT_PX } from './canvas-node-chrome';
@@ -1203,26 +1204,61 @@ export function WorkspaceProvider({
         });
       };
 
+      const queryPayload = {
+        question: queryNode.question,
+        keyword: keywordRef.current,
+        goal: goalRef.current,
+        context: contextRef.current ?? null,
+        contextPairs,
+        modelChoice: queryNode.modelChoice ?? null,
+        toolChoice: queryNode.toolChoice ?? 'auto',
+        locale: readLocaleForAi(),
+      };
+
+      const postQuery = (byok?: string) =>
+        fetch('/api/workspace/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(byok ? { [GEMINI_BYOK_HEADER]: byok } : {}),
+          },
+          body: JSON.stringify(queryPayload),
+        });
+
       let res: Response;
       try {
-        res = await fetch('/api/workspace/query', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: queryNode.question,
-            keyword: keywordRef.current,
-            goal: goalRef.current,
-            context: contextRef.current ?? null,
-            contextPairs,
-            modelChoice: queryNode.modelChoice ?? null,
-            toolChoice: queryNode.toolChoice ?? 'auto',
-            locale: readLocaleForAi(),
-          }),
-        });
+        res = await postQuery();
       } catch {
         toast.error(tr('ai.networkError'));
         dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
         return;
+      }
+
+      if (res.status === 429) {
+        const errBody = (await res.json().catch(() => ({}))) as {
+          code?: string;
+          byokHint?: boolean;
+        };
+        if (errBody.code === 'DAILY_QUOTA_EXCEEDED') {
+          const byok = await loadGeminiApiKey();
+          if (byok) {
+            toast.info(tr('ai.usingByok'));
+            try {
+              res = await postQuery(byok);
+            } catch {
+              toast.error(tr('ai.networkError'));
+              dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+              return;
+            }
+          } else {
+            toast.error(tr('ai.quotaExceeded'), {
+              duration: 8000,
+              description: tr('ai.quotaExceededHint'),
+            });
+            dispatch({ type: 'UPDATE_NODE', id: queryId, updates: { status: 'suggested' } });
+            return;
+          }
+        }
       }
 
       if (res.status === 503) {

@@ -21,6 +21,7 @@ import {
   hasLocalWorkspaceData,
   migrateBrowserLocalStorageToServer,
 } from '@/lib/workspace-local-migration';
+import { GeminiByokSection } from '@/components/settings/gemini-byok-section';
 
 export function SettingsClient() {
   const { t } = useI18n();
@@ -89,6 +90,8 @@ export function SettingsClient() {
             </div>
           )}
         </section>
+
+        <GeminiByokSection />
 
         <section className="rounded-2xl border border-border bg-card/80 p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-foreground">{t('settings.privacy.title')}</h2>
