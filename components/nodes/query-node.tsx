@@ -159,24 +159,51 @@ export function QueryNode({ node }: Props) {
           <button
             onClick={handleRun}
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition-all"
-            style={{ background: 'rgba(0,196,154,0.15)', color: '#00C49A' }}
+            style={
+              isComplete
+                ? {
+                    background: 'rgba(96,165,250,0.1)',
+                    color: '#60A5FA',
+                  }
+                : {
+                    background: 'rgba(0,196,154,0.15)',
+                    color: '#00C49A',
+                  }
+            }
             onMouseOver={(e) =>
-              Object.assign((e.currentTarget as HTMLElement).style, {
-                background: 'rgba(0,196,154,0.25)',
-                boxShadow: '0 0 8px rgba(0,196,154,0.2)',
-              })
+              Object.assign((e.currentTarget as HTMLElement).style, isComplete
+                ? {
+                    background: 'rgba(96,165,250,0.18)',
+                    boxShadow: '0 0 8px rgba(96,165,250,0.15)',
+                  }
+                : {
+                    background: 'rgba(0,196,154,0.25)',
+                    boxShadow: '0 0 8px rgba(0,196,154,0.2)',
+                  })
             }
             onMouseOut={(e) =>
-              Object.assign((e.currentTarget as HTMLElement).style, {
-                background: 'rgba(0,196,154,0.15)',
-                boxShadow: 'none',
-              })
+              Object.assign((e.currentTarget as HTMLElement).style, isComplete
+                ? {
+                    background: 'rgba(96,165,250,0.1)',
+                    boxShadow: 'none',
+                  }
+                : {
+                    background: 'rgba(0,196,154,0.15)',
+                    boxShadow: 'none',
+                  })
             }
+            title={isComplete ? t('nodes.run') : undefined}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5,3 19,12 5,21" />
-            </svg>
-            {isComplete ? 'Rerun' : t('nodes.run')}
+            {isComplete ? (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+            )}
+            {isComplete ? t('nodes.done') : t('nodes.run')}
           </button>
           <button
             onClick={() => setShowCustom(!showCustom)}

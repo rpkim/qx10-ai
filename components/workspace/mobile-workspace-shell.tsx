@@ -315,8 +315,27 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                 const a = answerByQuery.get(q.id);
                 const answerFollowUpChildren = a ? listChildQueriesOrdered(state.nodes, a.id) : [];
                 const d = a ? dataByAnswer.get(a.id) : null;
-                const isRunning = q.status === 'running';
+                const hasCompleteAnswer =
+                  a != null &&
+                  (a.status === 'complete' || Boolean((a.content || '').trim()));
+                const isRunning =
+                  q.status === 'running' ||
+                  (a?.status === 'streaming' && !(a.content || '').trim());
+                const isComplete = q.status === 'complete' || hasCompleteAnswer;
                 const canRun = !isRunning;
+                const queryStatusLabel =
+                  q.status === 'complete'
+                    ? t('nodes.done')
+                    : q.status === 'running'
+                      ? t('nodes.running')
+                      : q.status === 'suggested'
+                        ? t('nodes.suggested')
+                        : q.status;
+                const runLabel = isRunning
+                  ? t('nodes.running')
+                  : isComplete
+                    ? t('nodes.done')
+                    : t('nodes.run');
                 const isCollapsed = !!collapsedByQuery[q.id];
                 return (
                   <div
@@ -329,7 +348,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                         <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
                           Q
                         </span>
-                        <span className="text-[11px] text-muted-foreground">{q.status}</span>
+                        <span className="text-[11px] text-muted-foreground">{queryStatusLabel}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <button
@@ -367,9 +386,15 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                           type="button"
                           disabled={!canRun}
                           onClick={() => runQuery(q.id)}
-                          className="rounded-lg bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-50"
+                          title={isComplete ? t('nodes.run') : undefined}
+                          className={[
+                            'rounded-lg px-2.5 py-1 text-[11px] font-semibold disabled:opacity-50',
+                            isComplete
+                              ? 'border border-border bg-secondary text-muted-foreground hover:bg-secondary/80 hover:text-foreground'
+                              : 'bg-primary text-primary-foreground',
+                          ].join(' ')}
                         >
-                          {isRunning ? t('nodes.running') : t('nodes.run')}
+                          {runLabel}
                         </button>
                       </div>
                     </div>
