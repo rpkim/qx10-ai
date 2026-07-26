@@ -330,13 +330,15 @@ export default function LandingPage() {
 
             {/* Context input — keywords and/or URLs, added as chips */}
             <div className="flex min-w-0 flex-col gap-1.5">
-              <div className="flex items-center gap-2 px-1">
-                <span className="text-xs font-semibold uppercase tracking-widest text-primary/70">
-                  {t('toolbar.contextLabel')}
-                </span>
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary/60">
-                  {t('toolbar.contextOptional')}
-                </span>
+              <div className="flex flex-col gap-0.5 px-1 sm:flex-row sm:items-center sm:gap-2">
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="whitespace-nowrap text-xs font-semibold uppercase tracking-widest text-primary/70">
+                    {t('toolbar.contextLabel')}
+                  </span>
+                  <span className="whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary/60">
+                    {t('toolbar.contextOptional')}
+                  </span>
+                </div>
                 <span className="text-[10px] text-muted-foreground/60">{t('toolbar.contextUrlHint')}</span>
               </div>
               <div
