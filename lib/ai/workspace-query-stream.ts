@@ -5,6 +5,8 @@ import { parseQueryMetadata, normalizeDataNodePayload } from '@/lib/ai/metadata'
 import { buildAnswerSystemPrompt, buildMetadataSystemPrompt } from '@/lib/ai/prompts';
 import type { CatalogOption } from '@/lib/ai/model-config';
 import type { Locale } from '@/lib/i18n/constants';
+import { parseContextItems } from '@/lib/context-items';
+import { fetchPageExcerpts, isPageLikelyRelevant } from '@/lib/ai/url-context';
 
 const encoder = new TextEncoder();
 
@@ -12,12 +14,47 @@ export function sseLine(obj: unknown): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
 }
 
+const MAX_CONTEXT_URLS = 3;
+
+/**
+ * Two-tier reference material for context URLs: a short summary is always cheap enough to include
+ * on every question in the workspace; the full extracted page text is only worth the extra tokens
+ * when this specific question looks related to that page (keyword-overlap heuristic).
+ */
+async function buildUrlReferenceBlock(context: string | undefined, question: string): Promise<string> {
+  const urls = parseContextItems(context)
+    .filter((i) => i.isUrl)
+    .map((i) => i.value)
+    .slice(0, MAX_CONTEXT_URLS);
+  if (urls.length === 0) return '';
+
+  const pages = await fetchPageExcerpts(urls);
+  if (pages.length === 0) return '';
+
+  const lines = [
+    'Reference pages the user added to this workspace (high-level summaries):',
+    ...pages.map((p, i) => `[${i + 1}] "${p.title}" (${p.url}) — ${p.summary}`),
+  ];
+
+  const relevant = pages.filter((p) => isPageLikelyRelevant(question, p));
+  if (relevant.length > 0) {
+    lines.push(
+      '',
+      'The question below looks specifically related to one or more of those pages, so here is their full text for precise grounding:',
+      ...relevant.map((p) => `--- Full text of "${p.title}" ---\n${p.excerpt}`)
+    );
+  }
+
+  return `\n\n${lines.join('\n')}`;
+}
+
 function userPayload(
   keyword: string,
   goal: GoalType,
   question: string,
   contextPairs?: Array<{ question: string; answer: string }>,
-  rootContext?: string
+  rootContext?: string,
+  referenceBlock?: string
 ) {
   const contextText =
     contextPairs && contextPairs.length > 0
@@ -30,7 +67,7 @@ function userPayload(
         ].join('\n')
       : '';
   const contextSuffix = rootContext ? ` (context: "${rootContext}")` : '';
-  return `Workspace root keyword/topic: "${keyword}"${contextSuffix}\nExploration goal: ${goal}\n\n${contextText}User query:\n${question}`;
+  return `Workspace root keyword/topic: "${keyword}"${contextSuffix}${referenceBlock ?? ''}\nExploration goal: ${goal}\n\n${contextText}User query:\n${question}`;
 }
 
 /** Re-run keyword / follow-up / optional data-node extraction for an existing Q&A (no full answer regeneration). */
@@ -117,7 +154,6 @@ export function createWorkspaceQueryReadableStream(
   keys: { openaiKey: string | undefined; geminiKey: string | undefined }
 ): ReadableStream<Uint8Array> {
   const { question, keyword, goal, locale, contextPairs, context } = params;
-  const userText = userPayload(keyword, goal, question, contextPairs, context);
   const systemText = buildAnswerSystemPrompt(goal, locale);
 
   return new ReadableStream({
@@ -125,6 +161,9 @@ export function createWorkspaceQueryReadableStream(
       let fullAnswer = '';
 
       try {
+        const referenceBlock = await buildUrlReferenceBlock(context, question);
+        const userText = userPayload(keyword, goal, question, contextPairs, context, referenceBlock);
+
         if (selection.provider === 'openai') {
           if (!keys.openaiKey) {
             controller.enqueue(sseLine({ type: 'error', message: 'OpenAI API key missing' }));
