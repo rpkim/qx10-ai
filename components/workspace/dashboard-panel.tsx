@@ -24,10 +24,6 @@ import {
   mergeLayoutWithPins,
   type DashboardGridItem,
 } from '@/lib/dashboard-layout-storage';
-import {
-  fetchMarketQuotePayload,
-  marketDataNodeRefreshSymbol,
-} from '@/lib/market-data-node-refresh';
 import { getClientTtsProvider } from '@/lib/tts/config';
 import { useDashboardWidgetReorder } from '@/lib/use-dashboard-widget-reorder';
 
@@ -651,7 +647,6 @@ export function DashboardWidget({
   onCollapsedChange?: (collapsed: boolean) => void;
 }) {
   const { t } = useI18n();
-  const { dispatch } = useWorkspace();
   const [collapsedInternal, setCollapsedInternal] = useState(false);
   const collapsed = collapsedProp ?? collapsedInternal;
   const setCollapsed = (next: boolean | ((prev: boolean) => boolean)) => {
@@ -659,31 +654,7 @@ export function DashboardWidget({
     if (collapsedProp === undefined) setCollapsedInternal(value);
     onCollapsedChange?.(value);
   };
-  const [dataRefreshing, setDataRefreshing] = useState(false);
-
   const title = node.type === 'answer' ? t('nodes.answer') : (node as DataNodeData).title;
-  const dataRefreshSymbol =
-    node.type === 'data' ? marketDataNodeRefreshSymbol(node as DataNodeData) : null;
-
-  const refreshDataWidget = async () => {
-    if (!dataRefreshSymbol || dataRefreshing) return;
-    setDataRefreshing(true);
-    try {
-      const payload = await fetchMarketQuotePayload(dataRefreshSymbol);
-      if (!payload) {
-        toast.error(t('dashboard.dataRefreshFail'));
-        return;
-      }
-      dispatch({
-        type: 'UPDATE_NODE',
-        id: node.id,
-        updates: payload as Partial<DataNodeData>,
-      });
-      toast.success(t('dashboard.dataRefreshDone'));
-    } finally {
-      setDataRefreshing(false);
-    }
-  };
   const badge =
     node.type === 'answer'
       ? { bg: 'rgba(163,230,53,0.15)', color: '#A3E635', label: 'A' }
@@ -765,20 +736,6 @@ export function DashboardWidget({
           className="flex shrink-0 items-center gap-1"
           onPointerDown={(e) => e.stopPropagation()}
         >
-          {dataRefreshSymbol && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void refreshDataWidget();
-              }}
-              disabled={dataRefreshing}
-              className="rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:text-foreground disabled:opacity-50"
-              title={t('dashboard.dataRefresh')}
-            >
-              <RefreshCw className={`size-3.5 ${dataRefreshing ? 'animate-spin' : ''}`} />
-            </button>
-          )}
           <button
             type="button"
             onClick={(e) => {

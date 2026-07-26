@@ -35,6 +35,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { WorkspaceNodeSearchBar } from '@/components/workspace/node-search-bar';
+import { ContextChipInput } from '@/components/workspace/context-chip-input';
+import { formatContextForDisplay } from '@/lib/context-items';
 
 const NEW_WORKSPACE_GOALS: GoalType[] = ['learn', 'research', 'build', 'analyze', 'strategize'];
 
@@ -139,15 +141,16 @@ export function Toolbar({
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-medium text-muted-foreground">{t('toolbar.contextLabel')}</span>
                 <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/60">{t('toolbar.contextOptional')}</span>
+                <span className="text-[10px] text-muted-foreground/50">{t('toolbar.contextUrlHint')}</span>
               </div>
-              <Input
-                value={newContext}
-                onChange={(e) => setNewContext(e.target.value)}
-                placeholder={t('toolbar.contextPlaceholder')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') confirmNewWorkspace();
-                }}
-              />
+              <div className="flex min-h-9 w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md border border-input bg-transparent px-3 py-1.5 shadow-xs">
+                <ContextChipInput
+                  value={newContext}
+                  onChange={setNewContext}
+                  onEnterWithEmptyDraft={confirmNewWorkspace}
+                  placeholder={t('toolbar.contextPlaceholder')}
+                />
+              </div>
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">{t('toolbar.exploreMode')}</span>
@@ -300,7 +303,7 @@ export function Toolbar({
                     <span className="font-medium text-foreground">{e.keyword}</span>
                     {e.context && (
                       <span className="truncate text-[11px] italic text-muted-foreground/70">
-                        in &ldquo;{e.context}&rdquo;
+                        in &ldquo;{formatContextForDisplay(e.context)}&rdquo;
                       </span>
                     )}
                     <span className="text-xs text-muted-foreground">{t(GOAL_LABEL_KEYS[e.goal])}</span>

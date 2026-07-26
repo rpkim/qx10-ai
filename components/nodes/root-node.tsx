@@ -11,6 +11,9 @@ import {
 import { useI18n } from '@/components/i18n-provider';
 import { useDemoWorkspaceTourOptional } from '@/components/demo/demo-workspace-tour';
 import { getSuggestedQueries } from '@/lib/mock-data';
+import { contextHostname, parseContextItems } from '@/lib/context-items';
+import { ContextChipInput } from '@/components/workspace/context-chip-input';
+import { Check, Link2, Pencil, Plus } from 'lucide-react';
 
 const seedSuggestionCache = new Map<string, { questions: string[]; status: 'ai' | 'fallback' }>();
 const ROOT_SEED_CACHE_PREFIX = 'qx10.root.seed.v1:';
@@ -52,12 +55,14 @@ interface Props {
 
 export function RootNode({ node }: Props) {
   const { t, locale } = useI18n();
-  const { addCustomQuery, isDemoMode, state } = useWorkspace();
+  const { addCustomQuery, isDemoMode, state, setContext } = useWorkspace();
   const introduceReveal = useIntroduceReveal();
   const workspaceTour = useDemoWorkspaceTourOptional();
   const tourAwaitingQuestions = workspaceTour?.active && !workspaceTour.showQuestions;
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customQ, setCustomQ] = useState('');
+  const [editingContext, setEditingContext] = useState(false);
+  const canEditContext = !isDemoMode && !introduceReveal;
   const [seedSuggestions, setSeedSuggestions] = useState<string[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
   const [suggestionStatus, setSuggestionStatus] = useState<'ai' | 'fallback' | null>(null);
@@ -224,10 +229,55 @@ export function RootNode({ node }: Props) {
           {node.keyword}
         </h2>
 
-        {node.context && (
-          <p className="text-center text-xs text-muted-foreground">
-            in &ldquo;{node.context}&rdquo;
-          </p>
+        {editingContext ? (
+          <div className="flex w-full items-center gap-1.5 rounded-xl border border-primary/40 bg-card/90 px-2 py-1.5">
+            <ContextChipInput
+              value={node.context ?? ''}
+              onChange={setContext}
+              onEnterWithEmptyDraft={() => setEditingContext(false)}
+              placeholder={t('toolbar.contextPlaceholder')}
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setEditingContext(false)}
+              className="shrink-0 rounded-full p-1 text-primary transition-colors hover:bg-primary/10"
+              aria-label={t('nodes.doneEditingContext')}
+              title={t('nodes.doneEditingContext')}
+            >
+              <Check className="size-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-1">
+            {parseContextItems(node.context).map((item, idx) => (
+              <span
+                key={`${item.value}-${idx}`}
+                className={[
+                  'inline-flex max-w-45 items-center gap-1 rounded-full px-2 py-0.5 text-[11px]',
+                  item.isUrl ? 'bg-primary/10 text-primary' : 'text-muted-foreground',
+                ].join(' ')}
+                title={item.value}
+              >
+                {item.isUrl && <Link2 className="size-2.5 shrink-0" />}
+                <span className="truncate">{item.isUrl ? contextHostname(item.value) : item.value}</span>
+              </span>
+            ))}
+            {canEditContext && (
+              <button
+                type="button"
+                onClick={() => setEditingContext(true)}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+              >
+                {node.context ? (
+                  <Pencil className="size-2.5 shrink-0" />
+                ) : (
+                  <Plus className="size-2.5 shrink-0" />
+                )}
+                {node.context ? t('nodes.editContext') : t('nodes.addContext')}
+              </button>
+            )}
+          </div>
         )}
 
         {(isLoadingSuggestions || seedSuggestions.length > 0) && (
