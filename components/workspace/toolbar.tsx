@@ -138,9 +138,11 @@ export function Toolbar({
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">{t('toolbar.contextLabel')}</span>
-                <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/60">{t('toolbar.contextOptional')}</span>
+              <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-1.5">
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="whitespace-nowrap text-xs font-medium text-muted-foreground">{t('toolbar.contextLabel')}</span>
+                  <span className="whitespace-nowrap rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground/60">{t('toolbar.contextOptional')}</span>
+                </div>
                 <span className="text-[10px] text-muted-foreground/50">{t('toolbar.contextUrlHint')}</span>
               </div>
               <div className="flex min-h-9 w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md border border-input bg-transparent px-3 py-1.5 shadow-xs">
