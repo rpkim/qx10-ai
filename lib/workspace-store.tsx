@@ -1575,6 +1575,10 @@ export function WorkspaceProvider({
         type: 'ADD_EDGE',
         edge: { id: `e-${parentId}-${customQId}`, sourceId: parentId, targetId: customQId },
       });
+      // The position above is only a rough guess (doesn't account for sibling query nodes
+      // already under this parent) — re-run the real layout so the new node doesn't land on
+      // top of an existing one.
+      autoLayout();
       if (autoRun) {
         const tryRun = (attempt = 0) => {
           const exists = nodesRef.current.some((n) => n.id === customQId && n.type === 'query');
@@ -1589,7 +1593,7 @@ export function WorkspaceProvider({
       }
       return customQId;
     },
-    [runQuery]
+    [runQuery, autoLayout]
   );
 
   const toggleDashboardPin = useCallback((nodeId: string) => {
