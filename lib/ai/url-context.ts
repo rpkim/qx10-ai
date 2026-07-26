@@ -1,9 +1,9 @@
-// jsdom is pinned to an exact 27.0.0 in package.json — starting at 27.0.1 its parse5 dep
-// jumped to an ESM-only major (^8.0.0), and at 28.0.0 html-encoding-sniffer did too (^6.0.0
-// -> @exodus/bytes). Both break with ERR_REQUIRE_ESM on Vercel/Lambda, where Node's
-// require(esm) is disabled by default. Do not bump this version without re-checking that
-// jsdom's parse5 and html-encoding-sniffer deps are still CJS-compatible.
-import { JSDOM } from 'jsdom';
+// Uses linkedom instead of jsdom: jsdom's own dependency tree (parse5, html-encoding-sniffer,
+// cssstyle -> @asamuzakjp/css-color -> @csstools/css-calc, ...) repeatedly turned ESM-only,
+// which breaks with ERR_REQUIRE_ESM on Vercel/Lambda (Node's require(esm) is disabled there by
+// default). linkedom is a much smaller, CJS-only DOM implementation that's plenty for feeding
+// Readability plain HTML and reading back text content — we don't need jsdom's CSS/canvas support.
+import { parseHTML } from 'linkedom';
 import { Readability } from '@mozilla/readability';
 
 const FETCH_TIMEOUT_MS = 8000;
@@ -108,14 +108,14 @@ async function fetchPageExcerptUncached(rawUrl: string): Promise<PageExcerpt | n
   if (!fetched) return null;
 
   try {
-    const dom = new JSDOM(fetched.html, { url: fetched.finalUrl });
-    const reader = new Readability(dom.window.document);
+    const { document } = parseHTML(fetched.html);
+    const reader = new Readability(document as unknown as Document);
     const article = reader.parse();
-    const text = (article?.textContent ?? dom.window.document.body?.textContent ?? '')
+    const text = (article?.textContent ?? document.body?.textContent ?? '')
       .replace(/\s+/g, ' ')
       .trim();
     if (!text) return null;
-    const title = (article?.title ?? dom.window.document.title ?? url.hostname).trim();
+    const title = (article?.title ?? document.title ?? url.hostname).trim();
     const summary = (article?.excerpt?.trim() || text.slice(0, MAX_SUMMARY_CHARS)).slice(0, MAX_SUMMARY_CHARS);
     return {
       url: fetched.finalUrl,
