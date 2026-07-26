@@ -24,7 +24,7 @@ import {
 import { DashboardWidget } from '@/components/workspace/dashboard-panel';
 import { useDashboardWidgetReorder } from '@/lib/use-dashboard-widget-reorder';
 import { getClientTtsProvider } from '@/lib/tts/config';
-import { RefreshCw } from 'lucide-react';
+import { Check, RefreshCw } from 'lucide-react';
 
 interface Props {
   showDashboard: boolean;
@@ -522,11 +522,15 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                                     sqIdx === 0;
                                   const followUpGlow = introFollowGlow || followUpTourGlow;
                                   const followUpByIndex = answerFollowUpChildren[sqIdx];
+                                  const isFollowUpSelected = Boolean(followUpByIndex);
                                   return (
                                     <button
                                       key={`${a.id}-followup-${sqIdx}`}
                                       type="button"
+                                      disabled={isFollowUpSelected}
+                                      aria-disabled={isFollowUpSelected}
                                       onClick={() => {
+                                        if (isFollowUpSelected) return;
                                         if (introduceReveal) {
                                           followUpTour?.dismiss();
                                           if (followUpByIndex) {
@@ -556,13 +560,20 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                                         scrollToQueryCard(newId, 160);
                                       }}
                                       className={[
-                                        'rounded-lg border px-2 py-1 text-left text-[12px] transition-colors',
+                                        'flex items-start gap-1.5 rounded-lg border px-2 py-1 text-left text-[12px] transition-colors',
                                         followUpGlow
                                           ? 'demo-run-glow relative z-[102] border-primary/70 bg-primary/10 text-foreground ring-2 ring-primary/70 ring-offset-2 ring-offset-background shadow-[0_0_16px_rgba(0,196,154,0.35)]'
-                                          : 'border-border text-muted-foreground',
+                                          : isFollowUpSelected
+                                            ? 'cursor-not-allowed border-border/60 bg-secondary/60 text-muted-foreground/70'
+                                            : 'border-border text-muted-foreground hover:border-primary/40 hover:bg-secondary hover:text-foreground',
                                       ].join(' ')}
                                     >
-                                      + {sq}
+                                      {isFollowUpSelected ? (
+                                        <Check className="mt-0.5 size-3 shrink-0 text-primary/70" aria-hidden />
+                                      ) : (
+                                        <span className="shrink-0" aria-hidden>+</span>
+                                      )}
+                                      <span className="min-w-0 flex-1">{sq}</span>
                                     </button>
                                   );
                                 })}
