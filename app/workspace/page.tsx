@@ -9,6 +9,7 @@ import { Toolbar } from '@/components/workspace/toolbar';
 import { MiniMap } from '@/components/workspace/minimap';
 import { DashboardPanel } from '@/components/workspace/dashboard-panel';
 import { MobileWorkspaceShell } from '@/components/workspace/mobile-workspace-shell';
+import { ArticleStudio } from '@/components/workspace/article-studio';
 import { registerWorkspaceVisit } from '@/lib/workspace-index';
 import { useI18n } from '@/components/i18n-provider';
 import { loadWorkspaceFromServer } from '@/lib/workspace-api';
@@ -47,6 +48,7 @@ function WorkspaceInner() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [dashboardExpanded, setDashboardExpanded] = useState(false);
   const [desktopViewMode, setDesktopViewMode] = useState<'canvas' | 'cards'>('cards');
+  const [articleStudioOpen, setArticleStudioOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [loadingKeyword, setLoadingKeyword] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -162,6 +164,7 @@ function WorkspaceInner() {
         showDashboard={showDashboard}
         desktopViewMode={desktopViewMode}
         onDesktopViewModeChange={setDesktopViewMode}
+        onOpenArticleStudio={() => setArticleStudioOpen(true)}
       />
 
       {useCardMode ? (
@@ -196,6 +199,8 @@ function WorkspaceInner() {
           onExpandedChange={setDashboardExpanded}
         />
       )}
+
+      {articleStudioOpen && <ArticleStudio onClose={() => setArticleStudioOpen(false)} />}
 
       <div
         className={`absolute bottom-4 left-4 z-10 flex flex-col gap-1.5 rounded-xl border border-border bg-card/90 px-3 py-3 backdrop-blur-sm transition-opacity ${canvasObscured ? 'pointer-events-none opacity-0' : ''}`}

@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -26,8 +20,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { GoalType, WorkspaceNode } from '@/lib/types';
+import type { GoalType } from '@/lib/types';
 import { GOAL_LABEL_KEYS } from '@/lib/i18n/goal-keys';
+import { collectQaSources } from '@/lib/article-markdown';
 import { listRecentWorkspacesAsync, type WorkspaceIndexEntry } from '@/lib/workspace-index';
 import { workspaceUrl } from '@/lib/workspace-url';
 import {
@@ -48,6 +43,7 @@ interface ToolbarProps {
   showDashboard: boolean;
   desktopViewMode: 'canvas' | 'cards';
   onDesktopViewModeChange: (mode: 'canvas' | 'cards') => void;
+  onOpenArticleStudio: () => void;
 }
 
 export function Toolbar({
@@ -55,6 +51,7 @@ export function Toolbar({
   showDashboard,
   desktopViewMode,
   onDesktopViewModeChange,
+  onOpenArticleStudio,
 }: ToolbarProps) {
   const router = useRouter();
   const { t } = useI18n();
@@ -66,10 +63,6 @@ export function Toolbar({
   const [newGoal, setNewGoal] = useState<GoalType>('learn');
   const [recentOpen, setRecentOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [summaryOpen, setSummaryOpen] = useState(false);
-  const [summaryBusy, setSummaryBusy] = useState(false);
-  const [summaryText, setSummaryText] = useState('');
-  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [recent, setRecent] = useState<WorkspaceIndexEntry[]>([]);
 
   useEffect(() => {
@@ -117,60 +110,11 @@ export function Toolbar({
   };
 
   const zoomPct = Math.round(viewport.zoom * 100);
-  const queryNodes = useMemo(() => state.nodes.filter((n) => n.type === 'query'), [state.nodes]);
-  const answerNodes = useMemo(() => state.nodes.filter((n) => n.type === 'answer'), [state.nodes]);
-  const qaPairs = useMemo(() => {
-    const queryById = new Map(
-      state.nodes
-        .filter((n) => n.type === 'query')
-        .map((n) => [n.id, n.question] as const)
-    );
-    return state.nodes
-      .filter((n): n is Extract<WorkspaceNode, { type: 'answer' }> => n.type === 'answer')
-      .map((a) => {
-        const q = queryById.get(a.queryId);
-        return q && a.content.trim()
-          ? { question: q, answer: a.content.trim() }
-          : null;
-      })
-      .filter((x): x is { question: string; answer: string } => !!x)
-      .slice(-40);
-  }, [state.nodes]);
-  /** At least a few completed Q&A pairs (API needs non-empty pairs). */
-  const canUseSummary = qaPairs.length >= 3;
-
-  const generateSummary = async () => {
-    if (!canUseSummary || summaryBusy) return;
-    setSummaryBusy(true);
-    setSummaryError(null);
-    try {
-      const res = await fetch('/api/workspace/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keyword,
-          goal,
-          pairs: qaPairs,
-        }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error || `Summary request failed (${res.status})`);
-      }
-      const data = (await res.json()) as { summary?: string };
-      setSummaryText((data.summary ?? '').trim() || 'No summary generated.');
-    } catch (e) {
-      setSummaryError(e instanceof Error ? e.message : 'Failed to generate summary');
-    } finally {
-      setSummaryBusy(false);
-    }
-  };
-
-  const openSummary = async () => {
-    setSummaryOpen(true);
-    if (summaryText) return;
-    await generateSummary();
-  };
+  /** At least a few completed Q&A pairs, otherwise there is nothing to synthesize. */
+  const canWriteArticle = useMemo(
+    () => collectQaSources(state.nodes).length >= 3,
+    [state.nodes]
+  );
 
   return (
     <header className="pointer-events-none absolute left-0 right-0 top-0 z-40 flex flex-col items-stretch justify-between gap-2 p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] sm:flex-row sm:items-start sm:gap-4 sm:p-4 sm:pt-[max(1rem,env(safe-area-inset-top))] sm:pl-[max(1rem,env(safe-area-inset-left))] sm:pr-[max(1rem,env(safe-area-inset-right))]">
@@ -236,89 +180,6 @@ export function Toolbar({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
-        <DialogContent className="border-border sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Workspace Summary</DialogTitle>
-          </DialogHeader>
-          <div className="max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-card/50 p-4">
-            {summaryBusy && (
-              <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-background/70 p-4">
-                <div
-                  className="pointer-events-none absolute inset-0 opacity-[0.08]"
-                  style={{
-                    backgroundImage:
-                      'linear-gradient(to right, #00C49A 1px, transparent 1px), linear-gradient(to bottom, #00C49A 1px, transparent 1px)',
-                    backgroundSize: '22px 22px',
-                  }}
-                />
-                <div className="relative flex items-start gap-3">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/30 bg-primary/10">
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-foreground">Processing your workspace with AI...</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      Connecting questions, extracting signals, and drafting a one-page summary.
-                    </div>
-                    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-secondary/80">
-                      <div className="h-full w-2/5 animate-pulse rounded-full bg-primary" />
-                    </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-[11px] text-primary/80">
-                      <span className="h-1.5 w-1.5 animate-ping rounded-full bg-primary" />
-                      <span>AI is working</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {!summaryBusy && summaryError && (
-              <div className="text-sm text-destructive">{summaryError}</div>
-            )}
-            {!summaryBusy && !summaryError && (
-              <div className="text-sm leading-relaxed text-foreground/90">
-                {summaryText ? renderSummaryMarkdown(summaryText) : 'Summary is empty.'}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setSummaryText('');
-                setSummaryError(null);
-                void generateSummary();
-              }}
-              disabled={summaryBusy}
-            >
-              Regenerate
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                if (!summaryText.trim()) return;
-                const blob = new Blob([summaryText], { type: 'text/markdown;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                const safeKeyword = keyword.trim().replace(/\s+/g, '-').toLowerCase() || 'workspace';
-                a.href = url;
-                a.download = `qx10-summary-${safeKeyword}.md`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              disabled={summaryBusy || !summaryText.trim()}
-            >
-              Download .md
-            </Button>
-            <Button type="button" onClick={() => setSummaryOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {isMobile && (
         <div className="pointer-events-auto w-full max-w-[100vw] rounded-2xl border border-border bg-card/95 px-2 py-2 backdrop-blur-sm">
           <div className="flex min-w-0 items-center gap-2">
@@ -336,12 +197,12 @@ export function Toolbar({
             </div>
           </div>
           <div className="mt-2 flex flex-nowrap items-center justify-end gap-1.5 overflow-x-auto border-t border-border/60 pt-2 [scrollbar-width:none]">
-            {canUseSummary && (
+            {canWriteArticle && (
               <button
                 type="button"
-                onClick={() => void openSummary()}
+                onClick={onOpenArticleStudio}
                 className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                title={t('dashboard.summary')}
+                title={t('article.open')}
               >
                 <FileText className="size-4" />
               </button>
@@ -456,15 +317,15 @@ export function Toolbar({
       <div className={["pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2", isMobile ? "hidden sm:flex" : ""].join(' ')}>
         <LanguageSwitcher />
         <ThemeToggle />
-        {canUseSummary && (
+        {canWriteArticle && (
           <button
             type="button"
-            onClick={() => void openSummary()}
+            onClick={onOpenArticleStudio}
             className="flex items-center gap-2 rounded-xl border border-border bg-card/90 px-3 py-2 text-sm font-medium text-muted-foreground backdrop-blur-sm transition-all hover:bg-secondary hover:text-foreground"
-            title="Workspace Summary"
+            title={t('article.openHint')}
           >
             <FileText className="size-4" />
-            Summary
+            {t('article.open')}
           </button>
         )}
         {!isMobile && (
@@ -577,152 +438,3 @@ export function Toolbar({
   );
 }
 
-/** LLM often emits `* one * two` on one line; split so list items render with line breaks. */
-function tryRenderInlineAsteriskList(trimmed: string, keyIdx: number): ReactNode | null {
-  if (!/\*\s+\S/.test(trimmed)) return null;
-  const segments = trimmed
-    .split(/\s+(?=\*\s+)/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (segments.length < 2) return null;
-
-  const isBulletItem = (s: string) => /^\*\s+/.test(s);
-
-  if (segments.every(isBulletItem)) {
-    return (
-      <ul key={keyIdx} className="ml-4 list-disc space-y-1">
-        {segments.map((line, lineIdx) => (
-          <li key={lineIdx}>{formatSummaryBoldInline(line.replace(/^\*\s+/, ''))}</li>
-        ))}
-      </ul>
-    );
-  }
-
-  const [first, ...rest] = segments;
-  if (!isBulletItem(first) && rest.length > 0 && rest.every(isBulletItem)) {
-    return (
-      <div key={keyIdx} className="space-y-2">
-        <p className="text-sm leading-relaxed text-foreground/90">{formatSummaryBoldInline(first)}</p>
-        <ul className="ml-4 list-disc space-y-1">
-          {rest.map((line, lineIdx) => (
-            <li key={lineIdx}>{formatSummaryBoldInline(line.replace(/^\*\s+/, ''))}</li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
-
-  return null;
-}
-
-function renderSummaryMarkdown(content: string): ReactElement {
-  const blocks = content.split('\n\n').filter((b) => b.trim().length > 0);
-  return (
-    <div className="space-y-2">
-      {blocks.map((block, idx) => {
-        const trimmed = block.trim();
-        const lines = trimmed.split('\n').filter(Boolean);
-        const isList = lines.length > 0 && lines.every((line) => /^\s*[-*]\s+/.test(line));
-        const isMarkdownTable =
-          lines.length >= 2 &&
-          /^\s*\|?(.+\|)+.+\|?\s*$/.test(lines[0]) &&
-          /^\s*\|?[\s:-]+(\|[\s:-]+)+\|?\s*$/.test(lines[1]);
-
-        if (isMarkdownTable) {
-          const toCells = (line: string) =>
-            line
-              .trim()
-              .replace(/^\|/, '')
-              .replace(/\|$/, '')
-              .split('|')
-              .map((cell) => cell.trim());
-          const headers = toCells(lines[0]);
-          const rows = lines.slice(2).map(toCells);
-          return (
-            <div key={idx} className="overflow-x-auto rounded-lg border border-border bg-card/70">
-              <table className="w-full min-w-[480px] text-xs">
-                <thead>
-                  <tr>
-                    {headers.map((h, hIdx) => (
-                      <th
-                        key={hIdx}
-                        className="border-b border-border px-2 py-1.5 text-left font-semibold text-muted-foreground"
-                      >
-                        {formatSummaryBoldInline(h)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, rowIdx) => (
-                    <tr key={rowIdx}>
-                      {headers.map((_, colIdx) => (
-                        <td key={colIdx} className="border-b border-border px-2 py-1.5 text-foreground/85">
-                          {formatSummaryBoldInline(row[colIdx] ?? '')}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        }
-
-        if (isList) {
-          return (
-            <ul key={idx} className="ml-4 list-disc space-y-1">
-              {lines.map((line, lineIdx) => (
-                <li key={lineIdx}>{formatSummaryBoldInline(line.replace(/^\s*[-*]\s+/, ''))}</li>
-              ))}
-            </ul>
-          );
-        }
-
-        if (/^###\s+/.test(trimmed)) {
-          return (
-            <h4 key={idx} className="text-sm font-semibold text-foreground">
-              {formatSummaryBoldInline(trimmed.replace(/^###\s+/, ''))}
-            </h4>
-          );
-        }
-        if (/^##\s+/.test(trimmed)) {
-          return (
-            <h3 key={idx} className="text-base font-semibold text-foreground">
-              {formatSummaryBoldInline(trimmed.replace(/^##\s+/, ''))}
-            </h3>
-          );
-        }
-        if (/^#\s+/.test(trimmed)) {
-          return (
-            <h2 key={idx} className="text-lg font-semibold text-foreground">
-              {formatSummaryBoldInline(trimmed.replace(/^#\s+/, ''))}
-            </h2>
-          );
-        }
-
-        const inlineList = tryRenderInlineAsteriskList(trimmed, idx);
-        if (inlineList) return inlineList;
-
-        return (
-          <p key={idx} className="text-sm leading-relaxed text-foreground/90">
-            {formatSummaryBoldInline(trimmed)}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
-function formatSummaryBoldInline(text: string): (string | ReactElement)[] {
-  const parts = text.split(/\*\*(.*?)\*\*/g);
-  return parts.map((part, i) =>
-    i % 2 === 1 ? (
-      <strong key={i} className="font-semibold text-foreground">
-        {part}
-      </strong>
-    ) : (
-      part
-    )
-  );
-}
