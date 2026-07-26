@@ -1,3 +1,8 @@
+// jsdom is pinned to an exact 27.0.0 in package.json — starting at 27.0.1 its parse5 dep
+// jumped to an ESM-only major (^8.0.0), and at 28.0.0 html-encoding-sniffer did too (^6.0.0
+// -> @exodus/bytes). Both break with ERR_REQUIRE_ESM on Vercel/Lambda, where Node's
+// require(esm) is disabled by default. Do not bump this version without re-checking that
+// jsdom's parse5 and html-encoding-sniffer deps are still CJS-compatible.
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 
