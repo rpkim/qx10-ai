@@ -5,10 +5,14 @@ import type { GoalType } from '@/lib/types';
 import type { CatalogOption } from '@/lib/ai/model-config';
 import { GOAL_HINT } from '@/lib/ai/prompts';
 import type { Locale } from '@/lib/i18n/constants';
+import { parseContextItems } from '@/lib/context-items';
+import { fetchPageExcerpts } from '@/lib/ai/url-context';
 
 const seedSchema = z.object({
   questions: z.array(z.string()).min(4).max(8),
 });
+
+const MAX_CONTEXT_URLS = 3;
 
 const SEED_SYSTEM = `You help design a knowledge-discovery canvas. Output JSON only, no markdown fences.
 Shape: {"questions": string[]}
@@ -16,7 +20,8 @@ Rules:
 - Exactly 5 strings in "questions".
 - Each is one short, specific question the user might run first (full sentence, same language as the topic when possible).
 - Cover different angles; no near-duplicates.
-- Questions must be concrete enough to answer in one pass.`;
+- Questions must be concrete enough to answer in one pass.
+- If reference material from a URL is provided, you MUST ground at least 2-3 questions in specific facts, claims, or details from that material (not just the topic in general).`;
 
 export async function generateSeedQuestions(
   selection: CatalogOption,
@@ -35,8 +40,26 @@ export async function generateSeedQuestions(
           : locale === 'zh'
             ? 'Simplified Chinese (zh-Hans)'
             : 'English (en)';
-  const contextLine = context ? `\nContext: "${context}"` : '';
-  const user = `Topic / keyword: "${keyword}"${contextLine}
+
+  const items = parseContextItems(context);
+  const keywordItems = items.filter((i) => !i.isUrl).map((i) => i.value);
+  const urlItems = items.filter((i) => i.isUrl).map((i) => i.value).slice(0, MAX_CONTEXT_URLS);
+  const excerpts = urlItems.length > 0 ? await fetchPageExcerpts(urlItems) : [];
+
+  const contextLine = keywordItems.length > 0 ? `\nContext: "${keywordItems.join(', ')}"` : '';
+  const referenceBlock =
+    excerpts.length > 0
+      ? `\n\nReference material (user-provided pages — read these and ground questions in them):\n${excerpts
+          .map((e, i) => `[${i + 1}] "${e.title}" (${e.url})\n${e.excerpt}`)
+          .join('\n\n')}`
+      : '';
+  const unresolvedUrls = urlItems.filter((u) => !excerpts.some((e) => e.url === u || u.includes(e.url)));
+  const unresolvedLine =
+    unresolvedUrls.length > 0
+      ? `\nNote: the user also referenced ${unresolvedUrls.length} URL(s) that could not be fetched; ignore them.`
+      : '';
+
+  const user = `Topic / keyword: "${keyword}"${contextLine}${referenceBlock}${unresolvedLine}
 Exploration mode: ${goal}
 Mode guidance for biasing the questions: ${hint}
 Default output language: ${lang}

@@ -24,6 +24,7 @@ export type MessageKey =
   | 'toolbar.contextLabel'
   | 'toolbar.contextOptional'
   | 'toolbar.contextPlaceholder'
+  | 'toolbar.contextUrlHint'
   | 'toolbar.exploreMode'
   | 'toolbar.openWorkspace'
   | 'toolbar.workspaces'

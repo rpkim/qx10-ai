@@ -26,6 +26,7 @@ export const ja: Messages = {
   'toolbar.contextLabel': 'コンテキスト',
   'toolbar.contextOptional': '任意',
   'toolbar.contextPlaceholder': '例: ETF規制、初期スタートアップ…',
+  'toolbar.contextUrlHint': '（URLを貼り付けるとAIがそのページを読み込みます）',
   'toolbar.exploreMode': '探索モード',
   'toolbar.openWorkspace': '開く',
   'toolbar.workspaces': 'ワークスペース',

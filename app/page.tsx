@@ -21,6 +21,8 @@ import { readWorkspaceLaunch } from '@/lib/workspace-launch';
 import { removeDashboardGrid } from '@/lib/dashboard-layout-storage';
 import { trackSearch } from '@/lib/telemetry/client';
 import { Spinner } from '@/components/ui/spinner';
+import { ContextChipInput } from '@/components/workspace/context-chip-input';
+import { formatContextForDisplay } from '@/lib/context-items';
 
 const EXAMPLE_KEYWORDS = [
   'Quant Trading',
@@ -142,7 +144,7 @@ export default function LandingPage() {
                   <div className="truncate text-sm font-semibold text-foreground">{entry.keyword}</div>
                   {entry.context && (
                     <div className="mt-0.5 truncate text-xs text-muted-foreground/70 italic">
-                      in &ldquo;{entry.context}&rdquo;
+                      in &ldquo;{formatContextForDisplay(entry.context)}&rdquo;
                     </div>
                   )}
                   <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -326,7 +328,7 @@ export default function LandingPage() {
               </button>
             </div>
 
-            {/* Context input */}
+            {/* Context input — keywords and/or URLs, added as chips */}
             <div className="flex min-w-0 flex-col gap-1.5">
               <div className="flex items-center gap-2 px-1">
                 <span className="text-xs font-semibold uppercase tracking-widest text-primary/70">
@@ -335,10 +337,11 @@ export default function LandingPage() {
                 <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary/60">
                   {t('toolbar.contextOptional')}
                 </span>
+                <span className="text-[10px] text-muted-foreground/60">{t('toolbar.contextUrlHint')}</span>
               </div>
               <div
                 className={[
-                  'flex min-w-0 items-center gap-3 rounded-2xl border-2 px-4 py-3 transition-all duration-200 md:px-5 md:py-3.5',
+                  'flex min-w-0 items-center gap-2 rounded-2xl border-2 px-4 py-3 transition-all duration-200 md:px-5 md:py-3.5',
                   contextFocused
                     ? 'border-primary bg-primary/5 shadow-[0_0_0_4px_rgba(0,196,154,0.1)]'
                     : context
@@ -356,15 +359,13 @@ export default function LandingPage() {
                 >
                   in
                 </span>
-                <input
-                  type="text"
+                <ContextChipInput
                   value={context}
-                  onChange={(e) => setContext(e.target.value)}
+                  onChange={setContext}
                   onFocus={() => setContextFocused(true)}
                   onBlur={() => setContextFocused(false)}
-                  onKeyDown={handleKeyDown}
+                  onEnterWithEmptyDraft={handleStart}
                   placeholder={t('toolbar.contextPlaceholder')}
-                  className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
                 />
                 {context && (
                   <button

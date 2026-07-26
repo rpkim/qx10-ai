@@ -11,6 +11,8 @@ import {
 import { useI18n } from '@/components/i18n-provider';
 import { useDemoWorkspaceTourOptional } from '@/components/demo/demo-workspace-tour';
 import { getSuggestedQueries } from '@/lib/mock-data';
+import { contextHostname, parseContextItems } from '@/lib/context-items';
+import { Link2 } from 'lucide-react';
 
 const seedSuggestionCache = new Map<string, { questions: string[]; status: 'ai' | 'fallback' }>();
 const ROOT_SEED_CACHE_PREFIX = 'qx10.root.seed.v1:';
@@ -225,9 +227,21 @@ export function RootNode({ node }: Props) {
         </h2>
 
         {node.context && (
-          <p className="text-center text-xs text-muted-foreground">
-            in &ldquo;{node.context}&rdquo;
-          </p>
+          <div className="flex flex-wrap items-center justify-center gap-1">
+            {parseContextItems(node.context).map((item, idx) => (
+              <span
+                key={`${item.value}-${idx}`}
+                className={[
+                  'inline-flex max-w-45 items-center gap-1 rounded-full px-2 py-0.5 text-[11px]',
+                  item.isUrl ? 'bg-primary/10 text-primary' : 'text-muted-foreground',
+                ].join(' ')}
+                title={item.value}
+              >
+                {item.isUrl && <Link2 className="size-2.5 shrink-0" />}
+                <span className="truncate">{item.isUrl ? contextHostname(item.value) : item.value}</span>
+              </span>
+            ))}
+          </div>
         )}
 
         {(isLoadingSuggestions || seedSuggestions.length > 0) && (

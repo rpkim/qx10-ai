@@ -26,6 +26,7 @@ export const en: Messages = {
   'toolbar.contextLabel': 'Context',
   'toolbar.contextOptional': 'optional',
   'toolbar.contextPlaceholder': 'e.g. ETF regulation, early-stage startups…',
+  'toolbar.contextUrlHint': '(you can also paste a URL — the AI will read that page)',
   'toolbar.exploreMode': 'Explore mode',
   'toolbar.openWorkspace': 'Open',
   'toolbar.workspaces': 'Workspaces',

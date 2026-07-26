@@ -26,6 +26,7 @@ export const zh: Messages = {
   'toolbar.contextLabel': '上下文',
   'toolbar.contextOptional': '可选',
   'toolbar.contextPlaceholder': '例如：ETF监管、早期初创企业…',
+  'toolbar.contextUrlHint': '（也可以粘贴网址——AI 会读取该页面）',
   'toolbar.exploreMode': '探索模式',
   'toolbar.openWorkspace': '打开',
   'toolbar.workspaces': '工作区',

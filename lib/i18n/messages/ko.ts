@@ -26,6 +26,7 @@ export const ko: Messages = {
   'toolbar.contextLabel': '컨텍스트',
   'toolbar.contextOptional': '선택사항',
   'toolbar.contextPlaceholder': '예: ETF 규제, 초기 스타트업…',
+  'toolbar.contextUrlHint': '(URL을 붙여넣으면 AI가 해당 페이지를 읽고 반영해요)',
   'toolbar.exploreMode': '탐색 모드',
   'toolbar.openWorkspace': '열기',
   'toolbar.workspaces': '워크스페이스',

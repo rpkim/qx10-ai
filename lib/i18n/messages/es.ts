@@ -26,6 +26,7 @@ export const es: Messages = {
   'toolbar.contextLabel': 'Contexto',
   'toolbar.contextOptional': 'opcional',
   'toolbar.contextPlaceholder': 'p. ej. regulación de ETFs, startups en etapa inicial…',
+  'toolbar.contextUrlHint': '(también puedes pegar una URL — la IA leerá esa página)',
   'toolbar.exploreMode': 'Modo de exploración',
   'toolbar.openWorkspace': 'Abrir',
   'toolbar.workspaces': 'Espacios de trabajo',
