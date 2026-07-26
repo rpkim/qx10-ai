@@ -1,14 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import type { DataNodeData } from '@/lib/types';
-import {
-  fetchMarketQuotePayload,
-  marketDataNodeRefreshSymbol,
-} from '@/lib/market-data-node-refresh';
 import { useWorkspace } from '@/lib/workspace-store';
 import { useI18n } from '@/components/i18n-provider';
-import { RefreshCw } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -32,36 +26,8 @@ const DATA_NODE_INNER_CLASS =
 
 export function DataNode({ node }: Props) {
   const { t } = useI18n();
-  const { toggleDashboardPin, state, dispatch } = useWorkspace();
+  const { toggleDashboardPin, state } = useWorkspace();
   const isPinned = state.dashboardNodeIds.includes(node.id);
-  const [refreshing, setRefreshing] = useState(false);
-  const stockSymbol = marketDataNodeRefreshSymbol(node);
-  const isStockNode = !!stockSymbol;
-
-  const refreshStock = async () => {
-    if (!stockSymbol || refreshing) return;
-    setRefreshing(true);
-    try {
-      const payload = await fetchMarketQuotePayload(stockSymbol);
-      if (!payload) return;
-      dispatch({
-        type: 'UPDATE_NODE',
-        id: node.id,
-        updates: {
-          dataType: payload.dataType,
-          title: payload.title,
-          subtitle: payload.subtitle,
-          metrics: payload.metrics,
-          chartData: payload.chartData,
-          tableColumns: payload.tableColumns,
-          tableRows: payload.tableRows,
-          listItems: payload.listItems,
-        } as Partial<DataNodeData>,
-      });
-    } finally {
-      setRefreshing(false);
-    }
-  };
 
   return (
     <div
@@ -86,16 +52,6 @@ export function DataNode({ node }: Props) {
           </span>
         </div>
         <div className="flex items-center gap-1">
-          {isStockNode && (
-            <button
-              onClick={refreshStock}
-              disabled={refreshing}
-              className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
-              title="Refresh quote"
-            >
-              <RefreshCw className={`size-3 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-          )}
           <button
             onClick={() => toggleDashboardPin(node.id)}
             className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors"

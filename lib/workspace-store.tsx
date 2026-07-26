@@ -514,6 +514,7 @@ function attachAnswerChildren(
 ───────────────────────────────────────────── */
 type Action =
   | { type: 'INIT_WORKSPACE'; keyword: string; goal: GoalType; context?: string }
+  | { type: 'SET_CONTEXT'; context?: string }
   | { type: 'SET_SEED_QUERIES'; questions: string[] }
   | { type: 'UPDATE_NODE'; id: string; updates: Partial<WorkspaceNode> }
   | { type: 'ADD_NODE'; node: WorkspaceNode }
@@ -581,6 +582,11 @@ function reducer(state: WorkspaceState, action: Action): WorkspaceState {
         collapsedNodeIds: [],
         selectedNodeIds: [],
       };
+    }
+    case 'SET_CONTEXT': {
+      const context = action.context?.trim() ? action.context : undefined;
+      const nodes = state.nodes.map((n) => (n.type === 'root' ? { ...n, context } : n));
+      return { ...state, context, nodes };
     }
     case 'SET_SEED_QUERIES': {
       const root = state.nodes.find((n) => n.type === 'root');
@@ -823,6 +829,8 @@ interface WorkspaceContextValue {
   dispatch: React.Dispatch<Action>;
   aiCatalog: AiModelCatalog | null;
   initWorkspace: (keyword: string, goal: GoalType, context?: string) => void;
+  /** Adds/edits context (keywords and/or URLs) on the current workspace's root node. */
+  setContext: (context?: string) => void;
   runQuery: (queryId: string) => void;
   addCustomQuery: (
     question: string,
@@ -994,6 +1002,11 @@ export function WorkspaceProvider({
     },
     []
   );
+
+  /** Adds/edits context (keywords and/or URLs) on the current workspace's root node. */
+  const setContext = useCallback((context?: string) => {
+    dispatch({ type: 'SET_CONTEXT', context });
+  }, []);
 
   const runQuery = useCallback((queryId: string) => {
     const queryNode0 = nodesRef.current.find((n) => n.id === queryId);
@@ -1693,6 +1706,7 @@ export function WorkspaceProvider({
         dispatch,
         aiCatalog,
         initWorkspace,
+        setContext,
         runQuery,
         addCustomQuery,
         toggleDashboardPin,

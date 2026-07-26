@@ -133,8 +133,8 @@ export default function PrivacyPage() {
             </li>
             <li>
               <span className="font-medium text-foreground">Optional tools.</span>{' '}
-              Tavily (web search) and ElevenLabs (voice), only if and when you
-              invoke a feature that uses them.
+              ElevenLabs (voice), only if and when you invoke a feature that
+              uses it.
             </li>
           </ul>
 
