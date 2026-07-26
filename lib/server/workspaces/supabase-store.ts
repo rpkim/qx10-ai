@@ -5,6 +5,10 @@ import {
   isSupabaseServerConfigured,
 } from '@/lib/supabase/config';
 import type { DashboardGridItem } from '@/lib/dashboard-layout-storage';
+import {
+  parseStoredArticleDraft,
+  type StoredArticleDraft,
+} from '@/lib/article-draft-storage';
 import type { GoalType } from '@/lib/types';
 import type { WorkspaceSnapshotFile } from '@/lib/workspace-snapshot';
 import type { WorkspaceIndexRow, WorkspaceStore } from './types';
@@ -23,6 +27,13 @@ type DashboardRow = {
   user_sub: string;
   keyword: string;
   layout: DashboardGridItem[];
+  updated_at: string;
+};
+
+type ArticleDraftRow = {
+  user_sub: string;
+  keyword: string;
+  draft: StoredArticleDraft;
   updated_at: string;
 };
 
@@ -98,6 +109,7 @@ export class SupabaseWorkspaceStore implements WorkspaceStore {
       .eq('keyword', keyword);
     if (error) throw error;
     await this.deleteDashboardLayout(userSub, keyword);
+    await this.deleteArticleDraft(userSub, keyword);
     return (count ?? 0) > 0;
   }
 
@@ -106,6 +118,8 @@ export class SupabaseWorkspaceStore implements WorkspaceStore {
     if (wErr) throw wErr;
     const { error: dErr } = await this.client.from('dashboard_layouts').delete().eq('user_sub', userSub);
     if (dErr) throw dErr;
+    const { error: aErr } = await this.client.from('article_drafts').delete().eq('user_sub', userSub);
+    if (aErr) throw aErr;
     const { error: pErr } = await this.client.from('user_prefs').delete().eq('user_sub', userSub);
     if (pErr) throw pErr;
   }
@@ -148,6 +162,43 @@ export class SupabaseWorkspaceStore implements WorkspaceStore {
     if (error) throw error;
   }
 
+  async getArticleDraft(userSub: string, keyword: string): Promise<StoredArticleDraft | null> {
+    const { data, error } = await this.client
+      .from('article_drafts')
+      .select('draft')
+      .eq('user_sub', userSub)
+      .eq('keyword', keyword)
+      .maybeSingle();
+    if (error) throw error;
+    return parseStoredArticleDraft(data?.draft) ?? null;
+  }
+
+  async saveArticleDraft(
+    userSub: string,
+    keyword: string,
+    draft: StoredArticleDraft
+  ): Promise<void> {
+    const { error } = await this.client.from('article_drafts').upsert(
+      {
+        user_sub: userSub,
+        keyword,
+        draft,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_sub,keyword' }
+    );
+    if (error) throw error;
+  }
+
+  async deleteArticleDraft(userSub: string, keyword: string): Promise<void> {
+    const { error } = await this.client
+      .from('article_drafts')
+      .delete()
+      .eq('user_sub', userSub)
+      .eq('keyword', keyword);
+    if (error) throw error;
+  }
+
   async getUserPrefs(userSub: string): Promise<Record<string, unknown>> {
     const { data, error } = await this.client
       .from('user_prefs')
@@ -177,14 +228,28 @@ export class SupabaseWorkspaceStore implements WorkspaceStore {
     ]);
     const workspaces: WorkspaceSnapshotFile[] = [];
     const dashboardLayouts: Record<string, DashboardGridItem[]> = {};
+    const articleDrafts: Record<string, StoredArticleDraft> = {};
     for (const row of index) {
       const snap = await this.getSnapshot(userSub, row.keyword);
       if (snap) workspaces.push(snap);
       const layout = await this.getDashboardLayout(userSub, row.keyword);
       if (layout) dashboardLayouts[row.keyword] = layout;
+      const article = await this.getArticleDraft(userSub, row.keyword);
+      if (article) articleDrafts[row.keyword] = article;
     }
-    return { workspaces, dashboardLayouts, prefs };
+    // Also pick up article drafts whose workspace snapshot may have been deleted.
+    const { data: orphanDrafts, error } = await this.client
+      .from('article_drafts')
+      .select('keyword, draft')
+      .eq('user_sub', userSub);
+    if (error) throw error;
+    for (const row of orphanDrafts ?? []) {
+      if (articleDrafts[row.keyword]) continue;
+      const draft = parseStoredArticleDraft(row.draft);
+      if (draft) articleDrafts[row.keyword] = draft;
+    }
+    return { workspaces, dashboardLayouts, articleDrafts, prefs };
   }
 }
 
-export type { WorkspaceRow, DashboardRow, PrefsRow };
+export type { WorkspaceRow, DashboardRow, ArticleDraftRow, PrefsRow };

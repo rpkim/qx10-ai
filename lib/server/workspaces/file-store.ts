@@ -1,6 +1,10 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { DashboardGridItem } from '@/lib/dashboard-layout-storage';
+import {
+  parseStoredArticleDraft,
+  type StoredArticleDraft,
+} from '@/lib/article-draft-storage';
 import type { GoalType } from '@/lib/types';
 import type { WorkspaceSnapshotFile } from '@/lib/workspace-snapshot';
 import type { WorkspaceIndexRow, WorkspaceStore } from './types';
@@ -8,11 +12,12 @@ import type { WorkspaceIndexRow, WorkspaceStore } from './types';
 type UserFileShape = {
   workspaces: Record<string, WorkspaceSnapshotFile>;
   dashboardLayouts: Record<string, DashboardGridItem[]>;
+  articleDrafts: Record<string, StoredArticleDraft>;
   prefs: Record<string, unknown>;
 };
 
 function emptyUser(): UserFileShape {
-  return { workspaces: {}, dashboardLayouts: {}, prefs: {} };
+  return { workspaces: {}, dashboardLayouts: {}, articleDrafts: {}, prefs: {} };
 }
 
 export class FileWorkspaceStore implements WorkspaceStore {
@@ -36,6 +41,7 @@ export class FileWorkspaceStore implements WorkspaceStore {
       return {
         workspaces: data.workspaces ?? {},
         dashboardLayouts: data.dashboardLayouts ?? {},
+        articleDrafts: data.articleDrafts ?? {},
         prefs: data.prefs ?? {},
       };
     } catch {
@@ -96,6 +102,7 @@ export class FileWorkspaceStore implements WorkspaceStore {
       if (!data.workspaces[keyword]) return false;
       delete data.workspaces[keyword];
       delete data.dashboardLayouts[keyword];
+      delete data.articleDrafts[keyword];
       await this.writeUser(userSub, data);
       return true;
     });
@@ -139,6 +146,33 @@ export class FileWorkspaceStore implements WorkspaceStore {
     });
   }
 
+  async getArticleDraft(userSub: string, keyword: string): Promise<StoredArticleDraft | null> {
+    return this.enqueue(async () => {
+      const data = await this.readUser(userSub);
+      return parseStoredArticleDraft(data.articleDrafts[keyword]);
+    });
+  }
+
+  async saveArticleDraft(
+    userSub: string,
+    keyword: string,
+    draft: StoredArticleDraft
+  ): Promise<void> {
+    return this.enqueue(async () => {
+      const data = await this.readUser(userSub);
+      data.articleDrafts[keyword] = draft;
+      await this.writeUser(userSub, data);
+    });
+  }
+
+  async deleteArticleDraft(userSub: string, keyword: string): Promise<void> {
+    return this.enqueue(async () => {
+      const data = await this.readUser(userSub);
+      delete data.articleDrafts[keyword];
+      await this.writeUser(userSub, data);
+    });
+  }
+
   async getUserPrefs(userSub: string): Promise<Record<string, unknown>> {
     return this.enqueue(async () => {
       const data = await this.readUser(userSub);
@@ -160,6 +194,7 @@ export class FileWorkspaceStore implements WorkspaceStore {
       return {
         workspaces: Object.values(data.workspaces),
         dashboardLayouts: data.dashboardLayouts,
+        articleDrafts: data.articleDrafts,
         prefs: data.prefs,
       };
     });

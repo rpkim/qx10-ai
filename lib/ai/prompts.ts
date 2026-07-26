@@ -10,7 +10,7 @@ export const GOAL_HINT: Record<GoalType, string> = {
     'Prioritize goals, trade-offs, risks, sequencing, and “what would change my mind?” — questions that clarify direction and decisions.',
 };
 
-function preferredLanguageLabel(locale: Locale): string {
+export function preferredLanguageLabel(locale: Locale): string {
   if (locale === 'ko') return 'Korean';
   if (locale === 'ja') return 'Japanese';
   if (locale === 'es') return 'Spanish';
@@ -18,7 +18,7 @@ function preferredLanguageLabel(locale: Locale): string {
   return 'English';
 }
 
-function localeKey(locale: Locale): string {
+export function localeKey(locale: Locale): string {
   if (locale === 'ko') return 'ko';
   if (locale === 'ja') return 'ja';
   if (locale === 'es') return 'es';

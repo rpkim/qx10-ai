@@ -1,5 +1,6 @@
 import type { GoalType, WorkspaceState } from '@/lib/types';
 import type { DashboardGridItem } from '@/lib/dashboard-layout-storage';
+import type { StoredArticleDraft } from '@/lib/article-draft-storage';
 import type { WorkspaceIndexEntry } from '@/lib/workspace-index';
 import {
   parseWorkspaceSnapshot,
@@ -107,6 +108,33 @@ export async function saveDashboardLayoutToServer(
   const loaded = await loadWorkspaceFromServer(keyword);
   if (!loaded.ok) return;
   await saveWorkspaceToServer(loaded.state, layout);
+}
+
+export async function fetchArticleDraftFromServer(
+  keyword: string
+): Promise<StoredArticleDraft | null> {
+  if (!keyword.trim()) return null;
+  const res = await fetch(`/api/workspaces/${keywordPath(keyword)}/article`, {
+    credentials: 'include',
+  });
+  if (res.status === 401 || res.status === 404) return null;
+  if (!res.ok) return null;
+  const data = (await res.json()) as { draft?: StoredArticleDraft | null };
+  return data.draft ?? null;
+}
+
+export async function saveArticleDraftToServer(
+  keyword: string,
+  draft: StoredArticleDraft
+): Promise<boolean> {
+  if (!keyword.trim()) return false;
+  const res = await fetch(`/api/workspaces/${keywordPath(keyword)}/article`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ draft }),
+  });
+  return res.ok;
 }
 
 export async function fetchUserPrefs(): Promise<Record<string, unknown>> {

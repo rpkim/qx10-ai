@@ -1,6 +1,7 @@
 import type { GoalType } from '@/lib/types';
 import type { WorkspaceSnapshotFile } from '@/lib/workspace-snapshot';
 import type { DashboardGridItem } from '@/lib/dashboard-layout-storage';
+import type { StoredArticleDraft } from '@/lib/article-draft-storage';
 
 export interface WorkspaceIndexRow {
   keyword: string;
@@ -18,11 +19,15 @@ export interface WorkspaceStore {
   getDashboardLayout(userSub: string, keyword: string): Promise<DashboardGridItem[] | null>;
   saveDashboardLayout(userSub: string, keyword: string, layout: DashboardGridItem[]): Promise<void>;
   deleteDashboardLayout(userSub: string, keyword: string): Promise<void>;
+  getArticleDraft(userSub: string, keyword: string): Promise<StoredArticleDraft | null>;
+  saveArticleDraft(userSub: string, keyword: string, draft: StoredArticleDraft): Promise<void>;
+  deleteArticleDraft(userSub: string, keyword: string): Promise<void>;
   getUserPrefs(userSub: string): Promise<Record<string, unknown>>;
   saveUserPrefs(userSub: string, prefs: Record<string, unknown>): Promise<void>;
   exportAllForUser(userSub: string): Promise<{
     workspaces: WorkspaceSnapshotFile[];
     dashboardLayouts: Record<string, DashboardGridItem[]>;
+    articleDrafts: Record<string, StoredArticleDraft>;
     prefs: Record<string, unknown>;
   }>;
 }

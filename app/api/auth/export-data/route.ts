@@ -33,12 +33,12 @@ export async function GET() {
   }
 
   const payload = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: new Date().toISOString(),
     notice:
       'This file contains all personal information Qx10.lol holds about you on the server, ' +
-      'as required by CCPA/CPRA (Right to Know). Workspace content stored only in this browser ' +
-      'localStorage (not yet migrated) is not included.',
+      'as required by CCPA/CPRA (Right to Know). Includes workspaces, dashboard layouts, ' +
+      'and Article Studio drafts. Browser-only caches that have not synced are not included.',
     user: {
       sub: session.sub,
       email: session.email,
@@ -50,6 +50,7 @@ export async function GET() {
     events,
     workspaces: workspaceExport?.workspaces ?? [],
     dashboardLayouts: workspaceExport?.dashboardLayouts ?? {},
+    articleDrafts: workspaceExport?.articleDrafts ?? {},
     prefs: workspaceExport?.prefs ?? {},
   };
 

@@ -23,6 +23,14 @@ create table if not exists public.dashboard_layouts (
   primary key (user_sub, keyword)
 );
 
+create table if not exists public.article_drafts (
+  user_sub text not null references public.users (sub) on delete cascade,
+  keyword text not null,
+  draft jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (user_sub, keyword)
+);
+
 create table if not exists public.user_prefs (
   user_sub text primary key references public.users (sub) on delete cascade,
   prefs jsonb not null default '{}'::jsonb,
@@ -31,4 +39,5 @@ create table if not exists public.user_prefs (
 
 alter table public.workspaces enable row level security;
 alter table public.dashboard_layouts enable row level security;
+alter table public.article_drafts enable row level security;
 alter table public.user_prefs enable row level security;
