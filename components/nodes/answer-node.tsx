@@ -6,6 +6,7 @@ import { FOCUS_QUERY_NODE_EVENT, useWorkspace } from '@/lib/workspace-store';
 import {
   findQueryIdByParentAndQuestion,
   listChildQueriesOrdered,
+  normalizeIntroQuestion,
   useIntroduceReveal,
 } from '@/lib/introduce-reveal-context';
 import { useI18n } from '@/components/i18n-provider';
@@ -162,6 +163,14 @@ export function AnswerNode({ node }: Props) {
     () => listChildQueriesOrdered(state.nodes, node.id),
     [state.nodes, node.id]
   );
+  // Keyed by normalized question text (not array position) — a child's index among its siblings
+  // doesn't line up with its index in `suggestedQueries` once questions are answered out of order
+  // or a custom question is added.
+  const followUpChildrenByText = useMemo(
+    () =>
+      new Map(followUpChildrenOrdered.map((child) => [normalizeIntroQuestion(child.question), child] as const)),
+    [followUpChildrenOrdered]
+  );
 
   return (
     <div
@@ -314,7 +323,7 @@ export function AnswerNode({ node }: Props) {
           <span className="text-xs text-muted-foreground">Follow-up queries</span>
           <div className="flex flex-col gap-1">
             {node.suggestedQueries.slice(0, 2).map((q, idx) => {
-              const linked = followUpChildrenOrdered[idx];
+              const linked = followUpChildrenByText.get(normalizeIntroQuestion(q));
               const spawning = !linked;
               const running = linked?.status === 'running';
               const clickable = Boolean(introduceReveal) || !isDemoMode || idx === 0;
