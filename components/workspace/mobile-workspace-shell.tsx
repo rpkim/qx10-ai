@@ -584,6 +584,24 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                                     </button>
                                   );
                                 })}
+                                {answerFollowUpChildren
+                                  .filter(
+                                    (child) =>
+                                      !a.suggestedQueries.some(
+                                        (sq) => normalizeIntroQuestion(sq) === normalizeIntroQuestion(child.question)
+                                      )
+                                  )
+                                  .map((child) => (
+                                    <button
+                                      key={`${a.id}-custom-${child.id}`}
+                                      type="button"
+                                      onClick={() => scrollToQueryCard(child.id, 160)}
+                                      className="flex items-start gap-1.5 rounded-lg border border-border/60 bg-secondary/40 px-2 py-1 text-left text-[12px] text-foreground/80 transition-colors hover:border-primary/40 hover:bg-secondary"
+                                    >
+                                      <Check className="mt-0.5 size-3 shrink-0 text-primary/70" aria-hidden />
+                                      <span className="min-w-0 flex-1">{child.question}</span>
+                                    </button>
+                                  ))}
                                 <div className="flex gap-1.5">
                                   <input
                                     value={customInputByAnswer[a.id] ?? ''}

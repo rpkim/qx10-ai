@@ -430,6 +430,53 @@ export function AnswerNode({ node }: Props) {
                 </div>
               );
             })}
+            {followUpChildrenOrdered
+              .filter(
+                (child) =>
+                  !node.suggestedQueries.some(
+                    (sq) => normalizeIntroQuestion(sq) === normalizeIntroQuestion(child.question)
+                  )
+              )
+              .map((child) => (
+                <div
+                  key={`${node.id}-custom-${child.id}`}
+                  className="flex items-start gap-2 rounded-xl p-2 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(
+                          new CustomEvent(FOCUS_QUERY_NODE_EVENT, { detail: { queryId: child.id } })
+                        );
+                      }
+                    }}
+                    className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg shadow-[0_0_10px_rgba(0,196,154,0.22)]"
+                    style={{
+                      background: 'rgba(0,196,154,0.12)',
+                      color: '#00C49A',
+                      border: '1px solid rgba(0,196,154,0.35)',
+                    }}
+                    title={t('nodes.run')}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5,3 19,12 5,21" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.dispatchEvent(
+                        new CustomEvent(FOCUS_QUERY_NODE_EVENT, { detail: { queryId: child.id } })
+                      );
+                    }}
+                    className="min-w-0 flex-1 text-left leading-relaxed text-foreground transition-colors hover:text-foreground"
+                  >
+                    {child.question}
+                  </button>
+                </div>
+              ))}
             {!isDemoMode && (
               <button
                 onClick={() => setShowCustomInput((v) => !v)}
