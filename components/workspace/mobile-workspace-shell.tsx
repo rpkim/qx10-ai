@@ -12,6 +12,7 @@ import { FOCUS_QUERY_NODE_EVENT, useWorkspace } from '@/lib/workspace-store';
 import {
   findQueryIdByParentAndQuestion,
   listChildQueriesOrdered,
+  normalizeIntroQuestion,
   useIntroduceReveal,
 } from '@/lib/introduce-reveal-context';
 import { useI18n } from '@/components/i18n-provider';
@@ -314,6 +315,12 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
               cardQueryRows.map((q) => {
                 const a = answerByQuery.get(q.id);
                 const answerFollowUpChildren = a ? listChildQueriesOrdered(state.nodes, a.id) : [];
+                // Keyed by normalized question text (not array position) — a child's index among
+                // its siblings doesn't line up with its index in `suggestedQueries` once questions
+                // are answered out of order or a custom question is added.
+                const answerFollowUpByText = new Map(
+                  answerFollowUpChildren.map((child) => [normalizeIntroQuestion(child.question), child] as const)
+                );
                 const d = a ? dataByAnswer.get(a.id) : null;
                 const hasCompleteAnswer =
                   a != null &&
@@ -521,7 +528,7 @@ export function MobileWorkspaceShell({ showDashboard, isMobile, embedded = false
                                     followUpTour.spotlightAnswerId === a.id &&
                                     sqIdx === 0;
                                   const followUpGlow = introFollowGlow || followUpTourGlow;
-                                  const followUpByIndex = answerFollowUpChildren[sqIdx];
+                                  const followUpByIndex = answerFollowUpByText.get(normalizeIntroQuestion(sq));
                                   const isFollowUpSelected = Boolean(followUpByIndex);
                                   return (
                                     <button
