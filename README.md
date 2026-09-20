@@ -144,6 +144,10 @@ pnpm db:apply-waitlist       # Apply the waitlist migration
 
 The app deploys cleanly to Vercel. One gotcha worth knowing if you touch `lib/ai/url-context.ts`: avoid `jsdom` there. Several of jsdom's transitive dependencies (parse5, html-encoding-sniffer, cssstyle's CSS color parser) have gone ESM-only, which breaks with `ERR_REQUIRE_ESM` on Vercel/Lambda since `require(esm)` is disabled there by default. The project intentionally uses `linkedom` instead — a much lighter, fully CommonJS-compatible DOM implementation that's plenty for feeding HTML into Readability.
 
+## License
+
+This project is **source-available, not open source.** See [`LICENSE`](./LICENSE): all rights reserved. You may look at the code; you may not copy, modify, redistribute, or run it as your own product or service without written permission.
+
 ## Built with v0
 
 This repository is linked to a [v0](https://v0.app) project. Every merge to `main` auto-deploys.
