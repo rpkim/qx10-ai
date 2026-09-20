@@ -20,10 +20,21 @@ let _cachedKey: Buffer | undefined;
 function deriveKey(): Buffer {
   if (_cachedKey) return _cachedKey;
   const secret =
-    process.env.QX10_PII_SECRET ||
-    process.env.QX10_AUTH_SECRET ||
-    process.env.AUTH_SECRET ||
-    'dev-only-set-QX10_PII_SECRET-in-production';
+    process.env.QX10_PII_SECRET || process.env.QX10_AUTH_SECRET || process.env.AUTH_SECRET;
+  if (!secret) {
+    // Refuse to silently encrypt PII with a well-known key in production —
+    // that string is public (it's in the source), so it would offer no real
+    // protection. Callers already handle a throw here (decryptField wraps
+    // this in a try/catch; encryptField's callers log-and-continue), so this
+    // fails closed instead of failing insecure.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'QX10_PII_SECRET (or QX10_AUTH_SECRET / AUTH_SECRET) must be set in production — refusing to encrypt/decrypt PII fields with an insecure default key.'
+      );
+    }
+    _cachedKey = scryptSync('dev-only-set-QX10_PII_SECRET-in-production', 'qx10-pii-field-v1', 32);
+    return _cachedKey;
+  }
   _cachedKey = scryptSync(secret, 'qx10-pii-field-v1', 32);
   return _cachedKey;
 }
