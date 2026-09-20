@@ -1,10 +1,9 @@
 /**
- * Admin authorization. Currently a static allowlist driven by the
- * `ADMIN_EMAILS` env var (comma-separated). Defaults include the
- * project owner so the system is bootstrappable out of the box.
+ * Admin authorization. Static allowlist driven entirely by the
+ * `ADMIN_EMAILS` env var (comma-separated) — no default admin is baked
+ * into the source, since this repo is public. Set `ADMIN_EMAILS` in every
+ * environment that needs `/admin` access.
  */
-
-const DEFAULT_ADMINS = ['rpkim.jay@gmail.com'];
 
 function parseAdmins(): string[] {
   const raw = process.env.ADMIN_EMAILS;
@@ -14,7 +13,7 @@ function parseAdmins(): string[] {
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean)
     : [];
-  return Array.from(new Set([...list, ...DEFAULT_ADMINS.map((s) => s.toLowerCase())]));
+  return Array.from(new Set(list));
 }
 
 export function isAdminEmail(email: string | null | undefined): boolean {

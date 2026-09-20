@@ -18,8 +18,21 @@ function deriveKey(): Buffer {
   const secret =
     process.env.QX10_AUTH_SECRET ||
     process.env.QX10_GOOGLE_TOKEN_SECRET ||
-    process.env.AUTH_SECRET ||
-    'dev-only-set-QX10_AUTH_SECRET';
+    process.env.AUTH_SECRET;
+  if (!secret) {
+    // Refuse to silently sign sessions with a well-known key in production —
+    // that string is public (it's in the source), so anyone could forge a
+    // session cookie for any account, including admin. Callers already
+    // handle this failing (sealAuthSession's caller redirects to an error
+    // page; openAuthSession treats a throw the same as an invalid cookie),
+    // so this fails closed instead of failing insecure.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'QX10_AUTH_SECRET (or AUTH_SECRET) must be set in production — refusing to sign/verify session cookies with an insecure default key.'
+      );
+    }
+    return scryptSync('dev-only-set-QX10_AUTH_SECRET', 'qx10-auth-session', 32);
+  }
   return scryptSync(secret, 'qx10-auth-session', 32);
 }
 
