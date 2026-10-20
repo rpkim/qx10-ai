@@ -1,14 +1,21 @@
 import path from 'path';
+import { isPostgresConfigured } from '@/lib/server/db/pool';
 import { FileWorkspaceStore } from './file-store';
+import { PostgresWorkspaceStore } from './postgres-store';
 import { SupabaseWorkspaceStore, isWorkspaceDbConfigured } from './supabase-store';
 import type { WorkspaceStore } from './types';
 
+export type WorkspaceStoreKind = 'postgres' | 'supabase' | 'file';
+
 let cached: WorkspaceStore | null = null;
-let cachedKind: 'supabase' | 'file' | null = null;
+let cachedKind: WorkspaceStoreKind | null = null;
 
 export function getWorkspaceStore(): WorkspaceStore {
   if (cached) return cached;
-  if (isWorkspaceDbConfigured()) {
+  if (isPostgresConfigured()) {
+    cached = new PostgresWorkspaceStore();
+    cachedKind = 'postgres';
+  } else if (isWorkspaceDbConfigured()) {
     cached = new SupabaseWorkspaceStore();
     cachedKind = 'supabase';
   } else {
@@ -19,7 +26,7 @@ export function getWorkspaceStore(): WorkspaceStore {
   return cached;
 }
 
-export function getWorkspaceStoreKind(): 'supabase' | 'file' | null {
+export function getWorkspaceStoreKind(): WorkspaceStoreKind | null {
   if (!cached) getWorkspaceStore();
   return cachedKind;
 }

@@ -1,14 +1,21 @@
 import path from 'path';
+import { isPostgresConfigured } from '@/lib/server/db/pool';
 import { FileAnalyticsStore } from './file-store';
+import { PostgresAnalyticsStore } from './postgres-store';
 import { SupabaseAnalyticsStore, isSupabaseConfigured } from './supabase-store';
 import type { AnalyticsStore } from './types';
 
+export type AnalyticsStoreKind = 'postgres' | 'supabase' | 'file';
+
 let cached: AnalyticsStore | null = null;
-let cachedKind: 'supabase' | 'file' | null = null;
+let cachedKind: AnalyticsStoreKind | null = null;
 
 export function getAnalyticsStore(): AnalyticsStore {
   if (cached) return cached;
-  if (isSupabaseConfigured()) {
+  if (isPostgresConfigured()) {
+    cached = new PostgresAnalyticsStore();
+    cachedKind = 'postgres';
+  } else if (isSupabaseConfigured()) {
     cached = new SupabaseAnalyticsStore();
     cachedKind = 'supabase';
   } else {
@@ -19,7 +26,7 @@ export function getAnalyticsStore(): AnalyticsStore {
   return cached;
 }
 
-export function getAnalyticsStoreKind(): 'supabase' | 'file' | null {
+export function getAnalyticsStoreKind(): AnalyticsStoreKind | null {
   if (!cached) getAnalyticsStore();
   return cachedKind;
 }
