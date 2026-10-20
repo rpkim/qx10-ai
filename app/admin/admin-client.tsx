@@ -35,7 +35,7 @@ type WaitlistRow = {
 };
 
 type Overview = {
-  backend: 'postgres' | 'supabase' | 'file' | null;
+  backend: 'supabase' | 'file' | null;
   freeTierDailyLimit?: number;
   premiumTierDailyLimit?: number;
   signupStats?: {
@@ -234,15 +234,15 @@ export function AdminClient({ currentEmail }: { currentEmail: string }) {
               <span
                 className="ml-2 inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-[11px] uppercase tracking-wider text-muted-foreground"
                 title={
-                  overview.backend === 'file'
-                    ? 'Local JSON file — development only'
-                    : 'Postgres (qx10_ tables) — production-grade'
+                  overview.backend === 'supabase'
+                    ? 'Supabase (Postgres) — production-grade'
+                    : 'Local JSON file — development only'
                 }
               >
-                {overview.backend === 'file' ? (
-                  <HardDrive className="size-3" />
-                ) : (
+                {overview.backend === 'supabase' ? (
                   <Database className="size-3" />
+                ) : (
+                  <HardDrive className="size-3" />
                 )}
                 {overview.backend}
               </span>

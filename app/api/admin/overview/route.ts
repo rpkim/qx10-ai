@@ -92,11 +92,9 @@ export async function GET() {
         backend,
         message,
         hint:
-          backend === 'postgres'
-            ? 'Apply db/qx10-schema.sql and set DATABASE_URL.'
-            : backend === 'supabase'
-              ? 'If this is the first deploy with Supabase, apply db/schema.sql in your Supabase SQL editor.'
-              : 'On Vercel/serverless, the local file backend is not durable. Set DATABASE_URL (preferred) or Supabase keys in production.',
+          backend === 'supabase'
+            ? 'If this is the first deploy with Supabase, apply db/schema.sql in your Supabase SQL editor.'
+            : 'On Vercel/serverless, the local file backend is not durable. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) in production.',
       },
       { status: 500 }
     );

@@ -22,7 +22,7 @@ Built with Next.js 16 (App Router), React 19, and TypeScript. Originally bootstr
 - **Admin dashboard** (`/admin`) — usage overview, user list with tier management, waitlist invites, raw event feed.
 - **Text-to-speech** — read answers aloud via the browser Web Speech API or ElevenLabs.
 - **Export** — PDF/image export of the canvas and dashboard (`jspdf`, `pdf-lib`, `html2canvas`).
-- **Pluggable persistence** — a small storage interface backs onto local JSON files (zero-config local dev), `DATABASE_URL` Postgres with `qx10_`-prefixed tables, or legacy Supabase.
+- **Pluggable persistence** — a small storage interface backs onto either local JSON files (zero-config local dev) or Supabase/Postgres (production), selected automatically by which environment variables are set.
 
 ## Tech stack
 
@@ -32,7 +32,7 @@ Built with Next.js 16 (App Router), React 19, and TypeScript. Originally bootstr
 | Styling | Tailwind CSS v4, Radix UI primitives, `lucide-react` |
 | AI | `openai` SDK, `@google/generative-ai` (Gemini) |
 | URL content extraction | `linkedom` + `@mozilla/readability` (SSRF-guarded fetch, in-memory cache) |
-| Persistence | Postgres via `DATABASE_URL` (`qx10_` tables) in production, local JSON file store for dev |
+| Persistence | Supabase (Postgres) in production, local JSON file store for dev |
 | Auth | Google OAuth 2.0, signed session cookie (`qx10_session`) |
 | Charts / tables | `recharts` |
 | Markdown | `react-markdown` + `remark-gfm` |
@@ -62,8 +62,7 @@ lib/
   byok/                      # Client-side bring-your-own-key vault (Gemini)
 
 db/
-  schema.sql                # Legacy Supabase schema (unprefixed tables)
-  qx10-schema.sql           # Shared-Postgres schema (`qx10_` tables)
+  schema.sql                # Base Supabase schema (analytics/users/events)
   *-migration.sql            # Incremental migrations (workspaces, waitlist, quota, article drafts)
 
 scripts/
@@ -115,7 +114,7 @@ Copy `.env.example` to `.env.local` and fill in what you need. It's grouped by c
 - **AI providers** — `OPENAI_API_KEY` and/or `GEMINI_API_KEY` (at least one required for query/seed generation to work), plus optional model allowlists (`OPENAI_MODELS`, `GEMINI_MODELS`, `AI_MODEL_OPTIONS`) and daily quota knobs (`DAILY_QUERY_LIMIT`, `PREMIUM_DAILY_QUERY_LIMIT`).
 - **Google Sign-In** — `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NEXT_PUBLIC_APP_URL`, `QX10_AUTH_SECRET` (session/PII encryption). Required unless `AUTH_DISABLED=true`.
 - **Admin** — `ADMIN_EMAILS` (comma-separated allowlist for `/admin`).
-- **Persistence** — unset = local JSON files under `.qx10-data/` (fine for dev, not for serverless prod). Production uses `DATABASE_URL` (shared Neon/Postgres) and `db/qx10-schema.sql`, which creates `qx10_`-prefixed tables. Supabase (`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SECRET_KEY`) is a legacy fallback when `DATABASE_URL` is unset.
+- **Persistence** — unset = local JSON files under `.qx10-data/` (fine for dev, not for serverless prod). For production, create a Supabase project, run `db/schema.sql` plus the `*-migration.sql` files, then set `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY` (or the legacy `SUPABASE_SERVICE_ROLE_KEY`).
 - **Waitlist email** — `RESEND_API_KEY`, `EMAIL_FROM` (only needed if the signup cap is active and you want invite emails to send).
 - **Text-to-speech** — defaults to the browser's built-in speech synthesis; set `TTS_PROVIDER=elevenlabs` + `ELEVENLABS_API_KEY` for higher-quality voices.
 
@@ -123,9 +122,9 @@ See `.env.example` for the full, authoritative list with descriptions.
 
 ### Database setup (production)
 
-1. Create or reuse a Postgres database (the app currently shares a Neon database with another project).
-2. Set `DATABASE_URL` and run `pnpm db:apply-qx10`. That creates `qx10_users`, `qx10_events`, `qx10_workspaces`, and the other Qx10 tables.
-3. Legacy Supabase: run `db/schema.sql` plus each `db/*-migration.sql`, then set `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY`.
+1. Create a project at [supabase.com](https://supabase.com).
+2. Open the SQL editor and run `db/schema.sql`, then each `db/*-migration.sql` file (or use the matching `pnpm db:apply-*` script against `DATABASE_URL`).
+3. Set `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SECRET_KEY` in your environment.
 
 Without these, the app transparently falls back to a local JSON file store — convenient for development, but not suitable for serverless deployments with a read-only/ephemeral filesystem.
 
@@ -136,7 +135,6 @@ pnpm dev                     # Start dev server on :3002
 pnpm build                   # Production build
 pnpm start                   # Serve a production build
 pnpm lint                    # ESLint
-pnpm db:apply-qx10           # Apply qx10_-prefixed schema via DATABASE_URL
 pnpm db:apply-workspaces     # Apply the workspaces migration via DATABASE_URL
 pnpm db:apply-article-drafts # Apply the article-drafts migration
 pnpm db:apply-waitlist       # Apply the waitlist migration

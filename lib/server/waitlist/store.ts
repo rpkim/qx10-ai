@@ -1,21 +1,14 @@
 import path from 'path';
-import { isPostgresConfigured } from '@/lib/server/db/pool';
 import { FileWaitlistStore } from './file-store';
-import { PostgresWaitlistStore } from './postgres-store';
 import { SupabaseWaitlistStore, isWaitlistDbConfigured } from './supabase-store';
 import type { WaitlistStore } from './types';
 
-export type WaitlistStoreKind = 'postgres' | 'supabase' | 'file';
-
 let cached: WaitlistStore | null = null;
-let cachedKind: WaitlistStoreKind | null = null;
+let cachedKind: 'supabase' | 'file' | null = null;
 
 export function getWaitlistStore(): WaitlistStore {
   if (cached) return cached;
-  if (isPostgresConfigured()) {
-    cached = new PostgresWaitlistStore();
-    cachedKind = 'postgres';
-  } else if (isWaitlistDbConfigured()) {
+  if (isWaitlistDbConfigured()) {
     cached = new SupabaseWaitlistStore();
     cachedKind = 'supabase';
   } else {
@@ -26,7 +19,7 @@ export function getWaitlistStore(): WaitlistStore {
   return cached;
 }
 
-export function getWaitlistStoreKind(): WaitlistStoreKind | null {
+export function getWaitlistStoreKind(): 'supabase' | 'file' | null {
   if (!cached) getWaitlistStore();
   return cachedKind;
 }
